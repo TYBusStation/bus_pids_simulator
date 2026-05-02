@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base href="/bus_pids_simulator/">
+    <meta charset="UTF-8">
+    <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+    <meta name="description" content="公車 PIDS 模擬器">
+    <link rel="apple-touch-icon" href="icons/Icon-192.png">
+    <link rel="icon" type="image/png" href="favicon.png"/>
+    <title>公車 PIDS 模擬器</title>
+    <link rel="manifest" href="manifest.json">
+    <style>
+        body {
+            background-color: #121212;
+        }
+
+        .loading-container {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            width: 100vw;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 9999;
+            background-color: #121212;
+            transition: opacity 0.5s ease-out;
+        }
+
+        .loading-container.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loading-status {
+            color: #e0e0e0;
+            margin-top: 24px;
+            font-family: sans-serif;
+            font-size: 16px;
+        }
+
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 5px solid #424242;
+            border-top-color: #62a1ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+<body>
+<div id="loading-container" class="loading-container">
+    <div class="spinner"></div>
+    <p id="loading-status" class="loading-status">正在下載 CanvasKit 渲染器...</p>
+</div>
+
+<script src="flutter_bootstrap.js" async></script>
+
+<script>
+    window.hideFlutterLoader = function () {
+        const loadingContainer = document.getElementById('loading-container');
+        if (loadingContainer) {
+            loadingContainer.classList.add('hidden');
+            setTimeout(() => {
+                loadingContainer.remove();
+            }, 500);
+        }
+    }
+
+    const statusText = document.getElementById('loading-status');
+    _flutter.loader.load({
+        onEntrypointLoaded: async function (engineInitializer) {
+            statusText.textContent = "正在初始化 Flutter 引擎...";
+            const appRunner = await engineInitializer.initializeEngine();
+            statusText.textContent = "正在執行應用程式...";
+            await appRunner.runApp();
+        }
+    }).catch(function (error) {
+        console.error("Flutter 啟動失敗:", error);
+        if (statusText) {
+            statusText.textContent = '應用程式載入失敗，請重新整理或檢查主控台。';
+        }
+    });
+</script>
+
+</body>
+</html>
