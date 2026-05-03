@@ -1,13 +1,12 @@
 import 'package:bus_pids_simulator/pages/route_selection_page.dart';
-import 'package:bus_pids_simulator/utils/static.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart' show DateFormat;
 import 'package:marquee/marquee.dart';
 import 'package:provider/provider.dart';
 
 import '../data/status.dart';
-import '../utils/route_engine.dart';
+import '../utils/static.dart';
 import '../widgets/location_provider.dart';
+import '../widgets/route_analysis_provider.dart';
 import '../widgets/status_provider.dart';
 
 class InfoPage extends StatefulWidget {
@@ -18,192 +17,221 @@ class InfoPage extends StatefulWidget {
 }
 
 class _InfoPageState extends State<InfoPage> {
-  double _volume = 0.5;
-  double _brightness = 0.8;
+  late TextEditingController _volController;
+  late TextEditingController _speedController;
+
+  @override
+  void initState() {
+    super.initState();
+    _volController = TextEditingController(
+      text: Static.globalVolume.toStringAsFixed(2),
+    );
+    _speedController = TextEditingController(
+      text: Static.globalSpeed.toStringAsFixed(2),
+    );
+  }
+
+  @override
+  void dispose() {
+    _volController.dispose();
+    _speedController.dispose();
+    super.dispose();
+  }
+
+  void _updateVolume(double v) {
+    setState(() {
+      Static.globalVolume = v.clamp(0.0, 1.0);
+      _volController.text = Static.globalVolume.toStringAsFixed(2);
+    });
+  }
+
+  void _updateSpeed(double v) {
+    setState(() {
+      Static.globalSpeed = v.clamp(0.5, 2.0);
+      _speedController.text = Static.globalSpeed.toStringAsFixed(2);
+    });
+  }
+
+  Future<void> _showConfirmDialog({
+    required BuildContext context,
+    required String title,
+    required String content,
+    required VoidCallback onConfirm,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(content),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("取消"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("確定"),
+          ),
+        ],
+      ),
+    );
+    if (result == true) onConfirm();
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    return Consumer3<
+      LocationChangeNotifier,
+      StatusChangeNotifier,
+      RouteAnalysisProvider
+    >(
+      builder: (context, locNotifier, statusNotifier, analysisProvider, child) {
+        final currentStatus = statusNotifier.currentStatus;
+        final bool isOnDuty = currentStatus.dutyStatus == DutyStatus.onDuty;
+        final analysis = analysisProvider.currentAnalysis;
 
-    return Consumer2<LocationChangeNotifier, StatusChangeNotifier>(
-      builder: (context, locNotifier, statusNotifier, child) => LayoutBuilder(
-        builder: (context, constraints) {
-          final currentStatus = statusNotifier.currentStatus;
-          final bool isOnDuty = currentStatus.dutyStatus == DutyStatus.onDuty;
+        String nextStationName = "(無停靠站)";
+        String distanceText = "";
 
-          String nextStationName = "(無停靠站)";
-          String distanceText = "";
+        if (currentStatus.dutyStatus == DutyStatus.offDuty) {
+          nextStationName = "(非營運)";
+        } else if (locNotifier.currentLocation == null) {
+          nextStationName = "(無定位)";
+        } else if (analysis != null && analysis.nextStation != null) {
+          nextStationName = analysis.nextStation!.name;
+          String baseDist = analysis.distToNextStation != null
+              ? "${analysis.distToNextStation!.toStringAsFixed(0)}m"
+              : "";
+          distanceText = analysis.isOffRoute ? "$baseDist (脫離路線)" : baseDist;
+        }
 
-          if (currentStatus.dutyStatus == DutyStatus.offDuty) {
-            nextStationName = "(非營運)";
-          } else if (locNotifier.currentLocation == null) {
-            nextStationName = "(無定位)";
-          } else {
-            final stations = currentStatus.direction == Direction.go
-                ? currentStatus.route.stations.go
-                : currentStatus.route.stations.back;
-            final path = currentStatus.direction == Direction.go
-                ? currentStatus.route.path.goPoints
-                : currentStatus.route.path.backPoints;
-
-            if (stations.isNotEmpty && path.isNotEmpty) {
-              final result = RouteEngine.analyze(
-                currentPos: locNotifier.currentLocation!,
-                routePoints: path,
-                stations: stations,
-              );
-              if (result.nextStation != null) {
-                nextStationName = result.nextStation!.name;
-                String baseDist = result.distToNextStation != null
-                    ? "${(result.distToNextStation! / 1000).toStringAsFixed(2)} km"
-                    : "";
-                distanceText = result.isOffRoute
-                    ? "$baseDist (脫離路線)"
-                    : baseDist;
-              }
-            }
-          }
-
-          return Container(
-            color: theme.scaffoldBackgroundColor,
-            padding: const EdgeInsets.all(10),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Text(
-                      DateFormat('HH:mm').format(DateTime.now()),
-                      style: TextStyle(
-                        color: colorScheme.onSurface,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                  ],
+        return Container(
+          color: theme.scaffoldBackgroundColor,
+          padding: const EdgeInsets.all(8),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildLeftStatusPanel(locNotifier, theme),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildRightActionPanel(
+                  context,
+                  statusNotifier,
+                  nextStationName,
+                  distanceText,
+                  isOnDuty,
+                  theme,
                 ),
-                Expanded(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _buildLeftStatusPanel(locNotifier, theme),
-                      const SizedBox(width: 15),
-                      Expanded(
-                        child: _buildRightActionPanel(
-                          context,
-                          statusNotifier,
-                          nextStationName,
-                          distanceText,
-                          isOnDuty,
-                          theme,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
   Widget _buildLeftStatusPanel(LocationChangeNotifier loc, ThemeData theme) {
     bool hasLocation = loc.currentLocation != null;
-    final colorScheme = theme.colorScheme;
-
     return Container(
       width: 220,
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withOpacity(0.3),
+        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(
-          color: Colors.white, // 改為白框
-          width: 2,
-        ),
+        border: Border.all(color: Colors.white, width: 2),
       ),
-      padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 10),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
       child: Column(
         children: [
-          GestureDetector(
-            onTap: () => Static.requestLocationPermission(),
-            child: Icon(
-              hasLocation ? Icons.location_on : Icons.location_off,
-              color: hasLocation ? Colors.green : colorScheme.error,
-              size: 60,
+          Icon(
+            hasLocation ? Icons.location_on : Icons.location_off,
+            color: hasLocation ? Colors.green : Colors.red,
+            size: 36,
+          ),
+          Text(
+            hasLocation ? "定位正常" : "等待定位",
+            style: TextStyle(
+              color: hasLocation ? Colors.green : Colors.red,
+              fontSize: 12,
             ),
           ),
-          if (hasLocation) ...[
-            Text(
-              "緯度：${loc.currentLocation!.latitude.toStringAsFixed(6)}",
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.green,
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-              ),
+          const SizedBox(height: 4),
+          FilledButton(
+            onPressed: () => loc.forceRefresh(),
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              minimumSize: const Size(0, 30),
             ),
-            Text(
-              "經度：${loc.currentLocation!.longitude.toStringAsFixed(6)}",
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.green,
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ] else
-            Text(
-              "無訊號",
-              style: TextStyle(
-                color: colorScheme.error,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            child: const Text("手動重定位", style: TextStyle(fontSize: 11)),
+          ),
           const Spacer(),
-          _buildSliderWithIcon(
-            theme,
-            icon: Icons.brightness_6,
-            value: _brightness,
-            onChanged: (v) => setState(() => _brightness = v),
+          _buildControlRow(
+            Icons.volume_up,
+            Static.globalVolume,
+            0.0,
+            1.0,
+            _updateVolume,
+            _volController,
           ),
-          const SizedBox(height: 10),
-          _buildSliderWithIcon(
-            theme,
-            icon: Icons.volume_up,
-            value: _volume,
-            onChanged: (v) => setState(() => _volume = v),
+          const SizedBox(height: 8),
+          _buildControlRow(
+            Icons.speed,
+            Static.globalSpeed,
+            0.5,
+            2.0,
+            _updateSpeed,
+            _speedController,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSliderWithIcon(
-    ThemeData theme, {
-    required IconData icon,
-    required double value,
-    required ValueChanged<double> onChanged,
-  }) {
+  Widget _buildControlRow(
+    IconData icon,
+    double value,
+    double min,
+    double max,
+    Function(double) onSlider,
+    TextEditingController ctrl,
+  ) {
     return Row(
-      // 改為 Row 讓圖示在左側
       children: [
-        Icon(
-          icon,
-          color: theme.colorScheme.onSurface.withOpacity(0.7),
-          size: 24,
-        ),
+        Icon(icon, size: 18),
         Expanded(
+          flex: 4,
           child: SliderTheme(
-            data: theme.sliderTheme.copyWith(
-              trackHeight: 4,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 2,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
             ),
-            child: Slider(value: value, onChanged: onChanged),
+            child: Slider(
+              value: value,
+              min: min,
+              max: max,
+              onChanged: onSlider,
+            ),
+          ),
+        ),
+        const Spacer(flex: 1),
+        SizedBox(
+          width: 48,
+          height: 28,
+          child: TextField(
+            controller: ctrl,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+            decoration: const InputDecoration(
+              contentPadding: EdgeInsets.zero,
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onSubmitted: (s) {
+              final val = double.tryParse(s);
+              if (val != null) onSlider(val);
+            },
           ),
         ),
       ],
@@ -219,51 +247,72 @@ class _InfoPageState extends State<InfoPage> {
     ThemeData theme,
   ) {
     final status = notifier.currentStatus;
-
     return Column(
       children: [
         Expanded(
-          flex: 5,
+          flex: 4,
           child: _buildDashboardBox(
             theme: theme,
-            color: Colors.grey.shade700, // 灰底
+            color: Colors.grey.shade700,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text(
-                  "下一站",
-                  style: TextStyle(
-                    color: Colors.white, // 白字
-                    fontSize: 20,
-                  ),
-                ),
-                Flexible(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      nextStation,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    const Text(
+                      "下一站",
+                      style: TextStyle(color: Colors.white, fontSize: 16),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      distance,
                       style: const TextStyle(
-                        color: Colors.white, // 白字
-                        fontSize: 40,
-                        fontWeight: FontWeight.bold,
+                        color: Colors.amberAccent,
+                        fontSize: 20,
                       ),
                     ),
-                  ),
+                  ],
                 ),
-                if (distance.isNotEmpty)
-                  Text(
-                    distance,
-                    style: const TextStyle(
-                      color: Colors.white, // 白字
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: SizedBox(
+                    height: 55,
+                    child: LayoutBuilder(
+                      builder: (context, box) {
+                        const style = TextStyle(
+                          color: Colors.white,
+                          fontSize: 42,
+                          height: 1.1,
+                        );
+                        final painter = TextPainter(
+                          text: TextSpan(text: nextStation, style: style),
+                          maxLines: 1,
+                          textDirection: TextDirection.ltr,
+                        )..layout();
+                        return painter.width > box.maxWidth
+                            ? Marquee(
+                                text: nextStation,
+                                style: style,
+                                blankSpace: 80,
+                                velocity: 40,
+                                pauseAfterRound: const Duration(seconds: 2),
+                                accelerationDuration: const Duration(
+                                  seconds: 1,
+                                ),
+                              )
+                            : Center(child: Text(nextStation, style: style));
+                      },
                     ),
                   ),
+                ),
               ],
             ),
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 6),
         Expanded(
           flex: 3,
           child: Row(
@@ -282,72 +331,80 @@ class _InfoPageState extends State<InfoPage> {
                   },
                   child: _buildDashboardBox(
                     theme: theme,
-                    color: Colors.grey.shade700, // 灰底
+                    color: Colors.grey.shade700,
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         FittedBox(
-                          fit: BoxFit.scaleDown,
                           child: Text(
                             "路線：${status.route.name}(${status.route.id})",
                             style: const TextStyle(
-                              color: Colors.white, // 白字
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              fontSize: 22,
                             ),
                           ),
                         ),
-                        const SizedBox(height: 5),
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 15),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Flexible(
-                                child: LayoutBuilder(
-                                  builder: (context, box) {
-                                    const style = TextStyle(
-                                      color: Colors.white, // 白字
-                                      fontSize: 18,
-                                    );
-                                    final painter = TextPainter(
-                                      text: TextSpan(
-                                        text: status.route.description,
-                                        style: style,
-                                      ),
-                                      maxLines: 1,
-                                      textDirection: TextDirection.ltr,
-                                    )..layout();
-                                    if (painter.width > box.maxWidth) {
-                                      return SizedBox(
-                                        height: 25,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: SizedBox(
+                            height: 22,
+                            child: LayoutBuilder(
+                              builder: (context, box) {
+                                final description = status.route.description;
+                                final directionSuffix =
+                                    " | ${status.direction == Direction.go ? '去程' : '返程'} 往 ${status.direction == Direction.go ? status.route.destination : status.route.departure}";
+                                const style = TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                );
+
+                                final descPainter = TextPainter(
+                                  text: TextSpan(
+                                    text: description,
+                                    style: style,
+                                  ),
+                                  maxLines: 1,
+                                  textDirection: TextDirection.ltr,
+                                )..layout();
+
+                                final suffixPainter = TextPainter(
+                                  text: TextSpan(
+                                    text: directionSuffix,
+                                    style: style,
+                                  ),
+                                  maxLines: 1,
+                                  textDirection: TextDirection.ltr,
+                                )..layout();
+
+                                if (descPainter.width + suffixPainter.width >
+                                    box.maxWidth) {
+                                  return Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Flexible(
                                         child: Marquee(
-                                          text: status.route.description,
+                                          text: description,
                                           style: style,
-                                          blankSpace: 50,
+                                          blankSpace: 40,
                                           velocity: 30,
                                           pauseAfterRound: const Duration(
                                             seconds: 2,
                                           ),
                                         ),
-                                      );
-                                    } else {
-                                      return Text(
-                                        status.route.description,
-                                        style: style,
-                                      );
-                                    }
-                                  },
-                                ),
-                              ),
-                              Text(
-                                " | 往 ${status.direction == Direction.go ? status.route.destination : status.route.departure}",
-                                style: const TextStyle(
-                                  color: Colors.white, // 白字
-                                  fontSize: 18,
-                                ),
-                              ),
-                            ],
+                                      ),
+                                      Text(directionSuffix, style: style),
+                                    ],
+                                  );
+                                } else {
+                                  return Center(
+                                    child: Text(
+                                      "$description$directionSuffix",
+                                      style: style,
+                                    ),
+                                  );
+                                }
+                              },
+                            ),
                           ),
                         ),
                       ],
@@ -355,32 +412,35 @@ class _InfoPageState extends State<InfoPage> {
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 6),
               Expanded(
                 flex: 1,
                 child: GestureDetector(
-                  onTap: () {
-                    notifier.setStatus(
+                  onTap: () => _showConfirmDialog(
+                    context: context,
+                    title:
+                        "切換${status.direction == Direction.go ? '返程' : '去程'}",
+                    content:
+                        "是否確定切換${status.direction == Direction.go ? '返程' : '去程'}？",
+                    onConfirm: () => notifier.setStatus(
                       Status(
                         route: status.route,
                         direction: status.direction == Direction.go
                             ? Direction.back
                             : Direction.go,
-                        dutyStatus: status.dutyStatus,
+                        dutyStatus: DutyStatus.offDuty,
                       ),
-                    );
-                  },
+                    ),
+                  ),
                   child: _buildDashboardBox(
                     theme: theme,
                     color: Colors.blue.shade600,
-                    child: Center(
-                      child: Text(
-                        "切換\n${status.direction == Direction.go ? '返程' : '去程'}",
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
+                    child: const Center(
+                      child: FittedBox(
+                        child: Text(
+                          "切換去返程",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.white, fontSize: 18),
                         ),
                       ),
                     ),
@@ -390,32 +450,30 @@ class _InfoPageState extends State<InfoPage> {
             ],
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 6),
         Expanded(
           flex: 2,
           child: GestureDetector(
-            onTap: () {
-              notifier.setStatus(
+            onTap: () => _showConfirmDialog(
+              context: context,
+              title: isOnDuty ? '結束營運' : '開始營運',
+              content: "是否確定${isOnDuty ? '結束營運' : '開始營運'}？",
+              onConfirm: () => notifier.setStatus(
                 Status(
                   route: status.route,
                   direction: status.direction,
                   dutyStatus: isOnDuty ? DutyStatus.offDuty : DutyStatus.onDuty,
                 ),
-              );
-            },
+              ),
+            ),
             child: _buildDashboardBox(
               theme: theme,
               color: isOnDuty ? Colors.green.shade600 : Colors.red.shade600,
               child: Center(
                 child: FittedBox(
-                  fit: BoxFit.scaleDown,
                   child: Text(
-                    "車輛狀態：${isOnDuty ? '營運中' : '非營運'} (點我切換)",
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w900,
-                    ),
+                    '車輛狀態：${isOnDuty ? "營運中 【點我結束營運】" : "非營運 【點我開始營運】"}',
+                    style: const TextStyle(color: Colors.white, fontSize: 20),
                   ),
                 ),
               ),
@@ -436,10 +494,7 @@ class _InfoPageState extends State<InfoPage> {
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(
-          color: Colors.white, // 全部統一加上白框
-          width: 2,
-        ),
+        border: Border.all(color: Colors.white, width: 2),
       ),
       child: child,
     );

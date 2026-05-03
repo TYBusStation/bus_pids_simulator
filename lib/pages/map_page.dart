@@ -1,31 +1,39 @@
 import 'package:bus_pids_simulator/data/bus_station.dart';
 import 'package:bus_pids_simulator/widgets/location_provider.dart';
+import 'package:bus_pids_simulator/widgets/route_analysis_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../data/status.dart';
-import '../utils/map_utils.dart';
 import '../utils/route_engine.dart';
 import '../utils/static.dart';
+import '../widgets/map_bottom_panel.dart';
 
 class MapPage extends StatefulWidget {
-  const MapPage({super.key});
+  final bool showBottomInfo;
+  final VoidCallback onToggleBottomInfo;
+
+  const MapPage({
+    super.key,
+    required this.showBottomInfo,
+    required this.onToggleBottomInfo,
+  });
 
   @override
-  State createState() => _MapPageState();
+  State<MapPage> createState() => _MapPageState();
 }
 
-class _MapPageState extends State {
+class _MapPageState extends State<MapPage> {
   final MapController _mapController = MapController();
-
   bool _isFollowing = true;
-  double _satelliteOpacity = 1;
+  double _brightness = 0.6;
   bool _isFabMenuExpanded = false;
-
   List<Polyline> _userSelectedPolylines = [];
-  List<Marker> _userSelectedMarkers = [];
+  List<Marker> _stationMarkers = [];
+
+  final GlobalKey<MapBottomPanelState> _bottomPanelKey = GlobalKey();
 
   @override
   void dispose() {
@@ -34,81 +42,41 @@ class _MapPageState extends State {
   }
 
   void _handleAutoMove(LatLng? location, RouteAnalysisResult? result) {
-    if (_isFollowing && location != null) {
+    if (location != null &&
+        location.latitude.isFinite &&
+        location.longitude.isFinite &&
+        _isFollowing) {
       double rotation = 0;
-      if (result != null && !result.isOffRoute && result.bearing != null) {
+      if (result != null &&
+          !result.isOffRoute &&
+          result.bearing != null &&
+          result.bearing!.isFinite) {
         rotation = -result.bearing!;
       }
-
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _mapController.moveAndRotate(
-          location,
-          _mapController.camera.zoom,
-          rotation,
-        );
+        if (mounted) {
+          _mapController.moveAndRotate(location, 17.5, rotation);
+        }
       });
     }
   }
 
   void _recenterMap() {
     setState(() => _isFollowing = false);
-
     final List<LatLng> allPoints = [
       ..._userSelectedPolylines.expand((p) => p.points),
-      ..._userSelectedMarkers.map((m) => m.point),
-    ];
+      ..._stationMarkers.map((m) => m.point),
+    ].where((p) => p.latitude.isFinite && p.longitude.isFinite).toList();
 
     if (allPoints.isNotEmpty) {
-      final bounds = LatLngBounds.fromPoints(allPoints);
       _mapController.fitCamera(
         CameraFit.bounds(
-          bounds: bounds,
+          bounds: LatLngBounds.fromPoints(allPoints),
           padding: const EdgeInsets.all(50),
-          maxZoom: MapUtils.defaultZoom,
+          maxZoom: 17,
         ),
       );
     }
-  }
-
-  void _updateRouteLayers() {
-    final route = Static.currentStatus.route;
-    final direction = Static.currentStatus.direction;
-    const color = Colors.red;
-
-    List<Polyline> polylines = [];
-    List<Marker> markers = [];
-
-    if (direction == Direction.go && route.path.goPoints.isNotEmpty) {
-      polylines.add(
-        Polyline(
-          points: route.path.goPoints,
-          color: color.withOpacity(0.9),
-          strokeWidth: 5.0,
-        ),
-      );
-      markers.addAll(
-        route.stations.go.map(
-          (s) => _createStationMarker(s, color.withOpacity(0.9)),
-        ),
-      );
-    } else if (direction == Direction.back &&
-        route.path.backPoints.isNotEmpty) {
-      polylines.add(
-        Polyline(
-          points: route.path.backPoints,
-          color: color.withOpacity(0.9),
-          strokeWidth: 5.0,
-        ),
-      );
-      markers.addAll(
-        route.stations.back.map(
-          (s) => _createStationMarker(s, color.withOpacity(0.9)),
-        ),
-      );
-    }
-
-    _userSelectedPolylines = polylines;
-    _userSelectedMarkers = markers;
   }
 
   Marker _createStationMarker(BusStation station, Color color) {
@@ -132,50 +100,77 @@ class _MapPageState extends State {
               "${station.order}. ${station.name}",
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: FontWeight.bold,
               ),
-              textAlign: TextAlign.center,
-              softWrap: true,
             ),
           ),
           Icon(
             Icons.location_on,
-            size: 36,
+            size: 32,
             color: color,
-            shadows: const [
-              Shadow(color: Colors.black, blurRadius: 4, offset: Offset(0, 1)),
-            ],
+            shadows: const [Shadow(color: Colors.black, blurRadius: 4)],
           ),
         ],
       ),
     );
   }
 
+  void _updateRouteLayers() {
+    final route = Static.currentStatus.route;
+    final direction = Static.currentStatus.direction;
+    const color = Colors.red;
+    List<LatLng> points =
+        (direction == Direction.go
+                ? route.path.goPoints
+                : route.path.backPoints)
+            .where((p) => p.latitude.isFinite && p.longitude.isFinite)
+            .toList();
+
+    _userSelectedPolylines = points.isNotEmpty
+        ? [
+            Polyline(
+              points: points,
+              color: color.withOpacity(0.9),
+              strokeWidth: 5.0,
+            ),
+          ]
+        : [];
+
+    _stationMarkers = points.isNotEmpty
+        ? (direction == Direction.go ? route.stations.go : route.stations.back)
+              .where(
+                (s) =>
+                    s.position.latitude.isFinite &&
+                    s.position.longitude.isFinite,
+              )
+              .map((s) => _createStationMarker(s, color.withOpacity(0.9)))
+              .toList()
+        : [];
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_isFollowing) {
+        _bottomPanelKey.currentState?.scrollToCurrent();
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     _updateRouteLayers();
+    return Consumer2<LocationChangeNotifier, RouteAnalysisProvider>(
+      builder: (context, locNotifier, analysisProvider, child) {
+        final currentLocation = locNotifier.currentLocation;
+        final analysis = analysisProvider.currentAnalysis;
 
-    return LocationProvider(
-      builder: (context, currentLocation) {
-        RouteAnalysisResult? analysis;
-        if (currentLocation != null &&
-            Static.currentStatus.dutyStatus == DutyStatus.onDuty) {
-          final points = Static.currentStatus.direction == Direction.go
-              ? Static.currentStatus.route.path.goPoints
-              : Static.currentStatus.route.path.backPoints;
-          final stations = Static.currentStatus.direction == Direction.go
-              ? Static.currentStatus.route.stations.go
-              : Static.currentStatus.route.stations.back;
-
-          if (points.isNotEmpty && stations.isNotEmpty) {
-            analysis = RouteEngine.analyze(
-              currentPos: currentLocation,
-              routePoints: points,
-              stations: stations,
-            );
-          }
-        }
+        final bool isValidLocation =
+            currentLocation != null &&
+            currentLocation.latitude.isFinite &&
+            currentLocation.longitude.isFinite;
 
         _handleAutoMove(currentLocation, analysis);
 
@@ -184,30 +179,30 @@ class _MapPageState extends State {
             FlutterMap(
               mapController: _mapController,
               options: MapOptions(
-                initialCenter: LatLng(24.98893444390252, 121.31443803557084),
-                initialZoom: MapUtils.defaultZoom,
-                onPositionChanged: (position, hasGesture) {
-                  if (hasGesture && _isFollowing) {
-                    setState(() => _isFollowing = false);
-                  }
+                initialCenter: isValidLocation
+                    ? currentLocation
+                    : const LatLng(24.9889, 121.3144),
+                initialZoom: 17.5,
+                onPositionChanged: (p, g) {
+                  if (g && _isFollowing) setState(() => _isFollowing = false);
                 },
               ),
               children: [
                 ColorFiltered(
-                  colorFilter: const ColorFilter.matrix([
-                    0.6,
+                  colorFilter: ColorFilter.matrix([
+                    _brightness,
                     0,
                     0,
                     0,
                     0,
                     0,
-                    0.6,
+                    _brightness,
                     0,
                     0,
                     0,
                     0,
                     0,
-                    0.6,
+                    _brightness,
                     0,
                     0,
                     0,
@@ -216,13 +211,10 @@ class _MapPageState extends State {
                     1,
                     0,
                   ]),
-                  child: Opacity(
-                    opacity: _satelliteOpacity,
-                    child: TileLayer(
-                      urlTemplate:
-                          'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-                      tileProvider: NetworkTileProvider(),
-                    ),
+                  child: TileLayer(
+                    urlTemplate:
+                        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                    tileProvider: NetworkTileProvider(),
                   ),
                 ),
                 TileLayer(
@@ -233,20 +225,17 @@ class _MapPageState extends State {
                 PolylineLayer(polylines: _userSelectedPolylines),
                 MarkerLayer(
                   markers: [
-                    ..._userSelectedMarkers,
-                    if (currentLocation != null)
+                    ..._stationMarkers,
+                    if (isValidLocation)
                       Marker(
                         point: currentLocation,
-                        width: 25,
-                        height: 25,
+                        width: 22,
+                        height: 22,
                         child: Container(
                           decoration: BoxDecoration(
                             color: Colors.blue,
                             shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 3),
-                            boxShadow: const [
-                              BoxShadow(color: Colors.black26, blurRadius: 4),
-                            ],
+                            border: Border.all(color: Colors.white, width: 2.5),
                           ),
                         ),
                       ),
@@ -254,133 +243,54 @@ class _MapPageState extends State {
                 ),
               ],
             ),
-            if (analysis != null) _buildTopInfoOverlay(analysis),
-            Positioned(bottom: 20, right: 16, child: _buildMapControls()),
+            if (widget.showBottomInfo)
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: MapBottomPanel(
+                  key: _bottomPanelKey,
+                  analysis: analysis,
+                  stations: Static.currentStatus.direction == Direction.go
+                      ? Static.currentStatus.route.stations.go
+                      : Static.currentStatus.route.stations.back,
+                ),
+              ),
+            Positioned(
+              bottom: widget.showBottomInfo ? 35 : 0,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: GestureDetector(
+                  onTap: widget.onToggleBottomInfo,
+                  child: Container(
+                    width: 40,
+                    height: 18,
+                    decoration: const BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.vertical(
+                        top: Radius.circular(8),
+                      ),
+                    ),
+                    child: Icon(
+                      widget.showBottomInfo
+                          ? Icons.keyboard_arrow_down
+                          : Icons.keyboard_arrow_up,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: widget.showBottomInfo ? 45 : 10,
+              right: 15,
+              child: _buildMapControls(),
+            ),
           ],
         );
       },
-    );
-  }
-
-  Widget _buildTopInfoOverlay(RouteAnalysisResult res) {
-    final status = Static.currentStatus;
-    final directionText = status.direction == Direction.go
-        ? status.route.destination
-        : status.route.departure;
-
-    return Positioned(
-      top: 0,
-      left: 0,
-      right: 0,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.85),
-          border: const Border(
-            bottom: BorderSide(color: Colors.white24, width: 1),
-          ),
-        ),
-        child: SafeArea(
-          bottom: false,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
-            child: Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        res.prevStation?.name ?? "起點站",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                      ),
-                      if (res.distToPrevStation != null)
-                        Text(
-                          "${res.distToPrevStation!.toStringAsFixed(0)}m 前",
-                          style: const TextStyle(
-                            color: Colors.greenAccent,
-                            fontSize: 10,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                Container(
-                  width: 1,
-                  height: 25,
-                  color: Colors.white24,
-                  margin: const EdgeInsets.symmetric(horizontal: 5),
-                ),
-                Expanded(
-                  flex: 4,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        "${status.route.name} 往 $directionText",
-                        style: const TextStyle(
-                          color: Colors.amberAccent,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w900,
-                        ),
-                        textAlign: TextAlign.center,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (res.isOffRoute)
-                        const Text(
-                          "(脫離路線)",
-                          style: TextStyle(
-                            color: Colors.redAccent,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                Container(
-                  width: 1,
-                  height: 25,
-                  color: Colors.white24,
-                  margin: const EdgeInsets.symmetric(horizontal: 5),
-                ),
-                Expanded(
-                  flex: 3,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        res.nextStation?.name ?? "終點站",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                      ),
-                      if (res.distToNextStation != null)
-                        Text(
-                          "${res.distToNextStation!.toStringAsFixed(0)}m",
-                          style: const TextStyle(
-                            color: Colors.amberAccent,
-                            fontSize: 10,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 
@@ -390,90 +300,98 @@ class _MapPageState extends State {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        if (_isFabMenuExpanded)
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Card(
-                elevation: 4,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Container(
-                  width: 40,
-                  height: 120,
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.satellite_alt_outlined,
-                        size: 18,
-                        color: theme.colorScheme.onSurface,
-                      ),
-                      Expanded(
-                        child: RotatedBox(
-                          quarterTurns: 3,
-                          child: SliderTheme(
-                            data: SliderTheme.of(context).copyWith(
-                              trackHeight: 2.0,
-                              thumbShape: const RoundSliderThumbShape(
-                                enabledThumbRadius: 6.0,
-                              ),
-                              overlayShape: const RoundSliderOverlayShape(
-                                overlayRadius: 12.0,
-                              ),
-                            ),
-                            child: Slider(
-                              value: _satelliteOpacity,
-                              activeColor: theme.colorScheme.primary,
-                              onChanged: (v) =>
-                                  setState(() => _satelliteOpacity = v),
-                            ),
+        if (_isFabMenuExpanded) ...[
+          Card(
+            elevation: 3,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Container(
+              width: 32,
+              height: 90,
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.brightness_6,
+                    size: 14,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                  Expanded(
+                    child: RotatedBox(
+                      quarterTurns: 3,
+                      child: SliderTheme(
+                        data: SliderTheme.of(context).copyWith(
+                          trackHeight: 1.5,
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          thumbShape: const RoundSliderThumbShape(
+                            enabledThumbRadius: 4.0,
                           ),
                         ),
+                        child: Slider(
+                          value: _brightness,
+                          activeColor: theme.colorScheme.primary,
+                          onChanged: (v) => setState(() => _brightness = v),
+                        ),
                       ),
-                    ],
+                    ),
                   ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 5),
+        ],
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            if (_isFabMenuExpanded) ...[
+              SizedBox(
+                width: 34,
+                height: 34,
+                child: FloatingActionButton.small(
+                  onPressed: _recenterMap,
+                  heroTag: 'rec',
+                  child: const Icon(Icons.center_focus_strong, size: 16),
                 ),
               ),
-              const SizedBox(height: 4),
-              FloatingActionButton.small(
-                onPressed: _recenterMap,
-                tooltip: '重新置中',
-                elevation: 4,
-                heroTag: 'recenter_btn_nearby',
-                child: const Icon(Icons.center_focus_strong),
+              const SizedBox(width: 4),
+              SizedBox(
+                width: 34,
+                height: 34,
+                child: FloatingActionButton.small(
+                  onPressed: () {
+                    setState(() => _isFollowing = !_isFollowing);
+                    if (_isFollowing) {
+                      _bottomPanelKey.currentState?.scrollToCurrent();
+                    }
+                  },
+                  backgroundColor: _isFollowing
+                      ? theme.colorScheme.primaryContainer
+                      : null,
+                  heroTag: 'fol',
+                  child: const Icon(Icons.my_location, size: 16),
+                ),
               ),
-              const SizedBox(height: 4),
-              FloatingActionButton.small(
-                onPressed: () {
-                  final locProvider = context.read();
-                  if (locProvider.currentLocation != null) {
-                    setState(() => _isFollowing = true);
-                    _mapController.move(locProvider.currentLocation!, 17.0);
-                  }
-                },
-                tooltip: '定位我的位置',
-                elevation: 4,
-                backgroundColor:
-                    theme.floatingActionButtonTheme.backgroundColor,
-                heroTag: 'locate_me_btn_nearby',
-                child: const Icon(Icons.my_location),
-              ),
+              const SizedBox(width: 4),
             ],
-          ),
-        const SizedBox(height: 4),
-        FloatingActionButton(
-          onPressed: () =>
-              setState(() => _isFabMenuExpanded = !_isFabMenuExpanded),
-          tooltip: _isFabMenuExpanded ? '關閉選單' : '開啟選單',
-          elevation: 4,
-          heroTag: 'main_fab_toggle',
-          child: Icon(_isFabMenuExpanded ? Icons.close : Icons.menu_open),
+            SizedBox(
+              width: 38,
+              height: 38,
+              child: FloatingActionButton(
+                onPressed: () =>
+                    setState(() => _isFabMenuExpanded = !_isFabMenuExpanded),
+                heroTag: 'm',
+                child: Icon(
+                  _isFabMenuExpanded ? Icons.close : Icons.menu_open,
+                  size: 18,
+                ),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 16),
       ],
     );
   }

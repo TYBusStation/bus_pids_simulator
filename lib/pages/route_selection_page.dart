@@ -40,7 +40,7 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          '選擇路線 (當前：${Static.currentStatus.route.name}(${Static.currentStatus.route.id}) ${Static.currentStatus.route.description} | 往 ${Static.currentStatus.direction == Direction.go ? Static.currentStatus.route.destination : Static.currentStatus.route.departure})',
+          '選擇路線 (當前：${Static.currentStatus.route.name} 往 ${Static.currentStatus.direction == Direction.go ? Static.currentStatus.route.destination : Static.currentStatus.route.departure})',
         ),
         actions: [
           Padding(

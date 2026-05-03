@@ -10,12 +10,10 @@ class LocationChangeNotifier extends ChangeNotifier {
   LatLng? _currentLocation;
   bool _serviceEnabled = false;
   LocationPermission _permission = LocationPermission.denied;
+  StreamSubscription<Position>? _subscription;
+  bool _isDisposed = false;
 
   LatLng? get currentLocation => _currentLocation;
-
-  bool get serviceEnabled => _serviceEnabled;
-
-  LocationPermission get permission => _permission;
 
   bool get isGpsReady =>
       _serviceEnabled &&
@@ -26,6 +24,7 @@ class LocationChangeNotifier extends ChangeNotifier {
     _initLocation();
     if (!kIsWeb) {
       Geolocator.getServiceStatusStream().listen((ServiceStatus status) {
+        if (_isDisposed) return;
         _serviceEnabled = (status == ServiceStatus.enabled);
         notifyListeners();
       });
@@ -38,35 +37,57 @@ class LocationChangeNotifier extends ChangeNotifier {
     try {
       _serviceEnabled = await Geolocator.isLocationServiceEnabled();
       _permission = await Geolocator.checkPermission();
-
       if (_permission == LocationPermission.denied) {
         _permission = await Geolocator.requestPermission();
       }
-
-      if (isGpsReady) {
-        _startListening();
-      }
+      if (isGpsReady) _startListening();
     } catch (e) {
       debugPrint("定位初始化錯誤: $e");
     }
-    notifyListeners();
+    if (!_isDisposed) notifyListeners();
   }
 
   void _startListening() {
-    Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 5,
-      ),
-    ).listen(
-      (Position position) {
-        _currentLocation = LatLng(position.latitude, position.longitude);
+    _subscription?.cancel();
+    _subscription =
+        Geolocator.getPositionStream(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            distanceFilter: 5,
+          ),
+        ).listen((Position position) {
+          if (_isDisposed) return;
+          _currentLocation = LatLng(position.latitude, position.longitude);
+          notifyListeners();
+        }, onError: (e) => debugPrint("定位流錯誤: $e"));
+  }
+
+  Future<void> forceRefresh() async {
+    try {
+      _serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!_serviceEnabled) return;
+      _permission = await Geolocator.checkPermission();
+      if (_permission == LocationPermission.denied) {
+        _permission = await Geolocator.requestPermission();
+      }
+      if (isGpsReady) {
+        Position pos = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+        );
+        _currentLocation = LatLng(pos.latitude, pos.longitude);
+        _startListening();
         notifyListeners();
-      },
-      onError: (e) {
-        debugPrint("定位流錯誤: $e");
-      },
-    );
+      }
+    } catch (e) {
+      debugPrint("重定位失敗: $e");
+    }
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    _subscription?.cancel();
+    super.dispose();
   }
 }
 

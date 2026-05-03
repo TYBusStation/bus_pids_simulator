@@ -5,8 +5,8 @@ import 'package:bus_pids_simulator/utils/web_interop.dart'
     if (dart.library.io) 'package:bus_pids_simulator/utils/web_interop_stub.dart';
 import 'package:bus_pids_simulator/widgets/landscape_provider.dart';
 import 'package:bus_pids_simulator/widgets/location_provider.dart';
+import 'package:bus_pids_simulator/widgets/route_analysis_provider.dart';
 import 'package:bus_pids_simulator/widgets/status_provider.dart';
-import 'package:bus_pids_simulator/widgets/theme_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -56,22 +56,18 @@ class App extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(
-          create: (_) => ThemeChangeNotifier(Static.localStorage.appTheme),
-        ),
         ChangeNotifierProvider(create: (_) => LandscapeChangeNotifier(false)),
         ChangeNotifierProvider(
           create: (_) => StatusChangeNotifier(Static.currentStatus),
         ),
         ChangeNotifierProvider(create: (_) => LocationChangeNotifier()),
+        ChangeNotifierProvider(create: (_) => RouteAnalysisProvider()),
       ],
-      child: ThemeProvider(
-        builder: (context, themeData) => MaterialApp(
-          debugShowCheckedModeBanner: false,
-          title: '公車 PIDS 模擬器',
-          theme: themeData,
-          home: const LandscapeWatcher(child: MainPage()),
-        ),
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: '公車 PIDS 模擬器',
+        theme: ThemeData.dark(useMaterial3: true),
+        home: const LandscapeWatcher(child: MainPage()),
       ),
     );
   }
