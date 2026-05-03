@@ -14,10 +14,10 @@ class MapPage extends StatefulWidget {
   const MapPage({super.key});
 
   @override
-  State<MapPage> createState() => _MapPageState();
+  State createState() => _MapPageState();
 }
 
-class _MapPageState extends State<MapPage> {
+class _MapPageState extends State {
   final MapController _mapController = MapController();
 
   bool _isFollowing = true;
@@ -136,7 +136,7 @@ class _MapPageState extends State<MapPage> {
                 fontWeight: FontWeight.bold,
               ),
               textAlign: TextAlign.center,
-              softWrap: true, // 支援長站名換行
+              softWrap: true,
             ),
           ),
           Icon(
@@ -195,10 +195,26 @@ class _MapPageState extends State<MapPage> {
               children: [
                 ColorFiltered(
                   colorFilter: const ColorFilter.matrix([
-                    0.6, 0, 0, 0, 0, // 降低 R 亮度至 60%
-                    0, 0.6, 0, 0, 0, // 降低 G 亮度至 60%
-                    0, 0, 0.6, 0, 0, // 降低 B 亮度至 60%
-                    0, 0, 0, 1, 0,
+                    0.6,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0.6,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0.6,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    1,
+                    0,
                   ]),
                   child: Opacity(
                     opacity: _satelliteOpacity,
@@ -266,7 +282,7 @@ class _MapPageState extends State<MapPage> {
         child: SafeArea(
           bottom: false,
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
             child: Row(
               children: [
                 Expanded(
@@ -274,15 +290,11 @@ class _MapPageState extends State<MapPage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text(
-                        "上一站",
-                        style: TextStyle(color: Colors.white70, fontSize: 12),
-                      ),
                       Text(
                         res.prevStation?.name ?? "起點站",
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 16,
+                          fontSize: 14,
                           fontWeight: FontWeight.bold,
                         ),
                         overflow: TextOverflow.ellipsis,
@@ -293,15 +305,15 @@ class _MapPageState extends State<MapPage> {
                           "${res.distToPrevStation!.toStringAsFixed(0)}m 前",
                           style: const TextStyle(
                             color: Colors.greenAccent,
-                            fontSize: 11,
+                            fontSize: 10,
                           ),
                         ),
                     ],
                   ),
                 ),
                 Container(
-                  width: 2,
-                  height: 40,
+                  width: 1,
+                  height: 25,
                   color: Colors.white24,
                   margin: const EdgeInsets.symmetric(horizontal: 5),
                 ),
@@ -311,42 +323,30 @@ class _MapPageState extends State<MapPage> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        status.route.name,
+                        "${status.route.name} 往 $directionText",
                         style: const TextStyle(
                           color: Colors.amberAccent,
-                          fontSize: 18,
+                          fontSize: 15,
                           fontWeight: FontWeight.w900,
                         ),
-                      ),
-                      Text(
-                        status.route.description,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 11,
-                        ),
-                        overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
-                      ),
-                      Text(
-                        "往 $directionText ${res.isOffRoute ? '(脫離路線)' : ''}",
-                        style: TextStyle(
-                          color: res.isOffRoute
-                              ? Colors.redAccent
-                              : Colors.white,
-                          fontSize: 12,
-                          fontWeight: res.isOffRoute
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                        ),
                         overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
                       ),
+                      if (res.isOffRoute)
+                        const Text(
+                          "(脫離路線)",
+                          style: TextStyle(
+                            color: Colors.redAccent,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                     ],
                   ),
                 ),
                 Container(
-                  width: 2,
-                  height: 40,
+                  width: 1,
+                  height: 25,
                   color: Colors.white24,
                   margin: const EdgeInsets.symmetric(horizontal: 5),
                 ),
@@ -355,15 +355,11 @@ class _MapPageState extends State<MapPage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text(
-                        "下一站",
-                        style: TextStyle(color: Colors.white70, fontSize: 12),
-                      ),
                       Text(
                         res.nextStation?.name ?? "終點站",
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 16,
+                          fontSize: 14,
                           fontWeight: FontWeight.bold,
                         ),
                         overflow: TextOverflow.ellipsis,
@@ -374,7 +370,7 @@ class _MapPageState extends State<MapPage> {
                           "${res.distToNextStation!.toStringAsFixed(0)}m",
                           style: const TextStyle(
                             color: Colors.amberAccent,
-                            fontSize: 11,
+                            fontSize: 10,
                           ),
                         ),
                     ],
@@ -453,7 +449,7 @@ class _MapPageState extends State<MapPage> {
               const SizedBox(height: 4),
               FloatingActionButton.small(
                 onPressed: () {
-                  final locProvider = context.read<LocationChangeNotifier>();
+                  final locProvider = context.read();
                   if (locProvider.currentLocation != null) {
                     setState(() => _isFollowing = true);
                     _mapController.move(locProvider.currentLocation!, 17.0);
