@@ -458,13 +458,18 @@ class _InfoPageState extends State<InfoPage> {
               context: context,
               title: isOnDuty ? '結束營運' : '開始營運',
               content: "是否確定${isOnDuty ? '結束營運' : '開始營運'}？",
-              onConfirm: () => notifier.setStatus(
-                Status(
-                  route: status.route,
-                  direction: status.direction,
-                  dutyStatus: isOnDuty ? DutyStatus.offDuty : DutyStatus.onDuty,
-                ),
-              ),
+              onConfirm: () {
+                notifier.setStatus(
+                  Status(
+                    route: status.route,
+                    direction: status.direction,
+                    dutyStatus: isOnDuty
+                        ? DutyStatus.offDuty
+                        : DutyStatus.onDuty,
+                  ),
+                );
+                Static.TTS.speak("");
+              },
             ),
             child: _buildDashboardBox(
               theme: theme,

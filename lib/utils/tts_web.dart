@@ -8,9 +8,11 @@ import 'tts.dart';
 class TTSWeb implements TTSInterface {
   web.SpeechSynthesisVoice? _bestVoice;
 
+  web.SpeechSynthesisUtterance? _currentUtterance;
+
   @override
   Future<void> init() async {
-    await _loadBestVoice();
+    _loadBestVoice();
     web.window.speechSynthesis.onvoiceschanged = (web.Event _) {
       _loadBestVoice();
     }.toJS;
@@ -18,6 +20,8 @@ class TTSWeb implements TTSInterface {
 
   Future<void> _loadBestVoice() async {
     final voices = web.window.speechSynthesis.getVoices();
+    if (voices.length == 0) return;
+
     List<web.SpeechSynthesisVoice> zhVoices = [];
     for (int i = 0; i < voices.length; i++) {
       final v = voices[i];
@@ -25,7 +29,9 @@ class TTSWeb implements TTSInterface {
         zhVoices.add(v);
       }
     }
+
     if (zhVoices.isEmpty) return;
+
     try {
       _bestVoice = zhVoices.firstWhere(
         (v) => v.name.contains('Online') || v.name.contains('Neural'),
@@ -42,7 +48,7 @@ class TTSWeb implements TTSInterface {
   @override
   Future<void> stop() async {
     web.window.speechSynthesis.cancel();
-    await Future.delayed(const Duration(milliseconds: 150));
+    await Future.delayed(const Duration(milliseconds: 100));
   }
 
   @override
@@ -54,31 +60,37 @@ class TTSWeb implements TTSInterface {
   }) async {
     if (_bestVoice == null) await _loadBestVoice();
 
+    web.window.speechSynthesis.cancel();
+    web.window.speechSynthesis.resume();
+
     final completer = Completer<void>();
-    final utterance = web.SpeechSynthesisUtterance(text);
 
-    if (_bestVoice != null) utterance.voice = _bestVoice;
-    utterance.pitch = pitch;
-    utterance.rate = rate * 0.9;
-    utterance.lang = 'zh-TW';
-    utterance.volume = volume;
+    _currentUtterance = web.SpeechSynthesisUtterance(text);
 
-    final timeout = Timer(const Duration(seconds: 10), () {
-      if (!completer.isCompleted) completer.complete();
-    });
+    if (_bestVoice != null) {
+      _currentUtterance!.voice = _bestVoice;
+    }
+    _currentUtterance!.lang = 'zh-TW';
+    _currentUtterance!.pitch = pitch;
+    _currentUtterance!.rate = rate * 0.9;
+    _currentUtterance!.volume = volume;
 
-    utterance.onend = (web.Event _) {
-      timeout.cancel();
+    _currentUtterance!.onend = (web.Event _) {
       if (!completer.isCompleted) completer.complete();
     }.toJS;
 
-    utterance.onerror = (web.Event _) {
-      timeout.cancel();
+    _currentUtterance!.onerror = (web.Event _) {
       if (!completer.isCompleted) completer.complete();
     }.toJS;
 
-    web.window.speechSynthesis.speak(utterance);
-    return completer.future;
+    web.window.speechSynthesis.speak(_currentUtterance!);
+
+    return completer.future.timeout(
+      const Duration(seconds: 12),
+      onTimeout: () {
+        if (!completer.isCompleted) completer.complete();
+      },
+    );
   }
 }
 

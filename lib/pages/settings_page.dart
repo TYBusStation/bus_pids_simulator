@@ -48,17 +48,17 @@ class _RulesTabState extends State<_RulesTab> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       children: [
         _dTile(
-          "到站報站觸發離下站距離(公尺) [負數則無法觸發]",
+          "到站報站觸發：離下站距離(公尺) [負數則無法觸發]",
           Static.arrivalDistance,
           (v) => Static.arrivalDistance = v,
         ),
         _dTile(
-          "下站報站觸發離下站距離(公尺) [與下方則一處發]",
+          "下站報站觸發：離下站距離(公尺) [與下方擇一觸發]",
           Static.nextStationDistance,
           (v) => Static.nextStationDistance = v,
         ),
         _dTile(
-          "下站報站觸發離上站距離(公尺) [與上方則一處發]",
+          "下站報站觸發：離上站距離(公尺) [與上方擇一觸發]",
           Static.nextStationDepartureDistance,
           (v) => Static.nextStationDepartureDistance = v,
         ),

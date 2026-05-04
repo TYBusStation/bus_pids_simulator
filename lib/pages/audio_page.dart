@@ -22,7 +22,6 @@ class _AudioPageState extends State<AudioPage> {
     _loadNames();
   }
 
-  // 預先加載清單，提升效能
   void _loadNames() {
     _cachedNames = Static.audioManager.allAudioNames;
     _performSearch();
@@ -53,7 +52,6 @@ class _AudioPageState extends State<AudioPage> {
       floatingActionButton: _buildFABs(),
       body: Column(
         children: [
-          // 優化後的搜尋框
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Container(
@@ -89,8 +87,6 @@ class _AudioPageState extends State<AudioPage> {
               ),
             ),
           ),
-
-          // Grid 列表 (使用快取後的清單)
           Expanded(
             child: _filteredAudios.isEmpty
                 ? const Center(
@@ -101,7 +97,7 @@ class _AudioPageState extends State<AudioPage> {
                     gridDelegate:
                         const SliverGridDelegateWithMaxCrossAxisExtent(
                           maxCrossAxisExtent: 150,
-                          mainAxisExtent: 125,
+                          mainAxisExtent: 130,
                           crossAxisSpacing: 8,
                           mainAxisSpacing: 8,
                         ),
@@ -127,7 +123,7 @@ class _AudioPageState extends State<AudioPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           IconButton(
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
@@ -135,42 +131,56 @@ class _AudioPageState extends State<AudioPage> {
             onPressed: () => Static.audioManager.playAudio(name),
           ),
           const SizedBox(height: 4),
-          // 使用 Printer 邏輯判斷跑馬燈
           Padding(
-            padding: EdgeInsetsGeometry.symmetric(horizontal: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 6),
             child: SizedBox(
-              height: 22,
+              height: 20,
               child: _buildMarqueeOrText(name, theme),
             ),
           ),
-          const Divider(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              IconButton(
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                icon: const Icon(Icons.edit, size: 16),
-                onPressed: () => _showRenameDialog(name),
-              ),
-              IconButton(
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                icon: const Icon(Icons.delete, size: 16, color: Colors.red),
-                onPressed: () async {
-                  await Static.audioManager.deleteAudio(name);
-                  _refresh();
-                },
-              ),
-            ],
+          const Divider(height: 10, indent: 10, endIndent: 10),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  icon: const Icon(Icons.edit, size: 18),
+                  onPressed: () => _showRenameDialog(name),
+                ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  icon: const Icon(
+                    Icons.download,
+                    size: 18,
+                    color: Colors.green,
+                  ),
+                  onPressed: () => Static.audioManager.exportSingle(name),
+                ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  icon: const Icon(Icons.delete, size: 18, color: Colors.red),
+                  onPressed: () async {
+                    await Static.audioManager.deleteAudio(name);
+                    _refresh();
+                  },
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
         ],
       ),
     );
   }
 
-  // 使用 TextPainter (Printer) 判斷寬度
   Widget _buildMarqueeOrText(String text, ThemeData theme) {
     final style = theme.textTheme.bodySmall?.copyWith(
       fontWeight: FontWeight.bold,
@@ -185,7 +195,6 @@ class _AudioPageState extends State<AudioPage> {
           textDirection: TextDirection.ltr,
         )..layout(maxWidth: double.infinity);
 
-        // 如果文字寬度大於容器寬度，則顯示跑馬燈
         if (textPainter.size.width > constraints.maxWidth) {
           return Marquee(
             text: text,
@@ -204,7 +213,6 @@ class _AudioPageState extends State<AudioPage> {
     );
   }
 
-  // FAB 保持精簡
   Widget _buildFABs() {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -229,8 +237,6 @@ class _AudioPageState extends State<AudioPage> {
       ],
     );
   }
-
-  // --- 邏輯部分 (微調名稱獲取) ---
 
   Future<void> _handleImportZip() async {
     final files = await Static.audioManager.pickZipFiles();
