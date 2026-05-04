@@ -82,11 +82,20 @@ class LandscapeWatcher extends StatelessWidget {
   Widget build(BuildContext context) {
     final isLandscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
-    final notifier = context.read<LandscapeChangeNotifier>();
+    final landscapeNotifier = context.read<LandscapeChangeNotifier>();
+    final locationNotifier = context.watch<LocationChangeNotifier>();
+    final statusNotifier = context.watch<StatusChangeNotifier>();
+    final analysisProvider = context.read<RouteAnalysisProvider>();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (notifier.landscape != isLandscape) {
-        notifier.setLandscape(isLandscape);
+      if (landscapeNotifier.landscape != isLandscape) {
+        landscapeNotifier.setLandscape(isLandscape);
       }
+      analysisProvider.update(
+        locationNotifier.currentLocation,
+        locationNotifier.currentSpeed,
+        statusNotifier.currentStatus,
+      );
     });
 
     return child;

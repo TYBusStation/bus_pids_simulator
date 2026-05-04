@@ -1,19 +1,20 @@
 import 'dart:async';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:provider/provider.dart';
 
 class LocationChangeNotifier extends ChangeNotifier {
   LatLng? _currentLocation;
+  double _currentSpeed = 0;
   bool _serviceEnabled = false;
   LocationPermission _permission = LocationPermission.denied;
   StreamSubscription<Position>? _subscription;
   bool _isDisposed = false;
 
   LatLng? get currentLocation => _currentLocation;
+
+  double get currentSpeed => _currentSpeed;
 
   bool get isGpsReady =>
       _serviceEnabled &&
@@ -42,24 +43,50 @@ class LocationChangeNotifier extends ChangeNotifier {
       }
       if (isGpsReady) _startListening();
     } catch (e) {
-      debugPrint("定位初始化錯誤: $e");
+      debugPrint(e.toString());
     }
     if (!_isDisposed) notifyListeners();
   }
 
   void _startListening() {
     _subscription?.cancel();
+
+    late LocationSettings locationSettings;
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      locationSettings = AndroidSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 0,
+        intervalDuration: const Duration(milliseconds: 500),
+        foregroundNotificationConfig: const ForegroundNotificationConfig(
+          notificationText: "正在背景運行定位服務",
+          notificationTitle: "公車模擬器執行中",
+        ),
+      );
+    } else if (defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS) {
+      locationSettings = AppleSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 0,
+        pauseLocationUpdatesAutomatically: false,
+        showBackgroundLocationIndicator: true,
+      );
+    } else {
+      locationSettings = const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 0,
+      );
+    }
+
     _subscription =
-        Geolocator.getPositionStream(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.high,
-            distanceFilter: 5,
-          ),
-        ).listen((Position position) {
-          if (_isDisposed) return;
-          _currentLocation = LatLng(position.latitude, position.longitude);
-          notifyListeners();
-        }, onError: (e) => debugPrint("定位流錯誤: $e"));
+        Geolocator.getPositionStream(locationSettings: locationSettings).listen(
+          (Position position) {
+            if (_isDisposed) return;
+            _currentLocation = LatLng(position.latitude, position.longitude);
+            _currentSpeed = position.speed > 0 ? position.speed * 3.6 : 0;
+            notifyListeners();
+          },
+          onError: (e) => debugPrint(e.toString()),
+        );
   }
 
   Future<void> forceRefresh() async {
@@ -75,11 +102,12 @@ class LocationChangeNotifier extends ChangeNotifier {
           desiredAccuracy: LocationAccuracy.high,
         );
         _currentLocation = LatLng(pos.latitude, pos.longitude);
+        _currentSpeed = pos.speed > 0 ? pos.speed * 3.6 : 0;
         _startListening();
         notifyListeners();
       }
     } catch (e) {
-      debugPrint("重定位失敗: $e");
+      debugPrint(e.toString());
     }
   }
 
@@ -88,19 +116,5 @@ class LocationChangeNotifier extends ChangeNotifier {
     _isDisposed = true;
     _subscription?.cancel();
     super.dispose();
-  }
-}
-
-class LocationProvider extends StatelessWidget {
-  final Widget Function(BuildContext context, LatLng? location) builder;
-
-  const LocationProvider({super.key, required this.builder});
-
-  @override
-  Widget build(BuildContext context) {
-    return Consumer<LocationChangeNotifier>(
-      builder: (context, notifier, _) =>
-          builder(context, notifier.currentLocation),
-    );
   }
 }

@@ -60,9 +60,14 @@ class _MainPageState extends State<MainPage> {
           builder: (context, locNotifier, statusNotifier, child) {
             final status = statusNotifier.currentStatus;
             final location = locNotifier.currentLocation;
+            final speed = locNotifier.currentSpeed;
 
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              context.read<RouteAnalysisProvider>().update(location, status);
+              context.read<RouteAnalysisProvider>().update(
+                location,
+                speed,
+                status,
+              );
             });
 
             final bool isOnDuty = status.dutyStatus == DutyStatus.onDuty;

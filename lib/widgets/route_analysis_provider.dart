@@ -8,6 +8,7 @@ import '../utils/static.dart';
 
 class RouteAnalysisProvider extends ChangeNotifier {
   RouteAnalysisResult? _currentAnalysis;
+  double _currentSpeed = 0;
   int? _lastSpokenStationOrder;
   int? _lastArrivedStationOrder;
   DutyStatus? _lastDutyStatus;
@@ -15,7 +16,10 @@ class RouteAnalysisProvider extends ChangeNotifier {
 
   RouteAnalysisResult? get currentAnalysis => _currentAnalysis;
 
-  void update(LatLng? location, Status status) {
+  double get currentSpeed => _currentSpeed;
+
+  void update(LatLng? location, double speed, Status status) {
+    _currentSpeed = speed;
     if (location == null || status.dutyStatus != DutyStatus.onDuty) {
       if (_currentAnalysis != null || _lastDutyStatus == DutyStatus.onDuty) {
         _currentAnalysis = null;
@@ -116,7 +120,6 @@ class RouteAnalysisProvider extends ChangeNotifier {
     bool isStart =
         _lastDutyStatus != DutyStatus.onDuty && duty == DutyStatus.onDuty;
 
-    // 使用新的離站距離設定
     bool distCond =
         !result.isOffRoute &&
         (distPrev > Static.nextStationDepartureDistance ||

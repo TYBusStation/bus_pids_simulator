@@ -321,6 +321,7 @@ class _InfoPageState extends State<InfoPage> {
                 flex: 3,
                 child: GestureDetector(
                   onTap: () async {
+                    Static.TTS.speak("");
                     final newStatus = await Navigator.push<Status>(
                       context,
                       MaterialPageRoute(
@@ -416,22 +417,25 @@ class _InfoPageState extends State<InfoPage> {
               Expanded(
                 flex: 1,
                 child: GestureDetector(
-                  onTap: () => _showConfirmDialog(
-                    context: context,
-                    title:
-                        "切換${status.direction == Direction.go ? '返程' : '去程'}",
-                    content:
-                        "是否確定切換${status.direction == Direction.go ? '返程' : '去程'}？",
-                    onConfirm: () => notifier.setStatus(
-                      Status(
-                        route: status.route,
-                        direction: status.direction == Direction.go
-                            ? Direction.back
-                            : Direction.go,
-                        dutyStatus: DutyStatus.offDuty,
+                  onTap: () {
+                    Static.TTS.speak("");
+                    _showConfirmDialog(
+                      context: context,
+                      title:
+                          "切換${status.direction == Direction.go ? '返程' : '去程'}",
+                      content:
+                          "是否確定切換${status.direction == Direction.go ? '返程' : '去程'}？",
+                      onConfirm: () => notifier.setStatus(
+                        Status(
+                          route: status.route,
+                          direction: status.direction == Direction.go
+                              ? Direction.back
+                              : Direction.go,
+                          dutyStatus: DutyStatus.offDuty,
+                        ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                   child: _buildDashboardBox(
                     theme: theme,
                     color: Colors.blue.shade600,
@@ -440,7 +444,10 @@ class _InfoPageState extends State<InfoPage> {
                         child: Text(
                           "切換${status.direction == Direction.go ? '返程' : '去程'}",
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.white, fontSize: 18),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                          ),
                         ),
                       ),
                     ),
@@ -454,23 +461,26 @@ class _InfoPageState extends State<InfoPage> {
         Expanded(
           flex: 2,
           child: GestureDetector(
-            onTap: () => _showConfirmDialog(
-              context: context,
-              title: isOnDuty ? '結束營運' : '開始營運',
-              content: "是否確定${isOnDuty ? '結束營運' : '開始營運'}？",
-              onConfirm: () {
-                notifier.setStatus(
-                  Status(
-                    route: status.route,
-                    direction: status.direction,
-                    dutyStatus: isOnDuty
-                        ? DutyStatus.offDuty
-                        : DutyStatus.onDuty,
-                  ),
-                );
-                Static.TTS.speak("");
-              },
-            ),
+            onTap: () {
+              Static.TTS.speak("");
+              _showConfirmDialog(
+                context: context,
+                title: isOnDuty ? '結束營運' : '開始營運',
+                content: "是否確定${isOnDuty ? '結束營運' : '開始營運'}？",
+                onConfirm: () {
+                  notifier.setStatus(
+                    Status(
+                      route: status.route,
+                      direction: status.direction,
+                      dutyStatus: isOnDuty
+                          ? DutyStatus.offDuty
+                          : DutyStatus.onDuty,
+                    ),
+                  );
+                  if (!isOnDuty) Static.TTS.speak("", volume: 0.001);
+                },
+              );
+            },
             child: _buildDashboardBox(
               theme: theme,
               color: isOnDuty ? Colors.green.shade600 : Colors.red.shade600,

@@ -30,11 +30,21 @@ class TTSWeb implements TTSInterface {
       }
     }
 
+    if (zhVoices.isEmpty) {
+      for (int i = 0; i < voices.length; i++) {
+        if (voices[i].lang.contains('zh')) {
+          zhVoices.add(voices[i]);
+        }
+      }
+    }
+
     if (zhVoices.isEmpty) return;
 
     try {
       _bestVoice = zhVoices.firstWhere(
-        (v) => v.name.contains('Online') || v.name.contains('Neural'),
+        (v) =>
+            (v.name.contains('Online') || v.name.contains('Neural')) &&
+            v.lang.contains('zh-TW'),
       );
     } catch (_) {
       try {
@@ -48,7 +58,6 @@ class TTSWeb implements TTSInterface {
   @override
   Future<void> stop() async {
     web.window.speechSynthesis.cancel();
-    await Future.delayed(const Duration(milliseconds: 100));
   }
 
   @override
@@ -58,10 +67,12 @@ class TTSWeb implements TTSInterface {
     double rate = 1.0,
     double volume = 1.0,
   }) async {
+    web.window.speechSynthesis.resume();
+
     if (_bestVoice == null) await _loadBestVoice();
 
     web.window.speechSynthesis.cancel();
-    web.window.speechSynthesis.resume();
+    await Future.delayed(const Duration(milliseconds: 50));
 
     final completer = Completer<void>();
 
@@ -72,7 +83,7 @@ class TTSWeb implements TTSInterface {
     }
     _currentUtterance!.lang = 'zh-TW';
     _currentUtterance!.pitch = pitch;
-    _currentUtterance!.rate = rate * 0.9;
+    _currentUtterance!.rate = (rate * 0.9).clamp(0.1, 2.0);
     _currentUtterance!.volume = volume;
 
     _currentUtterance!.onend = (web.Event _) {
