@@ -50,57 +50,89 @@ class RouteAnalysisProvider extends ChangeNotifier {
     final int thisId = _activeSequenceId;
     await Static.TTS.stop();
     await Static.audioManager.stop();
-    await Future.delayed(const Duration(milliseconds: 50));
+    await Future.delayed(const Duration(milliseconds: 300));
     for (var part in sequence) {
       if (thisId != _activeSequenceId) return;
-      String text = part['text'];
-      double localSpeed = part['speed'] ?? 1.0;
-
+      String text = part['text'].trim();
+      if (text.isEmpty) continue;
+      double speed = part['speed'] ?? 1.0;
       if (Static.audioManager.hasAudio(text)) {
-        await Static.audioManager.playAndWait(text, localSpeed: localSpeed);
+        await Static.audioManager.playAndWait(text, localSpeed: speed);
       } else {
         await Static.TTS.speak(
           text,
           pitch: part['pitch'] ?? 1.0,
-          rate: localSpeed * Static.globalSpeed,
+          rate: speed * Static.globalSpeed,
           volume: Static.globalVolume,
         );
       }
+      await Future.delayed(const Duration(milliseconds: 50));
     }
   }
 
-  void _handleTTS(RouteAnalysisResult result,
-      DutyStatus currentDuty,
-      List<BusStation> stations,) {
+  List<Map<String, dynamic>> _buildSequence(
+    List<String> template,
+    String name,
+    bool isTerminal,
+  ) {
+    final List<Map<String, dynamic>> sequence = [];
+    for (var item in template) {
+      String processed = item
+          .replaceAll('{name}', name)
+          .replaceAll('{terminal}', isTerminal ? "終點站" : "");
+      sequence.add({
+        'text': processed,
+        'pitch': (processed == "到了" || processed == "終點站") ? 1.1 : 1.0,
+        'speed': (processed == "到了" || processed == "終點站") ? 0.9 : 1.0,
+      });
+    }
+    return sequence;
+  }
+
+  void _handleTTS(
+    RouteAnalysisResult result,
+    DutyStatus duty,
+    List<BusStation> stations,
+  ) {
     if (result.nextStation == null) return;
     final bool isTerminal = result.nextStation!.order == stations.last.order;
     final double distNext = result.distToNextStation ?? double.infinity;
     final double distPrev = result.distToPrevStation ?? 0;
-    if (!result.isOffRoute && distNext < 100) {
+
+    if (!result.isOffRoute && distNext < Static.arrivalDistance) {
       if (_lastArrivedStationOrder != result.nextStation!.order) {
         _lastArrivedStationOrder = result.nextStation!.order;
-        _executeSequence([
-          if (isTerminal) {'text': "終點站", 'pitch': 1.1, 'speed': 0.9},
-          {'text': result.nextStation!.name},
-          {'text': "到了", 'pitch': 1.1, 'speed': 0.9},
-        ]);
+        _executeSequence(
+          _buildSequence(
+            Static.arrivalTemplate,
+            result.nextStation!.name,
+            isTerminal,
+          ),
+        );
       }
       return;
     }
-    bool isStartOnDuty =
-        _lastDutyStatus != DutyStatus.onDuty &&
-            currentDuty == DutyStatus.onDuty;
-    bool distanceCondition =
-        !result.isOffRoute && (distPrev > 50 || distNext < 250);
-    if ((isStartOnDuty || distanceCondition) &&
+
+    bool isStart =
+        _lastDutyStatus != DutyStatus.onDuty && duty == DutyStatus.onDuty;
+
+    // 使用新的離站距離設定
+    bool distCond =
+        !result.isOffRoute &&
+        (distPrev > Static.nextStationDepartureDistance ||
+            distNext < Static.nextStationDistance);
+
+    if ((isStart || distCond) &&
         _lastSpokenStationOrder != result.nextStation!.order) {
       _lastSpokenStationOrder = result.nextStation!.order;
-      _executeSequence([
-        {'text': "下一站"},
-        if (isTerminal) {'text': "終點站", 'pitch': 1.1, 'speed': 0.9},
-        {'text': result.nextStation!.name},
-      ]);
+      _executeSequence(
+        _buildSequence(
+          Static.nextStationTemplate,
+          result.nextStation!.name,
+          isTerminal,
+        ),
+      );
     }
-    _lastDutyStatus = currentDuty;
+    _lastDutyStatus = duty;
   }
 }

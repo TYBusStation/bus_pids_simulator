@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 
-import '../data/contact_item.dart';
 import '../utils/static.dart';
-import '../widgets/searchable_list.dart';
+import 'audio_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -14,281 +11,190 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  void _refresh() => setState(() {});
-
-  Future<bool> _showConfirmDialog(
-    String title,
-    String content, {
-    Color? confirmColor,
-  }) async {
-    return await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text(title),
-            content: Text(content),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text("取消"),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: Text("確認", style: TextStyle(color: confirmColor)),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-  }
-
-  void _handleZipImport() async {
-    final files = await Static.audioManager.pickZipFiles();
-    if (files == null || files.isEmpty) return;
-
-    final bool confirm =
-        await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text("確認匯入 (${files.length} 個檔案)"),
-            content: SizedBox(
-              width: double.maxFinite,
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: files.keys.length,
-                itemBuilder: (context, i) => Text(
-                  "• ${files.keys.elementAt(i)}",
-                  style: const TextStyle(fontSize: 12),
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text("取消"),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text("開始匯入"),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-
-    if (confirm) {
-      for (var entry in files.entries) {
-        await Static.audioManager.saveAudio(entry.key, entry.value);
-      }
-      _refresh();
-    }
-  }
-
-  void _showAddAudioDialog() {
-    final controller = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("新增自定義音檔"),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(hintText: "輸入名稱 (如：下一站 或 站名)"),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("取消"),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (controller.text.isEmpty) return;
-              await Static.audioManager.pickAndSave(controller.text);
-              if (mounted) Navigator.pop(context);
-              _refresh();
-            },
-            child: const Text("選擇並上傳"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showRenameDialog(String oldName) {
-    final controller = TextEditingController(text: oldName);
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("更名"),
-        content: TextField(controller: controller),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("取消"),
-          ),
-          TextButton(
-            onPressed: () async {
-              if (controller.text.isNotEmpty && controller.text != oldName) {
-                await Static.audioManager.renameAudio(oldName, controller.text);
-                if (mounted) Navigator.pop(context);
-                _refresh();
-              }
-            },
-            child: const Text("確認"),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return DefaultTabController(
       length: 2,
-      child: Column(
-        children: [
-          TabBar(
-            labelColor: theme.colorScheme.primary,
-            tabs: const [
-              Tab(text: "一般設定"),
-              Tab(text: "語音音檔管理"),
+      child: Scaffold(
+        appBar: AppBar(
+          toolbarHeight: 0,
+          elevation: 0,
+          bottom: const TabBar(
+            labelStyle: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+            indicatorSize: TabBarIndicatorSize.label,
+            tabs: [
+              Tab(text: "報站規則"),
+              Tab(text: "語音管理"),
             ],
           ),
-          Expanded(
-            child: TabBarView(
+        ),
+        body: const TabBarView(children: [_RulesTab(), AudioPage()]),
+      ),
+    );
+  }
+}
+
+class _RulesTab extends StatefulWidget {
+  const _RulesTab();
+
+  @override
+  State<_RulesTab> createState() => _RulesTabState();
+}
+
+class _RulesTabState extends State<_RulesTab> {
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      children: [
+        _dTile(
+          "到站報站觸發離下站距離(公尺) [負數則無法觸發]",
+          Static.arrivalDistance,
+          (v) => Static.arrivalDistance = v,
+        ),
+        _dTile(
+          "下站報站觸發離下站距離(公尺) [與下方則一處發]",
+          Static.nextStationDistance,
+          (v) => Static.nextStationDistance = v,
+        ),
+        _dTile(
+          "下站報站觸發離上站距離(公尺) [與上方則一處發]",
+          Static.nextStationDepartureDistance,
+          (v) => Static.nextStationDepartureDistance = v,
+        ),
+        const Divider(),
+        _ruleExp("下站報站文字序列", Static.nextStationTemplate),
+        _ruleExp("到站報站文字序列", Static.arrivalTemplate),
+      ],
+    );
+  }
+
+  Widget _dTile(String l, double v, Function(double) cb) {
+    return ListTile(
+      dense: true,
+      title: Text(l, style: const TextStyle(fontSize: 14)),
+      trailing: SizedBox(
+        width: 60,
+        child: TextField(
+          textAlign: TextAlign.end,
+          style: const TextStyle(fontSize: 14),
+          controller: TextEditingController(text: v.toStringAsFixed(0)),
+          keyboardType: TextInputType.number,
+          onSubmitted: (s) {
+            final n = double.tryParse(s);
+            if (n != null) {
+              setState(() => cb(n));
+              Static.saveSettings();
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _ruleExp(String t, List<String> l) {
+    return ExpansionTile(
+      title: Text(
+        t,
+        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+      ),
+      tilePadding: EdgeInsets.zero,
+      children: [
+        ...l.asMap().entries.map(
+          (e) => ListTile(
+            dense: true,
+            contentPadding: const EdgeInsets.only(left: 12),
+            title: Text(e.value, style: const TextStyle(fontSize: 13)),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                _buildGeneralSettings(theme),
-                _buildAudioManagement(theme),
+                IconButton(
+                  icon: const Icon(Icons.edit, size: 16),
+                  onPressed: () => _showEditDialog(l, e.key),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.arrow_upward, size: 16),
+                  onPressed: e.key == 0
+                      ? null
+                      : () {
+                          setState(() {
+                            final i = l.removeAt(e.key);
+                            l.insert(e.key - 1, i);
+                          });
+                          Static.saveSettings();
+                        },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete, size: 16, color: Colors.red),
+                  onPressed: () {
+                    setState(() => l.removeAt(e.key));
+                    Static.saveSettings();
+                  },
+                ),
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildGeneralSettings(ThemeData theme) {
-    return ListView(
-      padding: const EdgeInsets.all(8.0),
-      children: [
-        Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 600),
-            child: Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                children: List.generate(ContactItem.contactItems.length, (
-                  index,
-                ) {
-                  final item = ContactItem.contactItems[index];
-                  return ListTile(
-                    dense: true,
-                    leading: FaIcon(
-                      item.icon,
-                      size: 26,
-                      color: theme.colorScheme.primary,
-                    ),
-                    title: Text(item.title),
-                    trailing: OutlinedButton(
-                      onPressed: () async =>
-                          await launchUrl(Uri.parse(item.url)),
-                      child: const Text("前往"),
-                    ),
-                  );
-                }),
-              ),
-            ),
-          ),
+        ),
+        ListTile(
+          dense: true,
+          leading: const Icon(Icons.add, size: 18),
+          title: const Text("新增片段", style: TextStyle(fontSize: 13)),
+          onTap: () => _showAddDialog(l),
         ),
       ],
     );
   }
 
-  Widget _buildAudioManagement(ThemeData theme) {
-    return Scaffold(
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          FloatingActionButton.small(
-            heroTag: "zip_import",
-            onPressed: _handleZipImport,
-            tooltip: "匯入 ZIP",
-            child: const Icon(Icons.drive_folder_upload),
+  void _showEditDialog(List<String> l, int index) {
+    final c = TextEditingController(text: l[index]);
+    showDialog(
+      context: context,
+      builder: (v) => AlertDialog(
+        title: const Text("編輯內容"),
+        content: TextField(controller: c, autofocus: true),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(v),
+            child: const Text("取消"),
           ),
-          const SizedBox(height: 8),
-          FloatingActionButton.small(
-            heroTag: "zip_export",
-            onPressed: () async {
-              if (await _showConfirmDialog("匯出 ZIP", "即將將所有自定義音檔打包為 ZIP 下載。")) {
-                Static.audioManager.exportAllZip();
+          TextButton(
+            onPressed: () {
+              if (c.text.isNotEmpty) {
+                setState(() => l[index] = c.text);
+                Static.saveSettings();
               }
+              Navigator.pop(v);
             },
-            tooltip: "匯出 ZIP",
-            child: const Icon(Icons.archive),
-          ),
-          const SizedBox(height: 8),
-          FloatingActionButton(
-            heroTag: "add_audio",
-            onPressed: _showAddAudioDialog,
-            tooltip: "新增音檔",
-            child: const Icon(Icons.add),
+            child: const Text("確定"),
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: SearchableList<String>(
-          allItems: Static.audioManager.allAudioNames,
-          searchHintText: "搜尋自定義音檔",
-          filterCondition: (item, query) =>
-              item.toLowerCase().contains(query.toLowerCase()),
-          emptyStateWidget: const Center(child: Text("目前無自定義音檔")),
-          sortCallback: (a, b) => a.compareTo(b),
-          itemBuilder: (context, name) => Card(
-            child: ListTile(
-              title: Text(name),
-              leading: IconButton(
-                icon: const Icon(Icons.play_circle_fill, color: Colors.blue),
-                onPressed: () => Static.audioManager.playAudio(name),
-              ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.edit, size: 20),
-                    onPressed: () => _showRenameDialog(name),
-                    tooltip: "更名",
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.download, size: 20),
-                    onPressed: () async {
-                      if (await _showConfirmDialog("匯出音檔", "確定要下載「$name」嗎？")) {
-                        Static.audioManager.exportSingle(name);
-                      }
-                    },
-                    tooltip: "匯出此音檔",
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.delete, size: 20, color: Colors.red),
-                    onPressed: () async {
-                      if (await _showConfirmDialog(
-                        "確認刪除",
-                        "確定要刪除「$name」嗎？",
-                        confirmColor: Colors.red,
-                      )) {
-                        await Static.audioManager.deleteAudio(name);
-                        _refresh();
-                      }
-                    },
-                    tooltip: "刪除",
-                  ),
-                ],
-              ),
-            ),
+    );
+  }
+
+  void _showAddDialog(List<String> l) {
+    final c = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (v) => AlertDialog(
+        title: const Text("新增內容"),
+        content: TextField(controller: c, autofocus: true),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(v),
+            child: const Text("取消"),
           ),
-        ),
+          TextButton(
+            onPressed: () {
+              if (c.text.isNotEmpty) {
+                setState(() => l.add(c.text));
+                Static.saveSettings();
+              }
+              Navigator.pop(v);
+            },
+            child: const Text("確定"),
+          ),
+        ],
       ),
     );
   }

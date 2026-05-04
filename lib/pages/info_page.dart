@@ -435,10 +435,10 @@ class _InfoPageState extends State<InfoPage> {
                   child: _buildDashboardBox(
                     theme: theme,
                     color: Colors.blue.shade600,
-                    child: const Center(
+                    child: Center(
                       child: FittedBox(
                         child: Text(
-                          "切換去返程",
+                          "切換${status.direction == Direction.go ? '返程' : '去程'}",
                           textAlign: TextAlign.center,
                           style: TextStyle(color: Colors.white, fontSize: 18),
                         ),

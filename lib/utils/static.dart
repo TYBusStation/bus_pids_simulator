@@ -1,11 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:bus_pids_simulator/data/bus_route.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../data/bus_route.dart';
 import '../data/status.dart';
 import 'audio_manager.dart';
 import 'tts.dart'
@@ -18,27 +19,66 @@ abstract class Static {
   static final TTS = getTTS();
   static final audioManager = AudioManager();
 
+  static const String _settingsBoxName = "settings_box";
+  static late Box _box;
+
   static double globalVolume = 0.5;
   static double globalSpeed = 1.0;
+  static double arrivalDistance = 100.0;
+  static double nextStationDistance = 250.0;
+  static double nextStationDepartureDistance = 50.0;
+
+  static List<String> arrivalTemplate = ["{terminal}", "{name}", "到了"];
+  static List<String> nextStationTemplate = ["下一站", "{terminal}", "{name}"];
 
   static void log(String message) {
     print("[${DateTime.now().toIso8601String()}] $message");
   }
 
   static Future<void> init() async {
+    await Hive.initFlutter();
+    await _loadSettings();
     await audioManager.init();
     await _loadRoutes();
     await TTS.init();
     await requestLocationPermission();
   }
 
+  static Future<void> _loadSettings() async {
+    _box = await Hive.openBox(_settingsBoxName);
+    globalVolume = _box.get('globalVolume', defaultValue: 0.5);
+    globalSpeed = _box.get('globalSpeed', defaultValue: 1.0);
+    arrivalDistance = _box.get('arrivalDistance', defaultValue: 100.0);
+    nextStationDistance = _box.get('nextStationDistance', defaultValue: 250.0);
+    nextStationDepartureDistance = _box.get(
+      'nextStationDepartureDistance',
+      defaultValue: 50.0,
+    );
+    arrivalTemplate = List<String>.from(
+      _box.get('arrivalTemplate', defaultValue: arrivalTemplate),
+    );
+    nextStationTemplate = List<String>.from(
+      _box.get('nextStationTemplate', defaultValue: nextStationTemplate),
+    );
+  }
+
+  static Future<void> saveSettings() async {
+    await _box.put('globalVolume', globalVolume);
+    await _box.put('globalSpeed', globalSpeed);
+    await _box.put('arrivalDistance', arrivalDistance);
+    await _box.put('nextStationDistance', nextStationDistance);
+    await _box.put(
+      'nextStationDepartureDistance',
+      nextStationDepartureDistance,
+    );
+    await _box.put('arrivalTemplate', arrivalTemplate);
+    await _box.put('nextStationTemplate', nextStationTemplate);
+  }
+
   static Future<void> requestLocationPermission() async {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        log("定位服務未開啟");
-        return;
-      }
+      if (!serviceEnabled) return;
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
@@ -46,26 +86,24 @@ abstract class Static {
       }
       if (permission == LocationPermission.deniedForever) return;
     } catch (e) {
-      log("權限請求錯誤: $e");
+      log("Error: $e");
     }
   }
 
   static Future<void> _loadRoutes() async {
-    await rootBundle
-        .loadString("assets/routes.json")
-        .then((data) {
-          List<dynamic> rawRouteData = jsonDecode(data);
-          routeData = rawRouteData
-              .map((rawRoute) => BusRoute.fromJson(rawRoute))
-              .toList();
-        })
-        .catchError((e) {
-          log("載入路線資料失敗: $e");
-        });
+    try {
+      final data = await rootBundle.loadString("assets/routes.json");
+      List<dynamic> rawRouteData = jsonDecode(data);
+      routeData = rawRouteData
+          .map((rawRoute) => BusRoute.fromJson(rawRoute))
+          .toList();
+    } catch (e) {
+      log("Load failed: $e");
+    }
   }
 
   static BusRoute getRouteById(String routeId) {
-    return Static.routeData.firstWhere((r) => r.id == routeId);
+    return routeData.firstWhere((r) => r.id == routeId);
   }
 
   static List<LatLng> wktPrase(String wkt) {

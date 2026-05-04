@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:archive/archive.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -15,6 +16,7 @@ class AudioManager {
   static const String _boxName = "custom_audio_box";
   late Box<Uint8List> _audioBox;
   final AudioPlayer _player = AudioPlayer();
+  final Random _random = Random();
 
   Future<void> init() async {
     await Hive.initFlutter();
@@ -33,10 +35,18 @@ class AudioManager {
     if (!_audioBox.containsKey(cleanName)) return cleanName;
     int counter = 1;
     while (true) {
-      final newName = "$cleanName ($counter)";
+      final newName = "${cleanName}_[$counter]";
       if (!_audioBox.containsKey(newName)) return newName;
       counter++;
     }
+  }
+
+  String _getRandomAudioKey(String baseName) {
+    final keys = _audioBox.keys.cast<String>().where((k) {
+      return k == baseName || k.startsWith("${baseName}_[");
+    }).toList();
+    if (keys.isEmpty) return baseName;
+    return keys[_random.nextInt(keys.length)];
   }
 
   Future<void> saveAudio(String name, Uint8List bytes) async {
@@ -58,7 +68,11 @@ class AudioManager {
     await _audioBox.delete(name);
   }
 
-  bool hasAudio(String name) => _audioBox.containsKey(name);
+  bool hasAudio(String name) {
+    return _audioBox.keys.cast<String>().any(
+      (k) => k == name || k.startsWith("${name}_["),
+    );
+  }
 
   Future<void> _applySettings(double localSpeed) async {
     await _player.setVolume(Static.globalVolume);
@@ -66,7 +80,8 @@ class AudioManager {
   }
 
   Future<void> playAudio(String name, {double localSpeed = 1.0}) async {
-    final bytes = _audioBox.get(name);
+    final key = _getRandomAudioKey(name);
+    final bytes = _audioBox.get(key);
     if (bytes != null) {
       await _player.stop();
       await _player.setSource(BytesSource(bytes));
@@ -76,24 +91,26 @@ class AudioManager {
   }
 
   Future<void> playAndWait(String name, {double localSpeed = 1.0}) async {
-    final bytes = _audioBox.get(name);
+    final key = _getRandomAudioKey(name);
+    final bytes = _audioBox.get(key);
     if (bytes != null) {
       await _player.stop();
+      await Future.delayed(const Duration(milliseconds: 100));
       await _player.setSource(BytesSource(bytes));
       await _applySettings(localSpeed);
-
       final completer = Completer<void>();
       StreamSubscription? sub;
       sub = _player.onPlayerComplete.listen((_) {
-        completer.complete();
+        if (!completer.isCompleted) completer.complete();
         sub?.cancel();
       });
-
       await _player.resume();
       if (kIsWeb)
         await _player.setPlaybackRate(Static.globalSpeed * localSpeed);
-
-      await completer.future;
+      await completer.future.timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => sub?.cancel(),
+      );
     }
   }
 
@@ -113,23 +130,19 @@ class AudioManager {
 
   void exportSingle(String name) {
     final bytes = _audioBox.get(name);
-    if (bytes != null) {
-      downloadFile(bytes, "$name.mp3");
-    }
+    if (bytes != null) downloadFile(bytes, "$name.mp3");
   }
 
   void exportAllZip() {
     final archive = Archive();
     for (var name in allAudioNames) {
       final bytes = _audioBox.get(name);
-      if (bytes != null) {
+      if (bytes != null)
         archive.addFile(ArchiveFile("$name.mp3", bytes.length, bytes));
-      }
     }
     final zipData = ZipEncoder().encode(archive);
-    if (zipData != null) {
+    if (zipData != null)
       downloadFile(Uint8List.fromList(zipData), "bus_audio_backup.zip");
-    }
   }
 
   Future<Map<String, Uint8List>?> pickZipFiles() async {
@@ -145,7 +158,9 @@ class AudioManager {
       if (file.isFile) {
         final fileName = file.name.split('/').last.split('\\').last;
         if (fileName.isEmpty || fileName.startsWith('.')) continue;
-        extracted[fileName] = Uint8List.fromList(file.content as List<int>);
+        extracted[_stripExtension(fileName)] = Uint8List.fromList(
+          file.content as List<int>,
+        );
       }
     }
     return extracted;

@@ -19,17 +19,13 @@ class TTSWeb implements TTSInterface {
   Future<void> _loadBestVoice() async {
     final voices = web.window.speechSynthesis.getVoices();
     List<web.SpeechSynthesisVoice> zhVoices = [];
-
     for (int i = 0; i < voices.length; i++) {
       final v = voices[i];
       if (v.lang.contains('zh-TW') || v.lang.contains('zh_TW')) {
         zhVoices.add(v);
       }
     }
-
     if (zhVoices.isEmpty) return;
-
-    // 優先順序：Microsoft Online (Neural) > Google 國語 > 其他
     try {
       _bestVoice = zhVoices.firstWhere(
         (v) => v.name.contains('Online') || v.name.contains('Neural'),
@@ -46,6 +42,7 @@ class TTSWeb implements TTSInterface {
   @override
   Future<void> stop() async {
     web.window.speechSynthesis.cancel();
+    await Future.delayed(const Duration(milliseconds: 150));
   }
 
   @override
@@ -60,20 +57,23 @@ class TTSWeb implements TTSInterface {
     final completer = Completer<void>();
     final utterance = web.SpeechSynthesisUtterance(text);
 
-    if (_bestVoice != null) {
-      utterance.voice = _bestVoice;
-    }
-
+    if (_bestVoice != null) utterance.voice = _bestVoice;
     utterance.pitch = pitch;
-    utterance.rate = rate * 0.9; // 略微放慢語速通常聽起來較自然
+    utterance.rate = rate * 0.9;
     utterance.lang = 'zh-TW';
     utterance.volume = volume;
 
+    final timeout = Timer(const Duration(seconds: 10), () {
+      if (!completer.isCompleted) completer.complete();
+    });
+
     utterance.onend = (web.Event _) {
+      timeout.cancel();
       if (!completer.isCompleted) completer.complete();
     }.toJS;
 
     utterance.onerror = (web.Event _) {
+      timeout.cancel();
       if (!completer.isCompleted) completer.complete();
     }.toJS;
 
