@@ -462,7 +462,7 @@ class _InfoPageState extends State<InfoPage> {
           flex: 2,
           child: GestureDetector(
             onTap: () {
-              Static.TTS.speak("");
+              Static.TTS.speak(" ");
               _showConfirmDialog(
                 context: context,
                 title: isOnDuty ? '結束營運' : '開始營運',
@@ -477,7 +477,11 @@ class _InfoPageState extends State<InfoPage> {
                           : DutyStatus.onDuty,
                     ),
                   );
-                  if (!isOnDuty) Static.TTS.speak("", volume: 0.001);
+                  if (!isOnDuty) {
+                    Future.delayed(const Duration(milliseconds: 300), () {
+                      Static.TTS.speak(" ");
+                    });
+                  }
                 },
               );
             },

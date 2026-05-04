@@ -7,7 +7,6 @@ import 'tts.dart';
 
 class TTSWeb implements TTSInterface {
   web.SpeechSynthesisVoice? _bestVoice;
-
   web.SpeechSynthesisUtterance? _currentUtterance;
 
   @override
@@ -18,39 +17,46 @@ class TTSWeb implements TTSInterface {
     }.toJS;
   }
 
-  Future<void> _loadBestVoice() async {
+  void _loadBestVoice() {
     final voices = web.window.speechSynthesis.getVoices();
     if (voices.length == 0) return;
 
-    List<web.SpeechSynthesisVoice> zhVoices = [];
+    List<web.SpeechSynthesisVoice> candidates = [];
     for (int i = 0; i < voices.length; i++) {
       final v = voices[i];
-      if (v.lang.contains('zh-TW') || v.lang.contains('zh_TW')) {
-        zhVoices.add(v);
+      final lang = v.lang.toLowerCase();
+      // 擴張匹配三星與 Android 可能出現的標籤
+      if (lang.contains('zh-tw') ||
+          lang.contains('zh_tw') ||
+          lang.contains('cmn-hant-tw')) {
+        candidates.add(v);
       }
     }
 
-    if (zhVoices.isEmpty) {
+    if (candidates.isEmpty) {
       for (int i = 0; i < voices.length; i++) {
-        if (voices[i].lang.contains('zh')) {
-          zhVoices.add(voices[i]);
-        }
+        if (voices[i].lang.toLowerCase().contains('zh'))
+          candidates.add(voices[i]);
       }
     }
 
-    if (zhVoices.isEmpty) return;
+    if (candidates.isEmpty) return;
 
     try {
-      _bestVoice = zhVoices.firstWhere(
+      // 優先尋找高品質語音
+      _bestVoice = candidates.firstWhere(
         (v) =>
-            (v.name.contains('Online') || v.name.contains('Neural')) &&
-            v.lang.contains('zh-TW'),
+            v.name.contains('Online') ||
+            v.name.contains('Neural') ||
+            v.name.contains('Premium'),
       );
     } catch (_) {
       try {
-        _bestVoice = zhVoices.firstWhere((v) => v.name.contains('Google'));
+        _bestVoice = candidates.firstWhere(
+          (v) => v.name.contains('Google') || v.name.contains('Samsung'),
+        );
       } catch (_) {
-        _bestVoice = zhVoices.first;
+        _bestVoice = candidates.first;
       }
     }
   }
@@ -67,23 +73,24 @@ class TTSWeb implements TTSInterface {
     double rate = 1.0,
     double volume = 1.0,
   }) async {
+    // 強制喚醒引擎
+    web.window.speechSynthesis.cancel();
     web.window.speechSynthesis.resume();
 
-    if (_bestVoice == null) await _loadBestVoice();
-
-    web.window.speechSynthesis.cancel();
-    await Future.delayed(const Duration(milliseconds: 50));
+    // 如果目前沒語音庫，嘗試再抓一次（解決三星/Chrome 延遲載入問題）
+    if (_bestVoice == null) _loadBestVoice();
 
     final completer = Completer<void>();
-
     _currentUtterance = web.SpeechSynthesisUtterance(text);
 
     if (_bestVoice != null) {
       _currentUtterance!.voice = _bestVoice;
     }
+
+    // 設定語系，即使沒選到 voice，瀏覽器也會用該語系的預設值
     _currentUtterance!.lang = 'zh-TW';
     _currentUtterance!.pitch = pitch;
-    _currentUtterance!.rate = (rate * 0.9).clamp(0.1, 2.0);
+    _currentUtterance!.rate = (rate * 0.9).clamp(0.5, 2.0);
     _currentUtterance!.volume = volume;
 
     _currentUtterance!.onend = (web.Event _) {
@@ -97,7 +104,7 @@ class TTSWeb implements TTSInterface {
     web.window.speechSynthesis.speak(_currentUtterance!);
 
     return completer.future.timeout(
-      const Duration(seconds: 12),
+      const Duration(seconds: 10),
       onTimeout: () {
         if (!completer.isCompleted) completer.complete();
       },
