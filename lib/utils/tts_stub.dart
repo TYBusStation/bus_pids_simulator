@@ -12,18 +12,9 @@ class TTSStub implements TTSInterface {
   Future<void> init() async {
     await _tts.setLanguage("zh-TW");
     await _tts.setVolume(1.0);
-
-    _tts.setCompletionHandler(() {
-      _completeSpeech();
-    });
-
-    _tts.setErrorHandler((msg) {
-      _completeSpeech();
-    });
-
-    _tts.setCancelHandler(() {
-      _completeSpeech();
-    });
+    _tts.setCompletionHandler(() => _completeSpeech());
+    _tts.setErrorHandler((msg) => _completeSpeech());
+    _tts.setCancelHandler(() => _completeSpeech());
   }
 
   void _completeSpeech() {
@@ -44,17 +35,37 @@ class TTSStub implements TTSInterface {
     double pitch = 1.0,
     double rate = 1.0,
     double volume = 1.0,
+    String? locale,
   }) async {
     _completeSpeech();
-
     _speechCompleter = Completer<void>();
+
+    if (locale != null && locale.startsWith("en")) {
+      await _tts.setLanguage(locale);
+      List<dynamic>? voices = await _tts.getVoices;
+      if (voices != null) {
+        try {
+          var femaleVoice = voices.firstWhere(
+            (v) =>
+                v["name"].toString().toLowerCase().contains("female") &&
+                v["locale"].toString().contains("en"),
+            orElse: () => null,
+          );
+          if (femaleVoice != null)
+            await _tts.setVoice({
+              "name": femaleVoice["name"],
+              "locale": femaleVoice["locale"],
+            });
+        } catch (_) {}
+      }
+    } else {
+      await _tts.setLanguage("zh-TW");
+    }
 
     await _tts.setPitch(pitch * 2.5 - 1.5);
     await _tts.setSpeechRate(rate * 1.2 - 0.8);
     await _tts.setVolume(volume);
-
     await _tts.speak(text);
-
     return _speechCompleter!.future;
   }
 }

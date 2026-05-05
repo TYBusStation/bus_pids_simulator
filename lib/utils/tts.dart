@@ -5,8 +5,13 @@ abstract class TTSInterface {
 
   Future<void> stop();
 
-  Future<void> speak(String text,
-      {double pitch = 1.0, double rate = 1.0, double volume = 1.0});
+  Future<void> speak(
+    String text, {
+    double pitch = 1.0,
+    double rate = 1.0,
+    double volume = 1.0,
+    String? locale,
+  });
 
   factory TTSInterface() => getTTS();
 }

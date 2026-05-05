@@ -9,6 +9,8 @@ class BusStation {
   final int order;
   @JsonKey(name: "name")
   final String name;
+  @JsonKey(name: "name_en")
+  final String nameEn;
   @JsonKey(name: "lat")
   final double lat;
   @JsonKey(name: "lon")
@@ -17,6 +19,7 @@ class BusStation {
   BusStation({
     required this.order,
     required this.name,
+    required this.nameEn,
     required this.lat,
     required this.lon,
   });

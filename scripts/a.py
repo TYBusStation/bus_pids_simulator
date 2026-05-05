@@ -72,7 +72,6 @@ def encoded_to_wkt(encoded_str):
         return ""
     try:
         coords = polyline.decode(encoded_str)
-        # polyline.decode 回傳 (lat, lon)，WKT 標準通常是 (lon lat)
         wkt_points = [f"{lon} {lat}" for lat, lon in coords]
         return f"LINESTRING ({', '.join(wkt_points)})"
     except Exception:
@@ -90,7 +89,7 @@ def main():
     route_edges = routes_resp['data']['routes']['edges']
     final_results = []
 
-    print(f"2. 共找到 {len(route_edges)} 條路線，開始抓取並處理詳細資料...")
+    print(f"2. 共找到 {len(route_edges)} 條路線，開始抓取中英文詳細資料...")
 
     for index, edge in enumerate(route_edges):
         node = edge['node']
@@ -104,14 +103,24 @@ def main():
 
         print(f"[{index + 1}/{len(route_edges)}] 處理中: {route_name} (ID: {route_id})")
 
-        # 抓取詳細資料
-        detail_resp = fetch_graphql(QUERY_ROUTE_DETAIL, {"routeId": int_id, "lang": "zh"})
+        # --- 抓取中文詳細資料 ---
+        detail_resp_zh = fetch_graphql(QUERY_ROUTE_DETAIL, {"routeId": int_id, "lang": "zh"})
+        # --- 額外抓取英文詳細資料 ---
+        detail_resp_en = fetch_graphql(QUERY_ROUTE_DETAIL, {"routeId": int_id, "lang": "en"})
 
-        if detail_resp and 'data' in detail_resp and detail_resp['data']['route']:
-            route_detail = detail_resp['data']['route']
+        if detail_resp_zh and 'data' in detail_resp_zh and detail_resp_zh['data']['route']:
+            route_detail_zh = detail_resp_zh['data']['route']
+
+            # 建立英文站名對照表 {(goBack, orderNo): EnglishName}
+            en_station_map = {}
+            if detail_resp_en and 'data' in detail_resp_en and detail_resp_en['data']['route']:
+                en_stations = detail_resp_en['data']['route'].get('stations', {}).get('edges', [])
+                for s_edge_en in en_stations:
+                    key = (s_edge_en['goBack'], s_edge_en['orderNo'])
+                    en_station_map[key] = s_edge_en['node']['name']
 
             # --- 處理路徑 (Path) 轉 WKT ---
-            path_data = route_detail.get('routePoint', {"go": "", "back": ""})
+            path_data = route_detail_zh.get('routePoint', {"go": "", "back": ""})
             wkt_path = {
                 "go": encoded_to_wkt(path_data.get("go", "")),
                 "back": encoded_to_wkt(path_data.get("back", ""))
@@ -120,18 +129,23 @@ def main():
             # --- 處理站點 (Stations) 分類與排序 ---
             stations_map = {"go": [], "back": []}
 
-            if 'stations' in route_detail and 'edges' in route_detail['stations']:
-                for s_edge in route_detail['stations']['edges']:
+            if 'stations' in route_detail_zh and 'edges' in route_detail_zh['stations']:
+                for s_edge in route_detail_zh['stations']['edges']:
                     s_node = s_edge['node']
+                    direction = s_edge['goBack']
+                    order = s_edge['orderNo']
+
+                    # 獲取對應的英文名稱
+                    name_en = en_station_map.get((direction, order), "")
+
                     station_info = {
-                        "order": s_edge['orderNo'],
+                        "order": order,
                         "name": s_node['name'],
+                        "name_en": name_en,  # 放入與 name 同級的欄位
                         "lat": s_node['lat'],
                         "lon": s_node['lon']
                     }
 
-                    # 根據 goBack 欄位分類 (通常 1 為去程, 2 為回程)
-                    direction = s_edge['goBack']
                     if direction == 1:
                         stations_map["go"].append(station_info)
                     elif direction == 2:
@@ -156,15 +170,15 @@ def main():
         else:
             print(f"  - 警告: 無法取得 {route_name} 的詳細資料")
 
-        # 延遲避免被伺服器阻擋
+        # 延遲避免被伺服器阻擋 (因為現在每條線要打兩次 API，建議維持或稍微增加延遲)
         time.sleep(0.1)
 
     # --- 儲存檔案 ---
-    output_file = "taichung_routes_final.json"
+    output_file = "taichung_routes_with_en.json"
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(final_results, f, ensure_ascii=False, indent=4)
 
-    print(f"\n任務完成！最終資料已寫入 {output_file}")
+    print(f"\n任務完成！資料已寫入 {output_file}")
 
 
 if __name__ == "__main__":

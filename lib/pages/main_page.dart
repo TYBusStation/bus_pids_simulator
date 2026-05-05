@@ -118,6 +118,14 @@ class _MainPageState extends State<MainPage> {
                         ),
                       ),
                       const SizedBox(width: 10),
+                      Text(
+                        "時速：$speed",
+                        style: const TextStyle(
+                          fontSize: 14,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
                       Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.end,

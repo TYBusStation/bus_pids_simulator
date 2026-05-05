@@ -50,7 +50,6 @@ class LocationChangeNotifier extends ChangeNotifier {
 
   void _startListening() {
     _subscription?.cancel();
-
     late LocationSettings locationSettings;
     if (defaultTargetPlatform == TargetPlatform.android) {
       locationSettings = AndroidSettings(

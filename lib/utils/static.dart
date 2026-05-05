@@ -103,8 +103,8 @@ abstract class Static {
       routeData[city] = rawRouteData
           .map((rawRoute) => BusRoute.fromJson(rawRoute))
           .toList();
-    } catch (e) {
-      log("Load failed: $e");
+    } catch (e, stacktrace) {
+      log("Load failed: $e\n$stacktrace");
     }
   }
 
