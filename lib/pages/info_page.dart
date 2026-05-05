@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bus_pids_simulator/pages/route_selection_page.dart';
 import 'package:flutter/material.dart';
 import 'package:marquee/marquee.dart';
@@ -16,9 +18,11 @@ class InfoPage extends StatefulWidget {
   State<InfoPage> createState() => _InfoPageState();
 }
 
-class _InfoPageState extends State<InfoPage> {
+class _InfoPageState extends State<InfoPage>
+    with SingleTickerProviderStateMixin {
   late TextEditingController _volController;
   late TextEditingController _speedController;
+  late AnimationController _flashController;
 
   @override
   void initState() {
@@ -29,12 +33,17 @@ class _InfoPageState extends State<InfoPage> {
     _speedController = TextEditingController(
       text: Static.globalSpeed.toStringAsFixed(2),
     );
+    _flashController = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    )..repeat();
   }
 
   @override
   void dispose() {
     _volController.dispose();
     _speedController.dispose();
+    _flashController.dispose();
     super.dispose();
   }
 
@@ -65,11 +74,17 @@ class _InfoPageState extends State<InfoPage> {
         content: Text(content),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () {
+              Static.TTS.speak(" ");
+              Navigator.pop(context, false);
+            },
             child: const Text("取消"),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () {
+              Static.TTS.speak(" ");
+              Navigator.pop(context, true);
+            },
             child: const Text("確定"),
           ),
         ],
@@ -89,6 +104,7 @@ class _InfoPageState extends State<InfoPage> {
       builder: (context, locNotifier, statusNotifier, analysisProvider, child) {
         final currentStatus = statusNotifier.currentStatus;
         final bool isOnDuty = currentStatus.dutyStatus == DutyStatus.onDuty;
+        final bool isOffDutyAlert = analysisProvider.isOffDutyAlert;
         final analysis = analysisProvider.currentAnalysis;
 
         String nextStationName = "(無停靠站)";
@@ -121,6 +137,7 @@ class _InfoPageState extends State<InfoPage> {
                   nextStationName,
                   distanceText,
                   isOnDuty,
+                  isOffDutyAlert,
                   theme,
                 ),
               ),
@@ -157,7 +174,10 @@ class _InfoPageState extends State<InfoPage> {
           ),
           const SizedBox(height: 4),
           FilledButton(
-            onPressed: () => loc.forceRefresh(),
+            onPressed: () {
+              Static.TTS.speak(" ");
+              loc.forceRefresh();
+            },
             style: FilledButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               minimumSize: const Size(0, 30),
@@ -210,7 +230,10 @@ class _InfoPageState extends State<InfoPage> {
               value: value,
               min: min,
               max: max,
-              onChanged: onSlider,
+              onChanged: (v) {
+                Static.TTS.speak(" ");
+                onSlider(v);
+              },
             ),
           ),
         ),
@@ -229,6 +252,7 @@ class _InfoPageState extends State<InfoPage> {
             ),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             onSubmitted: (s) {
+              Static.TTS.speak(" ");
               final val = double.tryParse(s);
               if (val != null) onSlider(val);
             },
@@ -244,6 +268,7 @@ class _InfoPageState extends State<InfoPage> {
     String nextStation,
     String distance,
     bool isOnDuty,
+    bool isOffDutyAlert,
     ThemeData theme,
   ) {
     final status = notifier.currentStatus;
@@ -321,7 +346,7 @@ class _InfoPageState extends State<InfoPage> {
                 flex: 3,
                 child: GestureDetector(
                   onTap: () async {
-                    Static.TTS.speak("");
+                    Static.TTS.speak(" ");
                     final newStatus = await Navigator.push<Status>(
                       context,
                       MaterialPageRoute(
@@ -418,7 +443,7 @@ class _InfoPageState extends State<InfoPage> {
                 flex: 1,
                 child: GestureDetector(
                   onTap: () {
-                    Static.TTS.speak("");
+                    Static.TTS.speak(" ");
                     _showConfirmDialog(
                       context: context,
                       title:
@@ -485,17 +510,32 @@ class _InfoPageState extends State<InfoPage> {
                 },
               );
             },
-            child: _buildDashboardBox(
-              theme: theme,
-              color: isOnDuty ? Colors.green.shade600 : Colors.red.shade600,
-              child: Center(
-                child: FittedBox(
-                  child: Text(
-                    '車輛狀態：${isOnDuty ? "營運中 【點我結束營運】" : "非營運 【點我開始營運】"}',
-                    style: const TextStyle(color: Colors.white, fontSize: 20),
+            child: AnimatedBuilder(
+              animation: _flashController,
+              builder: (context, child) {
+                Color boxColor = isOnDuty
+                    ? Colors.green.shade600
+                    : (isOffDutyAlert
+                          ? (_flashController.value > 0.5
+                                ? Colors.red.shade600
+                                : Colors.grey.shade600)
+                          : Colors.red.shade600);
+                return _buildDashboardBox(
+                  theme: theme,
+                  color: boxColor,
+                  child: Center(
+                    child: FittedBox(
+                      child: Text(
+                        '車輛狀態：${isOnDuty ? "營運中 【點我結束營運】" : "非營運 【點我開始營運】"}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
           ),
         ),

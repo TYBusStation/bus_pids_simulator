@@ -13,25 +13,46 @@ class RouteAnalysisProvider extends ChangeNotifier {
   int? _lastArrivedStationOrder;
   DutyStatus? _lastDutyStatus;
   int _activeSequenceId = 0;
+  bool _isOffDutyAlert = false;
 
   RouteAnalysisResult? get currentAnalysis => _currentAnalysis;
 
   double get currentSpeed => _currentSpeed;
 
+  bool get isOffDutyAlert => _isOffDutyAlert;
+
   void update(LatLng? location, double speed, Status status) {
     _currentSpeed = speed;
+
+    if (status.dutyStatus == DutyStatus.offDuty && speed > 20) {
+      if (!_isOffDutyAlert) {
+        _isOffDutyAlert = true;
+        _startOffDutyLoop();
+        notifyListeners();
+      }
+    } else {
+      if (_isOffDutyAlert) {
+        _isOffDutyAlert = false;
+        Static.audioManager.stop();
+        notifyListeners();
+      }
+    }
+
     if (location == null || status.dutyStatus != DutyStatus.onDuty) {
       if (_currentAnalysis != null || _lastDutyStatus == DutyStatus.onDuty) {
         _currentAnalysis = null;
         _lastSpokenStationOrder = null;
         _lastArrivedStationOrder = null;
         _lastDutyStatus = status.dutyStatus;
-        Static.TTS.stop();
-        Static.audioManager.stop();
+        if (!_isOffDutyAlert) {
+          Static.TTS.stop();
+          Static.audioManager.stop();
+        }
         notifyListeners();
       }
       return;
     }
+
     final points = status.direction == Direction.go
         ? status.route.path.goPoints
         : status.route.path.backPoints;
@@ -49,14 +70,21 @@ class RouteAnalysisProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> _startOffDutyLoop() async {
+    while (_isOffDutyAlert) {
+      await Static.audioManager.playAssetAndWait("off_duty.mp3");
+      await Future.delayed(const Duration(milliseconds: 250));
+    }
+  }
+
   Future<void> _executeSequence(List<Map<String, dynamic>> sequence) async {
     _activeSequenceId++;
     final int thisId = _activeSequenceId;
     await Static.TTS.stop();
     await Static.audioManager.stop();
-    await Future.delayed(const Duration(milliseconds: 300));
+    await Future.delayed(const Duration(milliseconds: 250));
     for (var part in sequence) {
-      if (thisId != _activeSequenceId) return;
+      if (thisId != _activeSequenceId || _isOffDutyAlert) return;
       String text = part['text'].trim();
       if (text.isEmpty) continue;
       double speed = part['speed'] ?? 1.0;
@@ -98,6 +126,7 @@ class RouteAnalysisProvider extends ChangeNotifier {
     DutyStatus duty,
     List<BusStation> stations,
   ) {
+    if (_isOffDutyAlert) return;
     if (result.nextStation == null) return;
     final bool isTerminal = result.nextStation!.order == stations.last.order;
     final double distNext = result.distToNextStation ?? double.infinity;

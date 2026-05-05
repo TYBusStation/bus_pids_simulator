@@ -14,7 +14,7 @@ import 'tts.dart'
     if (dart.library.io) 'tts_stub.dart';
 
 abstract class Static {
-  static List<BusRoute> routeData = [];
+  static Map<String, List<BusRoute>> routeData = {};
   static Status currentStatus = Status.unknown;
   static final TTS = getTTS();
   static final audioManager = AudioManager();
@@ -91,19 +91,21 @@ abstract class Static {
   }
 
   static Future<void> _loadRoutes() async {
+    await _loadRoute("taoyuan");
+    await _loadRoute("taipei");
+    await _loadRoute("taichung");
+  }
+
+  static Future<void> _loadRoute(String city) async {
     try {
-      final data = await rootBundle.loadString("assets/routes.json");
+      final data = await rootBundle.loadString("assets/routes/$city.json");
       List<dynamic> rawRouteData = jsonDecode(data);
-      routeData = rawRouteData
+      routeData[city] = rawRouteData
           .map((rawRoute) => BusRoute.fromJson(rawRoute))
           .toList();
     } catch (e) {
       log("Load failed: $e");
     }
-  }
-
-  static BusRoute getRouteById(String routeId) {
-    return routeData.firstWhere((r) => r.id == routeId);
   }
 
   static List<LatLng> wktPrase(String wkt) {

@@ -114,6 +114,25 @@ class AudioManager {
     }
   }
 
+  Future<void> playAssetAndWait(String path, {double localSpeed = 1.0}) async {
+    await _player.stop();
+    await Future.delayed(const Duration(milliseconds: 100));
+    await _player.setSource(AssetSource(path));
+    await _applySettings(localSpeed);
+    final completer = Completer<void>();
+    StreamSubscription? sub;
+    sub = _player.onPlayerComplete.listen((_) {
+      if (!completer.isCompleted) completer.complete();
+      sub?.cancel();
+    });
+    await _player.resume();
+    if (kIsWeb) await _player.setPlaybackRate(Static.globalSpeed * localSpeed);
+    await completer.future.timeout(
+      const Duration(seconds: 15),
+      onTimeout: () => sub?.cancel(),
+    );
+  }
+
   Future<void> stop() async {
     await _player.stop();
   }
