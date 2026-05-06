@@ -84,13 +84,22 @@ class _InfoPageState extends State<InfoPage>
           nextStationName = "(非營運)";
         } else if (locNotifier.currentLocation == null) {
           nextStationName = "(無定位)";
-        } else if (analysis != null && analysis.nextStation != null) {
-          nextStationName = analysis.nextStation!.name;
-          nextStationNameEn = analysis.nextStation!.nameEn;
-          String baseDist = analysis.distToNextStation != null
-              ? "${analysis.distToNextStation!.toStringAsFixed(0)}m"
-              : "";
-          distanceText = analysis.isOffRoute ? "$baseDist (脫離路線)" : baseDist;
+        } else if (analysis != null) {
+          final double distPrev = analysis.distToPrevStation ?? double.infinity;
+
+          if (analysis.prevStation != null &&
+              distPrev < Static.nextStationDepartureDistance) {
+            nextStationName = analysis.prevStation!.name;
+            nextStationNameEn = analysis.prevStation!.nameEn;
+            distanceText = "0 m(離站 ${distPrev.toStringAsFixed(0)} m)";
+          } else if (analysis.nextStation != null) {
+            nextStationName = analysis.nextStation!.name;
+            nextStationNameEn = analysis.nextStation!.nameEn;
+            String baseDist = analysis.distToNextStation != null
+                ? "${analysis.distToNextStation!.toStringAsFixed(0)} m"
+                : "";
+            distanceText = analysis.isOffRoute ? "$baseDist (脫離路線)" : baseDist;
+          }
         }
 
         return Container(
@@ -149,7 +158,7 @@ class _InfoPageState extends State<InfoPage>
               fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           _buildInfoRow(
             "時速",
             "${currentSpeed.toStringAsFixed(1)} km/h",
@@ -169,7 +178,7 @@ class _InfoPageState extends State<InfoPage>
                 : "N/A",
             Colors.white,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           FilledButton(
             onPressed: () {
               Static.TTS.speak(" ");
@@ -191,7 +200,7 @@ class _InfoPageState extends State<InfoPage>
             _volController,
             onChangedEnd: (v) => _playVolumeNotice(),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           _buildControlRow(
             Icons.speed,
             Static.globalSpeed,

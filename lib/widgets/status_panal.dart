@@ -102,7 +102,6 @@ class StatusPanel extends StatelessWidget {
         } else {
           return Center(
             child: FittedBox(
-              fit: BoxFit.scaleDown,
               child: Text(
                 cleanText,
                 style: style,
@@ -340,11 +339,6 @@ class StatusPanel extends StatelessWidget {
                           : DutyStatus.onDuty,
                     ),
                   );
-                  if (!isOnDuty) {
-                    Future.delayed(const Duration(milliseconds: 300), () {
-                      Static.TTS.speak(" ");
-                    });
-                  }
                 },
               );
             },

@@ -36,7 +36,8 @@ class RouteAnalysisProvider extends ChangeNotifier {
         notifyListeners();
       }
     }
-    if (location == null || status.dutyStatus != DutyStatus.onDuty) {
+
+    if (status.dutyStatus != DutyStatus.onDuty) {
       if (_currentAnalysis != null || _lastDutyStatus == DutyStatus.onDuty) {
         _currentAnalysis = null;
         _lastSpokenStationOrder = null;
@@ -50,28 +51,30 @@ class RouteAnalysisProvider extends ChangeNotifier {
       }
       return;
     }
+
     final points = status.direction == Direction.go
         ? status.route.path.goPoints
         : status.route.path.backPoints;
     final stations = status.direction == Direction.go
         ? status.route.stations.go
         : status.route.stations.back;
-    if (points.isEmpty || stations.isEmpty) return;
-    final result = RouteEngine.analyze(
-      currentPos: location,
-      routePoints: points,
-      stations: stations,
-    );
+
+    RouteAnalysisResult? result;
+    if (location != null && points.isNotEmpty && stations.isNotEmpty) {
+      result = RouteEngine.analyze(
+        currentPos: location,
+        routePoints: points,
+        stations: stations,
+      );
+    }
+
     _currentAnalysis = result;
     _handleTTS(result, status.dutyStatus, stations);
     notifyListeners();
   }
 
   Future<void> _startOffDutyLoop() async {
-    while (_isOffDutyAlert) {
-      await Static.audioManager.playAssetAndWait("notice.mp3");
-      await Future.delayed(const Duration(milliseconds: 200));
-    }
+    await Static.audioManager.startAssetLoop("notice.mp3");
   }
 
   Future<void> _executeSequence(
@@ -102,7 +105,7 @@ class RouteAnalysisProvider extends ChangeNotifier {
             await Future.delayed(const Duration(milliseconds: 100));
             await Static.TTS.speak(
               nameEn,
-              pitch: (part['pitch'] ?? 1.0) + 0.1,
+              pitch: (part['pitch'] ?? 1.0) - 0.1,
               rate: speed * Static.globalSpeed - 0.2,
               volume: Static.globalVolume + 0.2,
               locale: "en-US",
@@ -123,7 +126,7 @@ class RouteAnalysisProvider extends ChangeNotifier {
           );
         }
       }
-      await Future.delayed(const Duration(milliseconds: 50));
+      await Future.delayed(const Duration(milliseconds: 150));
     }
   }
 
@@ -149,14 +152,31 @@ class RouteAnalysisProvider extends ChangeNotifier {
   }
 
   void _handleTTS(
-    RouteAnalysisResult result,
+    RouteAnalysisResult? result,
     DutyStatus duty,
     List<BusStation> stations,
   ) {
-    if (_isOffDutyAlert || result.nextStation == null) return;
+    if (_isOffDutyAlert) return;
+
+    bool isStart =
+        _lastDutyStatus != DutyStatus.onDuty && duty == DutyStatus.onDuty;
+
+    if (isStart && (result == null || result.nextStation == null)) {
+      _executeSequence(
+        _buildSequence(Static.nextStationTemplate, "", false),
+        "",
+        "",
+      );
+      _lastDutyStatus = duty;
+      return;
+    }
+
+    if (result == null || result.nextStation == null) return;
+
     final bool isTerminal = result.nextStation!.order == stations.last.order;
     final double distNext = result.distToNextStation ?? double.infinity;
     final double distPrev = result.distToPrevStation ?? 0;
+
     if (!result.isOffRoute && distNext < Static.arrivalDistance) {
       if (_lastArrivedStationOrder != result.nextStation!.order) {
         _lastArrivedStationOrder = result.nextStation!.order;
@@ -172,12 +192,12 @@ class RouteAnalysisProvider extends ChangeNotifier {
       }
       return;
     }
-    bool isStart =
-        _lastDutyStatus != DutyStatus.onDuty && duty == DutyStatus.onDuty;
+
     bool distCond =
         !result.isOffRoute &&
         (distPrev > Static.nextStationDepartureDistance ||
             distNext < Static.nextStationDistance);
+
     if ((isStart || distCond) &&
         _lastSpokenStationOrder != result.nextStation!.order) {
       _lastSpokenStationOrder = result.nextStation!.order;

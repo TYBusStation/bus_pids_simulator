@@ -27,14 +27,16 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
   late BusRoute _selectedRoute;
   late Direction _selectedDirection;
   String _searchQuery = "";
-  String _activeCityKey = 'taoyuan';
+  String _activeCityKey = 'Taoyuan';
   List<BusRoute> _displayRoutes = [];
   final ScrollController _horizontalController = ScrollController();
 
   final Map<String, String> _cityNames = {
-    'taoyuan': '桃園市',
-    'taipei': '大臺北',
-    'taichung': '臺中市',
+    'Taoyuan': '桃園市',
+    'Taipei': '臺北市',
+    'NewTaipei': '新北市',
+    'Taichung': '臺中市',
+    'InterCity': '公路客運',
   };
 
   @override
@@ -108,11 +110,12 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
       appBar: AppBar(
         toolbarHeight: 40,
         title: Text(
-          '選擇路線 (當前：${_selectedRoute.name})',
+          '選擇路線 (當前選擇：${_selectedRoute.name} 往 ${_selectedDirection == Direction.go ? _selectedRoute.destination : _selectedRoute.departure})',
           style: const TextStyle(fontSize: 15),
         ),
         actions: [
-          IconButton(
+          FilledButton.icon(
+            label: const Text("確認"),
             onPressed: () => Navigator.pop(
               context,
               Status(
@@ -121,7 +124,7 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
                 dutyStatus: DutyStatus.offDuty,
               ),
             ),
-            icon: const Icon(Icons.check_circle, size: 28),
+            icon: const Icon(Icons.check, size: 28),
           ),
         ],
         bottom: PreferredSize(
@@ -173,7 +176,7 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
                     });
                   },
                   child: Container(
-                    height: 80,
+                    height: 40,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: isSelected
@@ -189,7 +192,7 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
                           : null,
                     ),
                     child: Text(
-                      e.value.split('').join('\n'),
+                      e.value,
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 12,

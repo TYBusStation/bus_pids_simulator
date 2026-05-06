@@ -119,7 +119,7 @@ class _MainPageState extends State<MainPage> {
                       ),
                       const SizedBox(width: 10),
                       Text(
-                        "時速：$speed",
+                        "時速：${speed.toStringAsFixed(1)} km/h",
                         style: const TextStyle(
                           fontSize: 14,
                           overflow: TextOverflow.ellipsis,

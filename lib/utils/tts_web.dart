@@ -6,53 +6,64 @@ import 'package:web/web.dart' as web;
 import 'tts.dart';
 
 class TTSWeb implements TTSInterface {
-  web.SpeechSynthesisVoice? _bestVoice;
-  web.SpeechSynthesisUtterance? _currentUtterance;
+  web.SpeechSynthesisVoice? _bestZhVoice;
+  web.SpeechSynthesisVoice? _bestEnVoice;
 
   @override
   Future<void> init() async {
-    _loadBestVoice();
+    _loadVoices();
     web.window.speechSynthesis.onvoiceschanged = (web.Event _) {
-      _loadBestVoice();
+      _loadVoices();
     }.toJS;
   }
 
-  void _loadBestVoice() {
+  void _loadVoices() {
     final voices = web.window.speechSynthesis.getVoices();
     if (voices.length == 0) return;
-    List<web.SpeechSynthesisVoice> candidates = [];
+
+    List<web.SpeechSynthesisVoice> zhCandidates = [];
+    List<web.SpeechSynthesisVoice> enCandidates = [];
+
     for (int i = 0; i < voices.length; i++) {
       final v = voices[i];
       final lang = v.lang.toLowerCase();
       if (lang.contains('zh-tw') ||
           lang.contains('zh_tw') ||
           lang.contains('cmn-hant-tw')) {
-        candidates.add(v);
+        zhCandidates.add(v);
+      } else if (lang.startsWith('en')) {
+        enCandidates.add(v);
       }
     }
-    if (candidates.isEmpty) {
-      for (int i = 0; i < voices.length; i++) {
-        if (voices[i].lang.toLowerCase().contains('zh'))
-          candidates.add(voices[i]);
-      }
-    }
-    if (candidates.isEmpty) return;
-    try {
-      _bestVoice = candidates.firstWhere(
-        (v) =>
-            v.name.contains('Online') ||
-            v.name.contains('Neural') ||
-            v.name.contains('Premium'),
-      );
-    } catch (_) {
+
+    _bestZhVoice = _findVoice(zhCandidates, [
+      'online',
+      'neural',
+      'premium',
+      'google',
+      'microsoft',
+    ]);
+    _bestEnVoice = _findVoice(enCandidates, [
+      'google',
+      'online',
+      'neural',
+      'zira',
+      'female',
+      'apple',
+    ]);
+  }
+
+  web.SpeechSynthesisVoice? _findVoice(
+    List<web.SpeechSynthesisVoice> list,
+    List<String> priority,
+  ) {
+    if (list.isEmpty) return null;
+    for (var p in priority) {
       try {
-        _bestVoice = candidates.firstWhere(
-          (v) => v.name.contains('Google') || v.name.contains('Samsung'),
-        );
-      } catch (_) {
-        _bestVoice = candidates.first;
-      }
+        return list.firstWhere((v) => v.name.toLowerCase().contains(p));
+      } catch (_) {}
     }
+    return list.first;
   }
 
   @override
@@ -70,37 +81,36 @@ class TTSWeb implements TTSInterface {
   }) async {
     web.window.speechSynthesis.cancel();
     web.window.speechSynthesis.resume();
-    if (_bestVoice == null) _loadBestVoice();
+
+    await Future.delayed(const Duration(milliseconds: 100));
+
     final completer = Completer<void>();
-    _currentUtterance = web.SpeechSynthesisUtterance(text);
+    final utterance = web.SpeechSynthesisUtterance(text);
 
     if (locale != null && locale.startsWith("en")) {
-      _currentUtterance!.lang = locale;
-      final voices = web.window.speechSynthesis.getVoices();
-      for (int i = 0; i < voices.length; i++) {
-        if (voices[i].lang.contains("en") &&
-            voices[i].name.toLowerCase().contains("female")) {
-          _currentUtterance!.voice = voices[i];
-          break;
-        }
-      }
+      utterance.lang = 'en-US';
+      if (_bestEnVoice != null) utterance.voice = _bestEnVoice;
     } else {
-      _currentUtterance!.lang = 'zh-TW';
-      if (_bestVoice != null) _currentUtterance!.voice = _bestVoice;
+      utterance.lang = 'zh-TW';
+      if (_bestZhVoice != null) utterance.voice = _bestZhVoice;
     }
 
-    _currentUtterance!.pitch = pitch;
-    _currentUtterance!.rate = (rate * 0.9).clamp(0.5, 2.0);
-    _currentUtterance!.volume = volume;
-    _currentUtterance!.onend = (web.Event _) {
+    utterance.pitch = pitch;
+    utterance.rate = (rate * 0.9).clamp(0.1, 10.0);
+    utterance.volume = volume;
+
+    utterance.onend = (web.Event _) {
       if (!completer.isCompleted) completer.complete();
     }.toJS;
-    _currentUtterance!.onerror = (web.Event _) {
+
+    utterance.onerror = (web.Event _) {
       if (!completer.isCompleted) completer.complete();
     }.toJS;
-    web.window.speechSynthesis.speak(_currentUtterance!);
+
+    web.window.speechSynthesis.speak(utterance);
+
     return completer.future.timeout(
-      const Duration(seconds: 10),
+      const Duration(seconds: 15),
       onTimeout: () {
         if (!completer.isCompleted) completer.complete();
       },

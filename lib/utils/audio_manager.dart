@@ -83,6 +83,7 @@ class AudioManager {
     final key = _getRandomAudioKey(name);
     final bytes = _audioBox.get(key);
     if (bytes != null) {
+      await _player.setReleaseMode(ReleaseMode.release);
       await _player.stop();
       await _player.setSource(BytesSource(bytes));
       await _applySettings(localSpeed);
@@ -94,6 +95,7 @@ class AudioManager {
     final key = _getRandomAudioKey(name);
     final bytes = _audioBox.get(key);
     if (bytes != null) {
+      await _player.setReleaseMode(ReleaseMode.release);
       await _player.stop();
       await Future.delayed(const Duration(milliseconds: 100));
       await _player.setSource(BytesSource(bytes));
@@ -115,6 +117,7 @@ class AudioManager {
   }
 
   Future<void> playAssetAndWait(String path, {double localSpeed = 1.0}) async {
+    await _player.setReleaseMode(ReleaseMode.release);
     await _player.stop();
     await Future.delayed(const Duration(milliseconds: 100));
     await _player.setSource(AssetSource(path));
@@ -133,7 +136,17 @@ class AudioManager {
     );
   }
 
+  Future<void> startAssetLoop(String path) async {
+    await _player.stop();
+    await _player.setReleaseMode(ReleaseMode.loop);
+    await _player.setSource(AssetSource(path));
+    await _applySettings(1.0);
+    await _player.resume();
+    if (kIsWeb) await _player.setPlaybackRate(Static.globalSpeed);
+  }
+
   Future<void> stop() async {
+    await _player.setReleaseMode(ReleaseMode.release);
     await _player.stop();
   }
 

@@ -91,9 +91,11 @@ abstract class Static {
   }
 
   static Future<void> _loadRoutes() async {
-    await _loadRoute("taoyuan");
-    await _loadRoute("taipei");
-    await _loadRoute("taichung");
+    await _loadRoute("Taoyuan");
+    await _loadRoute("Taipei");
+    await _loadRoute("NewTaipei");
+    await _loadRoute("Taichung");
+    await _loadRoute("InterCity");
   }
 
   static Future<void> _loadRoute(String city) async {
