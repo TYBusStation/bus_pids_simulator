@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import 'info_page.dart';
+import 'led_page.dart';
 import 'map_page.dart';
 
 class MainPage extends StatefulWidget {
@@ -33,6 +34,11 @@ class _MainPageState extends State<MainPage> {
       icon: Icon(Icons.map_outlined, size: 20),
       selectedIcon: Icon(Icons.map, size: 20),
       label: '地圖',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.text_fields_outlined, size: 20),
+      selectedIcon: Icon(Icons.text_fields, size: 20),
+      label: 'LED',
     ),
     NavigationDestination(
       icon: Icon(Icons.settings_outlined, size: 20),
@@ -202,6 +208,7 @@ class _MainPageState extends State<MainPage> {
                                   () => _showBottomInfo = !_showBottomInfo,
                                 ),
                               ),
+                              const LedPage(),
                               const SettingsPage(),
                             ],
                           ),

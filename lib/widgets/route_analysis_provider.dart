@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -6,47 +8,58 @@ import '../data/status.dart';
 import '../utils/route_engine.dart';
 import '../utils/static.dart';
 
+enum LedBroadcastType { slogan, next, arrival }
+
+class LedEvent {
+  final LedBroadcastType type;
+  final String name;
+  final String nameEn;
+  final bool isTerminal;
+  final DateTime timestamp;
+
+  LedEvent({
+    required this.type,
+    required this.name,
+    required this.nameEn,
+    this.isTerminal = false,
+  }) : timestamp = DateTime.now();
+}
+
 class RouteAnalysisProvider extends ChangeNotifier {
   RouteAnalysisResult? _currentAnalysis;
-  double _currentSpeed = 0;
   int? _lastSpokenStationOrder;
   int? _lastArrivedStationOrder;
   DutyStatus? _lastDutyStatus;
   int _activeSequenceId = 0;
   bool _isOffDutyAlert = false;
+  LedEvent _currentLedEvent = LedEvent(
+    type: LedBroadcastType.slogan,
+    name: "",
+    nameEn: "",
+  );
 
   RouteAnalysisResult? get currentAnalysis => _currentAnalysis;
 
-  double get currentSpeed => _currentSpeed;
-
   bool get isOffDutyAlert => _isOffDutyAlert;
 
+  LedEvent get currentLedEvent => _currentLedEvent;
+
   void update(LatLng? location, double speed, Status status) {
-    _currentSpeed = speed;
     if (status.dutyStatus == DutyStatus.offDuty && speed >= 20) {
       if (!_isOffDutyAlert) {
         _isOffDutyAlert = true;
         _startOffDutyLoop();
         notifyListeners();
       }
-    } else {
-      if (_isOffDutyAlert) {
-        _isOffDutyAlert = false;
-        Static.audioManager.stop();
-        notifyListeners();
-      }
+    } else if (_isOffDutyAlert) {
+      _isOffDutyAlert = false;
+      Static.audioManager.stop();
+      notifyListeners();
     }
 
     if (status.dutyStatus != DutyStatus.onDuty) {
       if (_currentAnalysis != null || _lastDutyStatus == DutyStatus.onDuty) {
-        _currentAnalysis = null;
-        _lastSpokenStationOrder = null;
-        _lastArrivedStationOrder = null;
-        _lastDutyStatus = status.dutyStatus;
-        if (!_isOffDutyAlert) {
-          Static.TTS.stop();
-          Static.audioManager.stop();
-        }
+        _resetAll();
         notifyListeners();
       }
       return;
@@ -67,17 +80,29 @@ class RouteAnalysisProvider extends ChangeNotifier {
         stations: stations,
       );
     }
-
     _currentAnalysis = result;
-    _handleTTS(result, status.dutyStatus, stations);
+    _handleLogic(result, status.dutyStatus, stations);
     notifyListeners();
+  }
+
+  void _resetAll() {
+    _currentAnalysis = null;
+    _lastSpokenStationOrder = null;
+    _lastArrivedStationOrder = null;
+    _lastDutyStatus = null;
+    _currentLedEvent = LedEvent(
+      type: LedBroadcastType.slogan,
+      name: "",
+      nameEn: "",
+    );
+    Static.TTS.stop();
   }
 
   Future<void> _startOffDutyLoop() async {
     await Static.audioManager.startAssetLoop("notice.mp3");
   }
 
-  Future<void> _executeSequence(
+  Future<void> _executeVoice(
     List<Map<String, dynamic>> sequence,
     String name,
     String nameEn,
@@ -86,28 +111,20 @@ class RouteAnalysisProvider extends ChangeNotifier {
     final int thisId = _activeSequenceId;
     await Static.TTS.stop();
     await Static.audioManager.stop();
-    await Future.delayed(const Duration(milliseconds: 250));
+    await Future.delayed(const Duration(milliseconds: 100));
     for (var part in sequence) {
       if (thisId != _activeSequenceId || _isOffDutyAlert) return;
-      bool isStationPart = part['isStationPart'] ?? false;
       double speed = part['speed'] ?? 1.0;
-      if (isStationPart) {
+      if (part['isStationPart']) {
         if (Static.audioManager.hasAudio(name)) {
           await Static.audioManager.playAndWait(name, localSpeed: speed);
         } else {
-          await Static.TTS.speak(
-            name,
-            pitch: part['pitch'] ?? 1.0,
-            rate: speed * Static.globalSpeed,
-            volume: Static.globalVolume,
-          );
+          await Static.TTS.speak(name, rate: speed * Static.globalSpeed);
           if (nameEn.isNotEmpty) {
             await Future.delayed(const Duration(milliseconds: 100));
             await Static.TTS.speak(
               nameEn,
-              pitch: (part['pitch'] ?? 1.0) - 0.1,
-              rate: speed * Static.globalSpeed - 0.2,
-              volume: Static.globalVolume + 0.2,
+              rate: speed * Static.globalSpeed - 0.1,
               locale: "en-US",
             );
           }
@@ -118,70 +135,34 @@ class RouteAnalysisProvider extends ChangeNotifier {
         if (Static.audioManager.hasAudio(text)) {
           await Static.audioManager.playAndWait(text, localSpeed: speed);
         } else {
-          await Static.TTS.speak(
-            text,
-            pitch: part['pitch'] ?? 1.0,
-            rate: speed * Static.globalSpeed,
-            volume: Static.globalVolume,
-          );
+          await Static.TTS.speak(text, rate: speed * Static.globalSpeed);
         }
       }
       await Future.delayed(const Duration(milliseconds: 150));
     }
   }
 
-  List<Map<String, dynamic>> _buildSequence(
-    List<String> template,
-    String name,
-    bool isTerminal,
-  ) {
-    final List<Map<String, dynamic>> sequence = [];
-    for (var item in template) {
-      bool isStationPart = item.contains('{name}');
-      String processed = item
-          .replaceAll('{name}', name)
-          .replaceAll('{terminal}', isTerminal ? "終點站" : "");
-      sequence.add({
-        'text': processed,
-        'isStationPart': isStationPart,
-        'pitch': (processed == "到了" || processed == "終點站") ? 1.1 : 1.0,
-        'speed': (processed == "到了" || processed == "終點站") ? 0.9 : 1.0,
-      });
-    }
-    return sequence;
-  }
-
-  void _handleTTS(
+  void _handleLogic(
     RouteAnalysisResult? result,
     DutyStatus duty,
     List<BusStation> stations,
   ) {
-    if (_isOffDutyAlert) return;
-
-    bool isStart =
-        _lastDutyStatus != DutyStatus.onDuty && duty == DutyStatus.onDuty;
-
-    if (isStart && (result == null || result.nextStation == null)) {
-      _executeSequence(
-        _buildSequence(Static.nextStationTemplate, "", false),
-        "",
-        "",
-      );
-      _lastDutyStatus = duty;
-      return;
-    }
-
-    if (result == null || result.nextStation == null) return;
+    if (_isOffDutyAlert || result == null || result.nextStation == null) return;
 
     final bool isTerminal = result.nextStation!.order == stations.last.order;
-    final double distNext = result.distToNextStation ?? double.infinity;
+    final double distNext = result.distToNextStation ?? 10000;
     final double distPrev = result.distToPrevStation ?? 0;
 
     if (!result.isOffRoute && distNext < Static.arrivalDistance) {
       if (_lastArrivedStationOrder != result.nextStation!.order) {
         _lastArrivedStationOrder = result.nextStation!.order;
-        _executeSequence(
-          _buildSequence(
+        _currentLedEvent = LedEvent(
+          type: LedBroadcastType.arrival,
+          name: result.nextStation!.name,
+          nameEn: result.nextStation!.nameEn,
+        );
+        _executeVoice(
+          _buildSeq(
             Static.arrivalTemplate,
             result.nextStation!.name,
             isTerminal,
@@ -189,6 +170,7 @@ class RouteAnalysisProvider extends ChangeNotifier {
           result.nextStation!.name,
           result.nextStation!.nameEn,
         );
+        notifyListeners();
       }
       return;
     }
@@ -197,12 +179,17 @@ class RouteAnalysisProvider extends ChangeNotifier {
         !result.isOffRoute &&
         (distPrev > Static.nextStationDepartureDistance ||
             distNext < Static.nextStationDistance);
-
-    if ((isStart || distCond) &&
+    if ((_lastDutyStatus != DutyStatus.onDuty || distCond) &&
         _lastSpokenStationOrder != result.nextStation!.order) {
       _lastSpokenStationOrder = result.nextStation!.order;
-      _executeSequence(
-        _buildSequence(
+      _currentLedEvent = LedEvent(
+        type: LedBroadcastType.next,
+        name: result.nextStation!.name,
+        nameEn: result.nextStation!.nameEn,
+        isTerminal: isTerminal,
+      );
+      _executeVoice(
+        _buildSeq(
           Static.nextStationTemplate,
           result.nextStation!.name,
           isTerminal,
@@ -210,7 +197,22 @@ class RouteAnalysisProvider extends ChangeNotifier {
         result.nextStation!.name,
         result.nextStation!.nameEn,
       );
+      notifyListeners();
     }
     _lastDutyStatus = duty;
+  }
+
+  List<Map<String, dynamic>> _buildSeq(List<String> tmp, String n, bool t) {
+    return tmp
+        .map(
+          (i) => {
+            'text': i
+                .replaceAll('{name}', n)
+                .replaceAll('{terminal}', t ? "終點站" : ""),
+            'isStationPart': i.contains('{name}'),
+            'speed': (i == "到了" || i == "終點站") ? 0.9 : 1.0,
+          },
+        )
+        .toList();
   }
 }
