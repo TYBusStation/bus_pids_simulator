@@ -57,21 +57,35 @@ class RouteAnalysisProvider extends ChangeNotifier {
       notifyListeners();
     }
 
+    final stations = status.direction == Direction.go
+        ? status.route.stations.go
+        : status.route.stations.back;
+    bool justTurnedOn =
+        _lastDutyStatus != DutyStatus.onDuty &&
+        status.dutyStatus == DutyStatus.onDuty;
+
+    if (justTurnedOn) {
+      _lastDutyStatus = DutyStatus.onDuty;
+      _lastSpokenStationOrder = null;
+      _lastArrivedStationOrder = null;
+      _triggerNextStationBroadcast(
+        stations.isNotEmpty ? stations.first : null,
+        stations.isNotEmpty ? stations.last.order : null,
+      );
+    }
+
     if (status.dutyStatus != DutyStatus.onDuty) {
-      if (_currentAnalysis != null || _lastDutyStatus == DutyStatus.onDuty) {
-        _resetAll();
+      if (_currentAnalysis != null) {
+        _resetLogicOnly();
         notifyListeners();
       }
+      _lastDutyStatus = status.dutyStatus;
       return;
     }
 
     final points = status.direction == Direction.go
         ? status.route.path.goPoints
         : status.route.path.backPoints;
-    final stations = status.direction == Direction.go
-        ? status.route.stations.go
-        : status.route.stations.back;
-
     RouteAnalysisResult? result;
     if (location != null && points.isNotEmpty && stations.isNotEmpty) {
       result = RouteEngine.analyze(
@@ -80,16 +94,21 @@ class RouteAnalysisProvider extends ChangeNotifier {
         stations: stations,
       );
     }
+
     _currentAnalysis = result;
-    _handleLogic(result, status.dutyStatus, stations);
+    _lastDutyStatus = status.dutyStatus;
+
+    if (result != null) {
+      _handleLogic(result, status.dutyStatus, stations);
+    }
+
     notifyListeners();
   }
 
-  void _resetAll() {
+  void _resetLogicOnly() {
     _currentAnalysis = null;
     _lastSpokenStationOrder = null;
     _lastArrivedStationOrder = null;
-    _lastDutyStatus = null;
     _currentLedEvent = LedEvent(
       type: LedBroadcastType.slogan,
       name: "",
@@ -99,7 +118,11 @@ class RouteAnalysisProvider extends ChangeNotifier {
   }
 
   Future<void> _startOffDutyLoop() async {
-    await Static.audioManager.startAssetLoop("notice.mp3");
+    while (_isOffDutyAlert) {
+      await Static.audioManager.playAssetAndWait("notice.mp3");
+      if (!_isOffDutyAlert) break;
+      await Future.delayed(const Duration(milliseconds: 200));
+    }
   }
 
   Future<void> _executeVoice(
@@ -112,19 +135,29 @@ class RouteAnalysisProvider extends ChangeNotifier {
     await Static.TTS.stop();
     await Static.audioManager.stop();
     await Future.delayed(const Duration(milliseconds: 100));
+
     for (var part in sequence) {
       if (thisId != _activeSequenceId || _isOffDutyAlert) return;
       double speed = part['speed'] ?? 1.0;
+      double finalSpeed = speed * Static.globalSpeed;
+      double finalVol = Static.globalVolume;
+
       if (part['isStationPart']) {
+        if (name.isEmpty) continue;
         if (Static.audioManager.hasAudio(name)) {
           await Static.audioManager.playAndWait(name, localSpeed: speed);
         } else {
-          await Static.TTS.speak(name, rate: speed * Static.globalSpeed);
+          await Static.TTS.speak(
+            name,
+            rate: finalSpeed.clamp(0.5, 2.0),
+            volume: finalVol,
+          );
           if (nameEn.isNotEmpty) {
             await Future.delayed(const Duration(milliseconds: 100));
             await Static.TTS.speak(
               nameEn,
-              rate: speed * Static.globalSpeed - 0.1,
+              rate: (finalSpeed - 0.1).clamp(0.5, 2.0),
+              volume: finalVol,
               locale: "en-US",
             );
           }
@@ -135,71 +168,79 @@ class RouteAnalysisProvider extends ChangeNotifier {
         if (Static.audioManager.hasAudio(text)) {
           await Static.audioManager.playAndWait(text, localSpeed: speed);
         } else {
-          await Static.TTS.speak(text, rate: speed * Static.globalSpeed);
+          await Static.TTS.speak(
+            text,
+            rate: finalSpeed.clamp(0.5, 2.0),
+            volume: finalVol,
+          );
         }
       }
       await Future.delayed(const Duration(milliseconds: 150));
     }
   }
 
+  void _triggerNextStationBroadcast(BusStation? station, int? terminalOrder) {
+    final int order = station?.order ?? -1;
+    if (_lastSpokenStationOrder == order) return;
+    final bool isTerminal = (station != null && terminalOrder != null)
+        ? station.order == terminalOrder
+        : false;
+    _lastSpokenStationOrder = order;
+    final String name = station?.name ?? "";
+    final String nameEn = station?.nameEn ?? "";
+
+    _currentLedEvent = LedEvent(
+      type: LedBroadcastType.next,
+      name: name,
+      nameEn: nameEn,
+      isTerminal: isTerminal,
+    );
+    _executeVoice(
+      _buildSeq(Static.nextStationTemplate, name, isTerminal),
+      name,
+      nameEn,
+    );
+  }
+
   void _handleLogic(
-    RouteAnalysisResult? result,
+    RouteAnalysisResult result,
     DutyStatus duty,
     List<BusStation> stations,
   ) {
-    if (_isOffDutyAlert || result == null || result.nextStation == null) return;
+    if (_isOffDutyAlert) return;
+    final BusStation? nextStation = result.nextStation;
+    final int? terminalOrder = stations.isNotEmpty ? stations.last.order : null;
 
-    final bool isTerminal = result.nextStation!.order == stations.last.order;
-    final double distNext = result.distToNextStation ?? 10000;
-    final double distPrev = result.distToPrevStation ?? 0;
-
-    if (!result.isOffRoute && distNext < Static.arrivalDistance) {
-      if (_lastArrivedStationOrder != result.nextStation!.order) {
-        _lastArrivedStationOrder = result.nextStation!.order;
-        _currentLedEvent = LedEvent(
-          type: LedBroadcastType.arrival,
-          name: result.nextStation!.name,
-          nameEn: result.nextStation!.nameEn,
-        );
-        _executeVoice(
-          _buildSeq(
-            Static.arrivalTemplate,
-            result.nextStation!.name,
-            isTerminal,
-          ),
-          result.nextStation!.name,
-          result.nextStation!.nameEn,
-        );
-        notifyListeners();
+    if (nextStation != null) {
+      final bool isTerminal = nextStation.order == stations.last.order;
+      final double distNext = result.distToNextStation ?? 10000;
+      if (!result.isOffRoute && distNext < Static.arrivalDistance) {
+        if (_lastArrivedStationOrder != nextStation.order) {
+          _lastArrivedStationOrder = nextStation.order;
+          _currentLedEvent = LedEvent(
+            type: LedBroadcastType.arrival,
+            name: nextStation.name,
+            nameEn: nextStation.nameEn,
+          );
+          _executeVoice(
+            _buildSeq(Static.arrivalTemplate, nextStation.name, isTerminal),
+            nextStation.name,
+            nextStation.nameEn,
+          );
+        }
+        return;
       }
-      return;
     }
 
+    final double distNext = result.distToNextStation ?? 10000;
+    final double distPrev = result.distToPrevStation ?? 0;
     bool distCond =
         !result.isOffRoute &&
         (distPrev > Static.nextStationDepartureDistance ||
             distNext < Static.nextStationDistance);
-    if ((_lastDutyStatus != DutyStatus.onDuty || distCond) &&
-        _lastSpokenStationOrder != result.nextStation!.order) {
-      _lastSpokenStationOrder = result.nextStation!.order;
-      _currentLedEvent = LedEvent(
-        type: LedBroadcastType.next,
-        name: result.nextStation!.name,
-        nameEn: result.nextStation!.nameEn,
-        isTerminal: isTerminal,
-      );
-      _executeVoice(
-        _buildSeq(
-          Static.nextStationTemplate,
-          result.nextStation!.name,
-          isTerminal,
-        ),
-        result.nextStation!.name,
-        result.nextStation!.nameEn,
-      );
-      notifyListeners();
+    if (distCond || (nextStation == null && _lastSpokenStationOrder != -1)) {
+      _triggerNextStationBroadcast(nextStation, terminalOrder);
     }
-    _lastDutyStatus = duty;
   }
 
   List<Map<String, dynamic>> _buildSeq(List<String> tmp, String n, bool t) {

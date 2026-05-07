@@ -31,6 +31,10 @@ abstract class Static {
   static List<String> arrivalTemplate = ["{terminal}", "{name}", "到了"];
   static List<String> nextStationTemplate = ["下一站", "{terminal}", "{name}"];
 
+  static List<String> sloganList = ["歡迎搭乘市區公車", "搭車請招手、上車請刷卡、下車請按鈴"];
+  static bool showStationListSlogan = true;
+  static double ledScrollSpeed = 400.0;
+
   static void log(String message) {
     print("[${DateTime.now().toIso8601String()}] $message");
   }
@@ -60,6 +64,14 @@ abstract class Static {
     nextStationTemplate = List<String>.from(
       _box.get('nextStationTemplate', defaultValue: nextStationTemplate),
     );
+    sloganList = List<String>.from(
+      _box.get('sloganList', defaultValue: sloganList),
+    );
+    showStationListSlogan = _box.get(
+      'showStationListSlogan',
+      defaultValue: true,
+    );
+    ledScrollSpeed = _box.get('ledScrollSpeed', defaultValue: 400.0);
   }
 
   static Future<void> saveSettings() async {
@@ -73,6 +85,9 @@ abstract class Static {
     );
     await _box.put('arrivalTemplate', arrivalTemplate);
     await _box.put('nextStationTemplate', nextStationTemplate);
+    await _box.put('sloganList', sloganList);
+    await _box.put('showStationListSlogan', showStationListSlogan);
+    await _box.put('ledScrollSpeed', ledScrollSpeed);
   }
 
   static Future<void> requestLocationPermission() async {

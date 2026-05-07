@@ -98,11 +98,6 @@ flutter:
   # list giving the asset and other descriptors for the font. For
   # example:
   fonts:
-    - family: Cubic_11
-      fonts:
-        - asset: assets/Cubic_11.ttf
-    #       - asset: fonts/Schyler-Italic.ttf
-    #         style: italic
     - family: unifont
       fonts:
         - asset: assets/unifont.otf

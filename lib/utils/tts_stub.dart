@@ -11,7 +11,6 @@ class TTSStub implements TTSInterface {
   @override
   Future<void> init() async {
     await _tts.setLanguage("zh-TW");
-    await _tts.setVolume(1.0);
     _tts.setCompletionHandler(() => _completeSpeech());
     _tts.setErrorHandler((msg) => _completeSpeech());
     _tts.setCancelHandler(() => _completeSpeech());
@@ -42,29 +41,13 @@ class TTSStub implements TTSInterface {
 
     if (locale != null && locale.startsWith("en")) {
       await _tts.setLanguage(locale);
-      List<dynamic>? voices = await _tts.getVoices;
-      if (voices != null) {
-        try {
-          var femaleVoice = voices.firstWhere(
-            (v) =>
-                v["name"].toString().toLowerCase().contains("female") &&
-                v["locale"].toString().contains("en"),
-            orElse: () => null,
-          );
-          if (femaleVoice != null)
-            await _tts.setVoice({
-              "name": femaleVoice["name"],
-              "locale": femaleVoice["locale"],
-            });
-        } catch (_) {}
-      }
     } else {
       await _tts.setLanguage("zh-TW");
     }
 
     await _tts.setPitch(pitch * 2.5 - 1.5);
     await _tts.setSpeechRate(rate * 1.2 - 0.8);
-    await _tts.setVolume(volume);
+    await _tts.setVolume(volume.clamp(0.0, 1.0));
     await _tts.speak(text);
     return _speechCompleter!.future;
   }

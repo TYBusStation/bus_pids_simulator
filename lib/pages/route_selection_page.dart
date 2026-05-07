@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
@@ -30,6 +32,7 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
   String _activeCityKey = 'Taoyuan';
   List<BusRoute> _displayRoutes = [];
   final ScrollController _horizontalController = ScrollController();
+  Timer? _debounceTimer;
 
   final Map<String, String> _cityNames = {
     'Taoyuan': '桃園市',
@@ -44,7 +47,6 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
     super.initState();
     _selectedRoute = Static.currentStatus.route;
     _selectedDirection = Static.currentStatus.direction;
-
     for (var entry in Static.routeData.entries) {
       if (entry.value.any(
         (r) => r.id == _selectedRoute.id && r.name == _selectedRoute.name,
@@ -58,14 +60,22 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _horizontalController.dispose();
     super.dispose();
+  }
+
+  void _onSearchChanged(String v) {
+    if (_debounceTimer?.isActive ?? false) _debounceTimer!.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      _searchQuery = v;
+      _performSearch();
+    });
   }
 
   void _performSearch() {
     final query = _searchQuery.toLowerCase();
     final tokens = query.split(RegExp(r'\s+')).where((t) => t.isNotEmpty);
-
     final routes = Static.routeData[_activeCityKey] ?? [];
     final List<BusRoute> matchingRoutes = routes.where((route) {
       if (query.isEmpty) return true;
@@ -146,10 +156,7 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
                   contentPadding: EdgeInsets.zero,
                   isDense: true,
                 ),
-                onChanged: (v) {
-                  _searchQuery = v;
-                  _performSearch();
-                },
+                onChanged: _onSearchChanged,
               ),
             ),
           ),

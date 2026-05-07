@@ -48,23 +48,37 @@ class _RulesTabState extends State<_RulesTab> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       children: [
         _dTile(
-          "到站報站觸發：離下站距離(公尺) [負數則無法觸發]",
+          "到站報站觸發：離下站距離(公尺)",
           Static.arrivalDistance,
           (v) => Static.arrivalDistance = v,
         ),
         _dTile(
-          "下站報站觸發：離下站距離(公尺) [與下方擇一觸發]",
+          "下站報站觸發：離下站距離(公尺)",
           Static.nextStationDistance,
           (v) => Static.nextStationDistance = v,
         ),
         _dTile(
-          "下站報站觸發：離上站距離(公尺) [與上方擇一觸發]",
+          "下站報站觸發：離上站距離(公尺)",
           Static.nextStationDepartureDistance,
           (v) => Static.nextStationDepartureDistance = v,
         ),
+        _dTile(
+          "LED 滾動速度 (數值越大越快)",
+          Static.ledScrollSpeed,
+          (v) => Static.ledScrollSpeed = v,
+        ),
         const Divider(),
-        _ruleExp("下站報站文字序列", Static.nextStationTemplate),
-        _ruleExp("到站報站文字序列", Static.arrivalTemplate),
+        SwitchListTile(
+          title: const Text("顯示即將接近站點序列", style: TextStyle(fontSize: 14)),
+          value: Static.showStationListSlogan,
+          onChanged: (v) {
+            setState(() => Static.showStationListSlogan = v);
+            Static.saveSettings();
+          },
+        ),
+        _ruleExp("下站報站語音序列", Static.nextStationTemplate),
+        _ruleExp("到站報站語音序列", Static.arrivalTemplate),
+        _ruleExp("LED 輪播標語設定", Static.sloganList),
       ],
     );
   }

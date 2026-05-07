@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../data/status.dart';
+import '../utils/static.dart';
 import '../widgets/route_analysis_provider.dart';
 import '../widgets/status_provider.dart';
 
@@ -27,7 +28,6 @@ class _LedPageState extends State<LedPage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // 初始標語
       _nextSlogan();
       context.read<RouteAnalysisProvider>().addListener(_onLedEventChanged);
     });
@@ -78,7 +78,7 @@ class _LedPageState extends State<LedPage> {
               ),
               child: ClipRect(
                 child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 120),
+                  duration: const Duration(milliseconds: 200),
                   reverseDuration: Duration.zero,
                   transitionBuilder: (child, animation) {
                     final key = (child.key as ValueKey<String>?)?.value;
@@ -91,15 +91,17 @@ class _LedPageState extends State<LedPage> {
                         child: child,
                       );
                     }
-                    return child;
+                    return FadeTransition(opacity: animation, child: child);
                   },
                   child: (!isOnDuty || (display.isEmpty && !_isBlanking))
                       ? const SizedBox.expand(key: ValueKey(''))
-                      : LedContent(
+                      : RepaintBoundary(
                           key: ValueKey(display),
-                          text: display,
-                          isPriority: _isPriorityMode,
-                          onComplete: _handleContentComplete,
+                          child: LedContent(
+                            text: display,
+                            isPriority: _isPriorityMode,
+                            onComplete: _handleContentComplete,
+                          ),
                         ),
                 ),
               ),
@@ -119,8 +121,6 @@ class _LedPageState extends State<LedPage> {
         _priorityQueue = [
           "下一站",
           if (event.isTerminal) "終點站",
-          event.name,
-          event.nameEn,
           event.name,
           event.nameEn,
         ];
@@ -174,19 +174,27 @@ class _LedPageState extends State<LedPage> {
     final statusProvider = context.read<StatusChangeNotifier>();
     final analysisProvider = context.read<RouteAnalysisProvider>();
 
-    List<String> slogans = ["歡迎搭乘市區公車", "搭車請招手、上車請刷卡、下車請按鈴"];
-    final stations = statusProvider.currentStatus.direction == Direction.go
-        ? statusProvider.currentStatus.route.stations.go
-        : statusProvider.currentStatus.route.stations.back;
-    final nextStation = analysisProvider.currentAnalysis?.nextStation;
+    List<String> slogans = List.from(Static.sloganList);
 
-    if (nextStation != null) {
-      int idx = stations.indexWhere((s) => s.order == nextStation.order);
-      if (idx != -1) {
-        slogans.add(
-          "即將接近：${stations.skip(idx).take(5).map((s) => s.name).join(">")}...下車的乘客請準備",
-        );
+    if (Static.showStationListSlogan) {
+      final stations = statusProvider.currentStatus.direction == Direction.go
+          ? statusProvider.currentStatus.route.stations.go
+          : statusProvider.currentStatus.route.stations.back;
+      final nextStation = analysisProvider.currentAnalysis?.nextStation;
+
+      if (nextStation != null) {
+        int idx = stations.indexWhere((s) => s.order == nextStation.order);
+        if (idx != -1) {
+          slogans.add(
+            "即將接近：${stations.skip(idx).take(5).map((s) => s.name).join(">")}...下車的乘客請準備",
+          );
+        }
       }
+    }
+
+    if (slogans.isEmpty) {
+      _currentText = "";
+      return;
     }
 
     _currentText = slogans[_sloganIndex % slogans.length];
@@ -246,11 +254,12 @@ class _LedContentState extends State<LedContent>
         ? (stopOffset + 20)
         : textW + (viewW / 2);
     _animation.duration = Duration(
-      milliseconds: (totalDist / 400 * 1000).toInt(),
+      milliseconds: (totalDist / Static.ledScrollSpeed * 1000).toInt(),
     );
     _animation.addListener(() {
-      if (_scrollController.hasClients)
+      if (_scrollController.hasClients) {
         _scrollController.jumpTo(_animation.value * totalDist);
+      }
     });
 
     _animation.forward().then((_) {

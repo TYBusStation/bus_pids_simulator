@@ -17,6 +17,7 @@ class AudioManager {
   late Box<Uint8List> _audioBox;
   final AudioPlayer _player = AudioPlayer();
   final Random _random = Random();
+  final Map<String, Uint8List> _memoryCache = {};
 
   Future<void> init() async {
     await Hive.initFlutter();
@@ -49,9 +50,19 @@ class AudioManager {
     return keys[_random.nextInt(keys.length)];
   }
 
+  Uint8List? _getBytes(String key) {
+    if (_memoryCache.containsKey(key)) return _memoryCache[key];
+    final bytes = _audioBox.get(key);
+    if (bytes != null && _memoryCache.length < 50) {
+      _memoryCache[key] = bytes;
+    }
+    return bytes;
+  }
+
   Future<void> saveAudio(String name, Uint8List bytes) async {
     final finalName = _getAvailableName(name);
     await _audioBox.put(finalName, bytes);
+    _memoryCache[finalName] = bytes;
   }
 
   Future<void> renameAudio(String oldName, String newName) async {
@@ -61,11 +72,14 @@ class AudioManager {
       final finalName = _getAvailableName(newName);
       await _audioBox.put(finalName, bytes);
       await _audioBox.delete(oldName);
+      _memoryCache.remove(oldName);
+      _memoryCache[finalName] = bytes;
     }
   }
 
   Future<void> deleteAudio(String name) async {
     await _audioBox.delete(name);
+    _memoryCache.remove(name);
   }
 
   bool hasAudio(String name) {
@@ -75,13 +89,15 @@ class AudioManager {
   }
 
   Future<void> _applySettings(double localSpeed) async {
-    await _player.setVolume(Static.globalVolume);
-    await _player.setPlaybackRate(Static.globalSpeed * localSpeed);
+    await _player.setVolume(Static.globalVolume.clamp(0.0, 1.0));
+    await _player.setPlaybackRate(
+      (Static.globalSpeed * localSpeed).clamp(0.5, 2.0),
+    );
   }
 
   Future<void> playAudio(String name, {double localSpeed = 1.0}) async {
     final key = _getRandomAudioKey(name);
-    final bytes = _audioBox.get(key);
+    final bytes = _getBytes(key);
     if (bytes != null) {
       await _player.setReleaseMode(ReleaseMode.release);
       await _player.stop();
@@ -93,7 +109,7 @@ class AudioManager {
 
   Future<void> playAndWait(String name, {double localSpeed = 1.0}) async {
     final key = _getRandomAudioKey(name);
-    final bytes = _audioBox.get(key);
+    final bytes = _getBytes(key);
     if (bytes != null) {
       await _player.setReleaseMode(ReleaseMode.release);
       await _player.stop();
@@ -107,8 +123,11 @@ class AudioManager {
         sub?.cancel();
       });
       await _player.resume();
-      if (kIsWeb)
-        await _player.setPlaybackRate(Static.globalSpeed * localSpeed);
+      if (kIsWeb) {
+        await _player.setPlaybackRate(
+          (Static.globalSpeed * localSpeed).clamp(0.5, 2.0),
+        );
+      }
       await completer.future.timeout(
         const Duration(seconds: 15),
         onTimeout: () => sub?.cancel(),
@@ -129,7 +148,11 @@ class AudioManager {
       sub?.cancel();
     });
     await _player.resume();
-    if (kIsWeb) await _player.setPlaybackRate(Static.globalSpeed * localSpeed);
+    if (kIsWeb) {
+      await _player.setPlaybackRate(
+        (Static.globalSpeed * localSpeed).clamp(0.5, 2.0),
+      );
+    }
     await completer.future.timeout(
       const Duration(seconds: 15),
       onTimeout: () => sub?.cancel(),
@@ -142,7 +165,9 @@ class AudioManager {
     await _player.setSource(AssetSource(path));
     await _applySettings(1.0);
     await _player.resume();
-    if (kIsWeb) await _player.setPlaybackRate(Static.globalSpeed);
+    if (kIsWeb) {
+      await _player.setPlaybackRate(Static.globalSpeed.clamp(0.5, 2.0));
+    }
   }
 
   Future<void> stop() async {
@@ -169,12 +194,14 @@ class AudioManager {
     final archive = Archive();
     for (var name in allAudioNames) {
       final bytes = _audioBox.get(name);
-      if (bytes != null)
+      if (bytes != null) {
         archive.addFile(ArchiveFile("$name.mp3", bytes.length, bytes));
+      }
     }
     final zipData = ZipEncoder().encode(archive);
-    if (zipData != null)
+    if (zipData != null) {
       downloadFile(Uint8List.fromList(zipData), "bus_audio_backup.zip");
+    }
   }
 
   Future<Map<String, Uint8List>?> pickZipFiles() async {
