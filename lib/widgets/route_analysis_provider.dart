@@ -125,11 +125,7 @@ class RouteAnalysisProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> _executeVoice(
-    List<Map<String, dynamic>> sequence,
-    String name,
-    String nameEn,
-  ) async {
+  Future<void> _executeVoice(List<Map<String, dynamic>> sequence) async {
     _activeSequenceId++;
     final int thisId = _activeSequenceId;
     await Static.TTS.stop();
@@ -138,42 +134,26 @@ class RouteAnalysisProvider extends ChangeNotifier {
 
     for (var part in sequence) {
       if (thisId != _activeSequenceId || _isOffDutyAlert) return;
-      double speed = part['speed'] ?? 1.0;
-      double finalSpeed = speed * Static.globalSpeed;
-      double finalVol = Static.globalVolume;
 
-      if (part['isStationPart']) {
-        if (name.isEmpty) continue;
-        if (Static.audioManager.hasAudio(name)) {
-          await Static.audioManager.playAndWait(name, localSpeed: speed);
-        } else {
-          await Static.TTS.speak(
-            name,
-            rate: finalSpeed.clamp(0.5, 2.0),
-            volume: finalVol,
-          );
-          if (nameEn.isNotEmpty) {
-            await Future.delayed(const Duration(milliseconds: 100));
-            await Static.TTS.speak(
-              nameEn,
-              rate: (finalSpeed - 0.1).clamp(0.5, 2.0),
-              volume: finalVol,
-              locale: "en-US",
-            );
-          }
-        }
-      } else {
-        String text = part['text'].trim();
-        if (text.isEmpty) continue;
-        if (Static.audioManager.hasAudio(text)) {
-          await Static.audioManager.playAndWait(text, localSpeed: speed);
-        } else {
-          await Static.TTS.speak(
-            text,
-            rate: finalSpeed.clamp(0.5, 2.0),
-            volume: finalVol,
-          );
-        }
+      String audioKey = part['audioKey'];
+      String text = part['text'];
+      String locale = part['locale'];
+      double speed = part['speed'] * Static.globalSpeed;
+
+      if (Static.audioManager.hasAudio(audioKey)) {
+        await Static.audioManager.playAndWait(
+          audioKey,
+          localSpeed: part['speed'],
+        );
+      } else if (text.isNotEmpty) {
+        if (audioKey.endsWith("_ho") || audioKey.endsWith("_hk")) continue;
+
+        await Static.TTS.speak(
+          text,
+          rate: speed.clamp(0.5, 2.0),
+          volume: Static.globalVolume,
+          locale: locale,
+        );
       }
       await Future.delayed(const Duration(milliseconds: 150));
     }
@@ -196,9 +176,7 @@ class RouteAnalysisProvider extends ChangeNotifier {
       isTerminal: isTerminal,
     );
     _executeVoice(
-      _buildSeq(Static.nextStationTemplate, name, isTerminal),
-      name,
-      nameEn,
+      _buildSeq(Static.nextStationTemplate, name, nameEn, isTerminal),
     );
   }
 
@@ -214,7 +192,10 @@ class RouteAnalysisProvider extends ChangeNotifier {
     if (nextStation != null) {
       final bool isTerminal = nextStation.order == stations.last.order;
       final double distNext = result.distToNextStation ?? 10000;
-      if (!result.isOffRoute && distNext < Static.arrivalDistance) {
+
+      if (Static.arrivalDistance >= 0 &&
+          !result.isOffRoute &&
+          distNext < Static.arrivalDistance) {
         if (_lastArrivedStationOrder != nextStation.order) {
           _lastArrivedStationOrder = nextStation.order;
           _currentLedEvent = LedEvent(
@@ -223,9 +204,12 @@ class RouteAnalysisProvider extends ChangeNotifier {
             nameEn: nextStation.nameEn,
           );
           _executeVoice(
-            _buildSeq(Static.arrivalTemplate, nextStation.name, isTerminal),
-            nextStation.name,
-            nextStation.nameEn,
+            _buildSeq(
+              Static.arrivalTemplate,
+              nextStation.name,
+              nextStation.nameEn,
+              isTerminal,
+            ),
           );
         }
         return;
@@ -234,26 +218,74 @@ class RouteAnalysisProvider extends ChangeNotifier {
 
     final double distNext = result.distToNextStation ?? 10000;
     final double distPrev = result.distToPrevStation ?? 0;
+
     bool distCond =
         !result.isOffRoute &&
         (distPrev > Static.nextStationDepartureDistance ||
-            distNext < Static.nextStationDistance);
+            (Static.nextStationDistance >= 0 &&
+                distNext < Static.nextStationDistance));
+
     if (distCond || (nextStation == null && _lastSpokenStationOrder != -1)) {
       _triggerNextStationBroadcast(nextStation, terminalOrder);
     }
   }
 
-  List<Map<String, dynamic>> _buildSeq(List<String> tmp, String n, bool t) {
-    return tmp
-        .map(
-          (i) => {
-            'text': i
-                .replaceAll('{name}', n)
-                .replaceAll('{terminal}', t ? "終點站" : ""),
-            'isStationPart': i.contains('{name}'),
-            'speed': (i == "到了" || i == "終點站") ? 0.9 : 1.0,
-          },
-        )
+  List<Map<String, dynamic>> _buildSeq(
+    List<String> template,
+    String name,
+    String nameEn,
+    bool isTerminal,
+  ) {
+    // 檢查是否有站點名稱的音檔 (假設音檔 Key 即為站名)
+    bool hasAudio = Static.audioManager.hasAudio(name);
+
+    List<String> expanded = [];
+    for (var item in template) {
+      if (item == "{station_voices}") {
+        if (hasAudio) {
+          expanded.add("{name_zh}");
+        } else {
+          expanded.addAll(Static.stationVoiceSequence);
+        }
+      } else {
+        expanded.add(item);
+      }
+    }
+
+    return expanded
+        .map((item) {
+          String audioKey = "";
+          String text = "";
+          String locale = "zh-TW";
+
+          if (item.contains('{name_en}')) {
+            text = nameEn;
+            audioKey = nameEn;
+            locale = "en-US";
+          } else if (item.contains('{name_zh}')) {
+            text = name;
+            audioKey = name;
+          } else if (item.contains('{name_ho}')) {
+            text = name;
+            audioKey = "${name}_ho";
+          } else if (item.contains('{name_hk}')) {
+            text = name;
+            audioKey = "${name}_hk";
+          } else {
+            text = item
+                .replaceAll('{terminal}', isTerminal ? "終點站" : "")
+                .replaceAll('{name_zh}', name);
+            audioKey = text;
+          }
+
+          return {
+            'text': text,
+            'audioKey': audioKey,
+            'locale': locale,
+            'speed': (text == "到了" || text == "終點站") ? 0.9 : 1.0,
+          };
+        })
+        .where((m) => m['text'].toString().trim().isNotEmpty)
         .toList();
   }
 }

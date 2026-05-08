@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../data/led_sequence.dart';
 import '../data/status.dart';
 import '../utils/static.dart';
 import '../widgets/route_analysis_provider.dart';
@@ -16,174 +17,101 @@ class LedPage extends StatefulWidget {
 }
 
 class _LedPageState extends State<LedPage> {
-  int _sloganIndex = 0;
+  List<LedSequence> _activeQueue = [];
+  int _queueIndex = 0;
   DateTime? _lastEventTime;
-  List<String> _priorityQueue = [];
-  bool _isPriorityLooping = false;
-  String _currentText = "";
   bool _isPriorityMode = false;
+  String _currentText = "";
+  int _sloganIndex = 0;
   bool _isBlanking = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _nextSlogan();
-      context.read<RouteAnalysisProvider>().addListener(_onLedEventChanged);
-    });
+    _nextSlogan();
+    context.read<RouteAnalysisProvider>().addListener(_onLedEventChanged);
+    Static.settingsNotifier.addListener(_onSettingsChanged);
   }
 
   @override
   void dispose() {
     context.read<RouteAnalysisProvider>().removeListener(_onLedEventChanged);
+    Static.settingsNotifier.removeListener(_onSettingsChanged);
     super.dispose();
   }
 
-  void _onLedEventChanged() {
-    if (!mounted) return;
-    final event = context.read<RouteAnalysisProvider>().currentLedEvent;
-
-    if (event.type != LedBroadcastType.slogan &&
-        event.timestamp != _lastEventTime) {
-      _lastEventTime = event.timestamp;
-      _startPriorityBroadcast(event);
-    } else if (event.type == LedBroadcastType.slogan && _isPriorityMode) {
+  void _onSettingsChanged() {
+    if (mounted && !_isPriorityMode) {
       setState(() {
-        _isPriorityMode = false;
-        _isPriorityLooping = false;
-        _priorityQueue.clear();
+        _sloganIndex = 0;
         _nextSlogan();
       });
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Consumer<StatusChangeNotifier>(
-        builder: (context, statusNotifier, child) {
-          final isOnDuty =
-              statusNotifier.currentStatus.dutyStatus == DutyStatus.onDuty;
-          String display = _isBlanking ? "" : _currentText;
-
-          return Center(
-            child: Container(
-              width: MediaQuery.of(context).size.width * 0.98,
-              height: 220,
-              decoration: BoxDecoration(
-                color: const Color(0xFF101010),
-                border: Border.all(color: const Color(0xFF999999), width: 12),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: ClipRect(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 200),
-                  reverseDuration: Duration.zero,
-                  transitionBuilder: (child, animation) {
-                    final key = (child.key as ValueKey<String>?)?.value;
-                    if (_isPriorityMode && key != null && key != "") {
-                      return SlideTransition(
-                        position: Tween<Offset>(
-                          begin: const Offset(0, 1),
-                          end: Offset.zero,
-                        ).animate(animation),
-                        child: child,
-                      );
-                    }
-                    return FadeTransition(opacity: animation, child: child);
-                  },
-                  child: (!isOnDuty || (display.isEmpty && !_isBlanking))
-                      ? const SizedBox.expand(key: ValueKey(''))
-                      : RepaintBoundary(
-                          key: ValueKey(display),
-                          child: LedContent(
-                            text: display,
-                            isPriority: _isPriorityMode,
-                            onComplete: _handleContentComplete,
-                          ),
-                        ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  void _startPriorityBroadcast(LedEvent event) {
-    setState(() {
-      _isPriorityMode = true;
-      _isBlanking = false;
-      _priorityQueue.clear();
-      if (event.type == LedBroadcastType.next) {
-        _priorityQueue = [
-          "下一站",
-          if (event.isTerminal) "終點站",
-          event.name,
-          event.nameEn,
-        ];
-        _isPriorityLooping = false;
-      } else if (event.type == LedBroadcastType.arrival) {
-        _priorityQueue = [event.name, event.nameEn, "到了"];
-        _isPriorityLooping = true;
-      }
-      _currentText = _priorityQueue.isNotEmpty
-          ? _priorityQueue.removeAt(0)
-          : "";
-    });
-  }
-
-  void _handleContentComplete() {
-    if (!mounted) return;
-
-    setState(() {
-      _isBlanking = true;
-      _currentText = "";
-    });
-
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (!mounted) return;
+  void _onLedEventChanged() {
+    final event = context.read<RouteAnalysisProvider>().currentLedEvent;
+    if (event.timestamp != _lastEventTime &&
+        event.type != LedBroadcastType.slogan) {
+      _lastEventTime = event.timestamp;
       setState(() {
+        _isPriorityMode = true;
         _isBlanking = false;
-        if (_isPriorityMode) {
-          if (_priorityQueue.isNotEmpty) {
-            _currentText = _priorityQueue.removeAt(0);
-          } else if (_isPriorityLooping) {
-            final ev = context.read<RouteAnalysisProvider>().currentLedEvent;
-            if (ev.type == LedBroadcastType.arrival) {
-              _priorityQueue = [ev.name, ev.nameEn, "到了"];
-              _currentText = _priorityQueue.removeAt(0);
-            } else {
-              _isPriorityMode = false;
-              _nextSlogan();
-            }
-          } else {
-            _isPriorityMode = false;
-            _nextSlogan();
-          }
-        } else {
-          _nextSlogan();
-        }
+        _queueIndex = 0;
+        _activeQueue = List.from(
+          event.type == LedBroadcastType.next
+              ? Static.ledNextStationSeq
+              : Static.ledArrivalSeq,
+        );
+        _updateCurrentText(event);
       });
-    });
+    }
+  }
+
+  void _updateCurrentText(LedEvent event) {
+    if (_queueIndex < _activeQueue.length) {
+      final config = _activeQueue[_queueIndex];
+      String processed = config.template
+          .replaceAll('{name}', event.name)
+          .replaceAll('{nameEn}', event.nameEn)
+          .replaceAll('{terminal}', event.isTerminal ? "終點站" : "");
+
+      if (processed.trim().isEmpty) {
+        _queueIndex++;
+        if (_queueIndex < _activeQueue.length) {
+          _updateCurrentText(event);
+        } else {
+          _exitPriority();
+        }
+      } else {
+        _currentText = processed;
+      }
+    } else {
+      _exitPriority();
+    }
+  }
+
+  void _exitPriority() {
+    _isPriorityMode = false;
+    _activeQueue = [];
+    _queueIndex = 0;
+    _nextSlogan();
   }
 
   void _nextSlogan() {
-    final statusProvider = context.read<StatusChangeNotifier>();
-    final analysisProvider = context.read<RouteAnalysisProvider>();
-
+    final status = context.read<StatusChangeNotifier>().currentStatus;
+    final analysis = context.read<RouteAnalysisProvider>().currentAnalysis;
     List<String> slogans = List.from(Static.sloganList);
 
-    if (Static.showStationListSlogan) {
-      final stations = statusProvider.currentStatus.direction == Direction.go
-          ? statusProvider.currentStatus.route.stations.go
-          : statusProvider.currentStatus.route.stations.back;
-      final nextStation = analysisProvider.currentAnalysis?.nextStation;
-
-      if (nextStation != null) {
-        int idx = stations.indexWhere((s) => s.order == nextStation.order);
+    if (Static.showStationListSlogan &&
+        status.dutyStatus == DutyStatus.onDuty) {
+      final stations = status.direction == Direction.go
+          ? status.route.stations.go
+          : status.route.stations.back;
+      if (analysis?.nextStation != null) {
+        int idx = stations.indexWhere(
+          (s) => s.order == analysis!.nextStation!.order,
+        );
         if (idx != -1) {
           slogans.add(
             "即將接近：${stations.skip(idx).take(5).map((s) => s.name).join(">")}...下車的乘客請準備",
@@ -194,22 +122,95 @@ class _LedPageState extends State<LedPage> {
 
     if (slogans.isEmpty) {
       _currentText = "";
-      return;
+    } else {
+      _currentText = slogans[_sloganIndex % slogans.length];
+      _sloganIndex++;
+    }
+    if (mounted) setState(() {});
+  }
+
+  void _handleComplete() {
+    if (!mounted) return;
+    setState(() => _isBlanking = true);
+
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (!mounted) return;
+      setState(() {
+        _isBlanking = false;
+        if (_isPriorityMode) {
+          final event = context.read<RouteAnalysisProvider>().currentLedEvent;
+          if (_queueIndex < _activeQueue.length - 1) {
+            _queueIndex++;
+            _updateCurrentText(event);
+          } else if (event.type == LedBroadcastType.arrival) {
+            _queueIndex = 0;
+            _updateCurrentText(event);
+          } else {
+            _exitPriority();
+          }
+        } else {
+          _nextSlogan();
+        }
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    String display = _isBlanking ? "" : _currentText;
+    LedSequence config;
+
+    if (_isPriorityMode &&
+        _activeQueue.isNotEmpty &&
+        _queueIndex < _activeQueue.length) {
+      config = _activeQueue[_queueIndex];
+    } else {
+      config = LedSequence(
+        template: _currentText,
+        scrollSpeed: Static.ledScrollSpeed,
+      );
     }
 
-    _currentText = slogans[_sloganIndex % slogans.length];
-    _sloganIndex++;
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Center(
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.98,
+          height: 220,
+          decoration: BoxDecoration(
+            color: const Color(0xFF101010),
+            border: Border.all(color: const Color(0xFF999999), width: 12),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: ClipRect(
+            child: (display.isEmpty)
+                ? const SizedBox.expand()
+                : LedContent(
+                    key: ValueKey(
+                      "${_isPriorityMode}_${_lastEventTime}_${_queueIndex}_${display}_${_isBlanking}_${config.scrollSpeed}",
+                    ),
+                    text: display,
+                    config: config,
+                    isPriority: _isPriorityMode,
+                    onComplete: _handleComplete,
+                  ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
 class LedContent extends StatefulWidget {
   final String text;
+  final LedSequence config;
   final bool isPriority;
   final VoidCallback onComplete;
 
   const LedContent({
     super.key,
     required this.text,
+    required this.config,
     required this.isPriority,
     required this.onComplete,
   });
@@ -218,92 +219,152 @@ class LedContent extends StatefulWidget {
   State<LedContent> createState() => _LedContentState();
 }
 
-class _LedContentState extends State<LedContent>
-    with SingleTickerProviderStateMixin {
-  late ScrollController _scrollController;
-  late AnimationController _animation;
-  final GlobalKey _textKey = GlobalKey();
+class _LedContentState extends State<LedContent> with TickerProviderStateMixin {
+  late ScrollController _scroll;
+  late AnimationController _scrollAnim;
+  late AnimationController _entryAnim;
+  final GlobalKey _key = GlobalKey();
+  bool _isLong = false;
+  Offset _entryOffset = Offset.zero;
+  Alignment _align = Alignment.center;
 
   @override
   void initState() {
     super.initState();
-    _scrollController = ScrollController();
-    _animation = AnimationController(vsync: this);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _start());
+    _scroll = ScrollController();
+    _scrollAnim = AnimationController(vsync: this);
+    _entryAnim = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: widget.config.entrySpeed.toInt()),
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initLayout());
   }
 
-  Future<void> _start() async {
-    if (!mounted || widget.text.isEmpty) return;
-    await Future.delayed(const Duration(seconds: 1));
-    final RenderBox? box =
-        _textKey.currentContext?.findRenderObject() as RenderBox?;
-    if (box == null || !mounted) return;
+  void _initLayout() async {
+    if (!mounted) return;
+    final rb = _key.currentContext?.findRenderObject() as RenderBox?;
+    if (rb == null) return;
 
-    double textW = box.size.width;
-    double viewW = _scrollController.position.viewportDimension;
-    double stopOffset = textW - (viewW / 2);
-    bool shouldScroll = widget.isPriority ? textW > (viewW - 40) : true;
+    double tw = rb.size.width;
+    double vw = MediaQuery.of(context).size.width * 0.98;
+    _isLong = tw > (vw - 40);
 
-    if (!shouldScroll) {
-      await Future.delayed(const Duration(seconds: 2));
-      widget.onComplete();
-      return;
-    }
-
-    double totalDist = widget.isPriority
-        ? (stopOffset + 20)
-        : textW + (viewW / 2);
-    _animation.duration = Duration(
-      milliseconds: (totalDist / Static.ledScrollSpeed * 1000).toInt(),
-    );
-    _animation.addListener(() {
-      if (_scrollController.hasClients) {
-        _scrollController.jumpTo(_animation.value * totalDist);
+    setState(() {
+      if (!_isLong) {
+        switch (widget.config.entryShort) {
+          case LedEntryShort.bottomLeft:
+            _entryOffset = const Offset(0, 1);
+            _align = Alignment.centerLeft;
+          case LedEntryShort.bottomCenter:
+            _entryOffset = const Offset(0, 1);
+            _align = Alignment.center;
+          case LedEntryShort.topLeft:
+            _entryOffset = const Offset(0, -1);
+            _align = Alignment.centerLeft;
+          case LedEntryShort.topCenter:
+            _entryOffset = const Offset(0, -1);
+            _align = Alignment.center;
+          case LedEntryShort.rightLeft:
+            _entryOffset = const Offset(1, 0);
+            _align = Alignment.centerLeft;
+          case LedEntryShort.rightCenter:
+            _entryOffset = const Offset(1, 0);
+            _align = Alignment.center;
+        }
+      } else {
+        switch (widget.config.entryLong) {
+          case LedEntryLong.bottomLeftScroll:
+            _entryOffset = const Offset(0, 1);
+            _align = Alignment.centerLeft;
+          case LedEntryLong.topLeftScroll:
+            _entryOffset = const Offset(0, -1);
+            _align = Alignment.centerLeft;
+          case LedEntryLong.rightLeftScroll:
+            _entryOffset = const Offset(1, 0);
+            _align = Alignment.centerLeft;
+          case LedEntryLong.rightScrollIn:
+            _entryOffset = Offset.zero;
+            _align = Alignment.centerLeft;
+        }
       }
     });
 
-    _animation.forward().then((_) {
+    if (widget.config.entryLong == LedEntryLong.rightScrollIn && _isLong) {
+      _startScroll(tw, vw);
+    } else {
+      await _entryAnim.forward();
+      await Future.delayed(Duration(milliseconds: widget.config.stayMs));
+      if (_isLong) {
+        _startScroll(tw, vw);
+      } else {
+        await Future.delayed(const Duration(seconds: 2));
+        widget.onComplete();
+      }
+    }
+  }
+
+  void _startScroll(double tw, double vw) {
+    double dist;
+    if (widget.config.entryLong == LedEntryLong.rightScrollIn) {
+      dist = tw + vw;
+    } else {
+      dist = (tw - (vw / 2) + 20);
+    }
+
+    _scrollAnim.duration = Duration(
+      milliseconds: (dist / widget.config.scrollSpeed * 1000).toInt(),
+    );
+    _scrollAnim.addListener(() {
+      if (_scroll.hasClients) _scroll.jumpTo(_scrollAnim.value * dist);
+    });
+    _scrollAnim.forward().then((_) {
       if (mounted) widget.onComplete();
     });
   }
 
   @override
   void dispose() {
-    _scrollController.dispose();
-    _animation.dispose();
+    _scroll.dispose();
+    _scrollAnim.dispose();
+    _entryAnim.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Container(
-          color: Colors.black,
-          child: SingleChildScrollView(
-            controller: _scrollController,
-            scrollDirection: Axis.horizontal,
-            physics: const NeverScrollableScrollPhysics(),
-            child: Row(
-              children: [
-                SizedBox(width: widget.isPriority ? 20 : constraints.maxWidth),
-                Text(
-                  key: _textKey,
-                  widget.text,
-                  style: const TextStyle(
-                    fontFamily: 'unifont',
-                    fontSize: 165,
-                    color: Color(0xFFFF0000),
-                    height: 1.0,
-                    decoration: TextDecoration.none,
-                  ),
+    return SlideTransition(
+      position: Tween<Offset>(
+        begin: _entryOffset,
+        end: Offset.zero,
+      ).animate(_entryAnim),
+      child: Container(
+        alignment: _align,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: SingleChildScrollView(
+          controller: _scroll,
+          scrollDirection: Axis.horizontal,
+          physics: const NeverScrollableScrollPhysics(),
+          child: Row(
+            children: [
+              if (widget.config.entryLong == LedEntryLong.rightScrollIn &&
+                  _isLong)
+                SizedBox(width: MediaQuery.of(context).size.width),
+              Text(
+                widget.text,
+                key: _key,
+                style: const TextStyle(
+                  fontFamily: 'unifont',
+                  fontSize: 165,
+                  color: Color(0xFFFF0000),
+                  height: 1.0,
                 ),
-                SizedBox(width: constraints.maxWidth * 2),
-              ],
-            ),
+              ),
+              if (_isLong)
+                SizedBox(width: MediaQuery.of(context).size.width * 2),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }

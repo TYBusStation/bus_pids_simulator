@@ -1,6 +1,6 @@
 import json
 
-CITY = "InterCity"
+CITY = "Taipei"
 
 
 def process_city_bus_data():
@@ -24,26 +24,35 @@ def process_city_bus_data():
         print(f"錯誤: JSON 格式有誤 ({e})")
         return
 
-    # 建立一個以 SubRouteID 為 Key 的字典來整合資料
+    # 整合資料的字典
     merged_results = {}
+    # 建立 RouteID 與 SubRouteID 的映射關係，處理「找不到 SubRouteID 時改找 RouteID」的需求
+    route_to_subs = {}
 
     print("Step 1: 處理基礎資訊 (Data)...")
     for item in data_list:
-        # 主路線資訊
+        route_id_main = item.get("RouteID")
         departure_main = item.get("DepartureStopNameZh", "")
         destination_main = item.get("DestinationStopNameZh", "")
 
+        if route_id_main not in route_to_subs:
+            route_to_subs[route_id_main] = []
+
         # 遍歷附屬路線 SubRoutes
         for sub in item.get("SubRoutes", []):
-            rid = sub.get("SubRouteID")
-            if not rid:
+            sid = sub.get("SubRouteID")
+            if not sid:
                 continue
 
+            # 建立 RouteID 對應 SubRouteID 的索引
+            route_to_subs[route_id_main].append(sid)
+
             # 初始化結構
-            merged_results[rid] = {
-                "id": str(rid),  # SubRouteID => id
-                "name": sub.get("SubRouteName", {}).get("Zh_tw", ""),  # SubRouteName => name
-                "description": sub.get("Headsign", ""),  # headsign => description
+            merged_results[sid] = {
+                "id": str(sid),
+                "route_id": route_id_main,  # 暫存以便追蹤
+                "name": sub.get("SubRouteName", {}).get("Zh_tw", ""),
+                "description": sub.get("Headsign", ""),
                 "departure": departure_main,
                 "destination": destination_main,
                 "path": {"go": "", "back": ""},
@@ -52,44 +61,61 @@ def process_city_bus_data():
 
     print("Step 2: 處理軌跡資訊 (Route)...")
     for r in route_list:
-        # 使用 .get 避免 KeyError
-        rid = r.get("SubRouteID")
-        if rid in merged_results:
-            direction = r.get("Direction")
-            geometry = r.get("Geometry", "")
+        sid = r.get("SubRouteID")
+        rid = r.get("RouteID")
+        direction = r.get("Direction")
+        geometry = r.get("Geometry", "")
 
+        # 決定要更新哪些 SubRouteID
+        target_sids = []
+        if sid in merged_results:
+            target_sids = [sid]
+        elif rid in route_to_subs:
+            # 如果 SubRouteID 找不到，嘗試用 RouteID 找回其下所有的 SubRoutes
+            target_sids = route_to_subs[rid]
+
+        for target_id in target_sids:
             if direction == 0:
-                merged_results[rid]["path"]["go"] = geometry
+                merged_results[target_id]["path"]["go"] = geometry
             elif direction == 1:
-                merged_results[rid]["path"]["back"] = geometry
+                merged_results[target_id]["path"]["back"] = geometry
 
     print("Step 3: 處理站點資訊 (Stop)...")
     for s_group in stop_list:
-        rid = s_group.get("SubRouteID")
-        if rid in merged_results:
-            direction = s_group.get("Direction")
-            dir_key = "go" if direction == 0 else "back"
+        sid = s_group.get("SubRouteID")
+        rid = s_group.get("RouteID")
+        direction = s_group.get("Direction")
+        dir_key = "go" if direction == 0 else "back"
 
-            station_details = []
-            for s in s_group.get("Stops", []):
-                stop_name_obj = s.get("StopName", {})
-                pos = s.get("StopPosition", {})
+        station_details = []
+        for s in s_group.get("Stops", []):
+            stop_name_obj = s.get("StopName", {})
+            pos = s.get("StopPosition", {})
+            station_details.append({
+                "order": s.get("StopSequence"),
+                "name": stop_name_obj.get("Zh_tw", ""),
+                "name_en": stop_name_obj.get("En", ""),
+                "lat": pos.get("PositionLat"),
+                "lon": pos.get("PositionLon")
+            })
+        station_details.sort(key=lambda x: x["order"] if x["order"] is not None else 0)
 
-                stop_info = {
-                    "order": s.get("StopSequence"),
-                    "name": stop_name_obj.get("Zh_tw", ""),
-                    "name_en": stop_name_obj.get("En", ""),  # 放入與 name 同級
-                    "lat": pos.get("PositionLat"),
-                    "lon": pos.get("PositionLon")
-                }
-                station_details.append(stop_info)
+        # 決定要更新哪些 SubRouteID
+        target_sids = []
+        if sid in merged_results:
+            target_sids = [sid]
+        elif rid in route_to_subs:
+            target_sids = route_to_subs[rid]
 
-            # 確保按照 StopSequence 排序
-            station_details.sort(key=lambda x: x["order"] if x["order"] is not None else 0)
-            merged_results[rid]["stations"][dir_key] = station_details
+        for target_id in target_sids:
+            # 避免重複填入（如果該 SubRoute 已經有資料了可自行決定是否覆蓋）
+            merged_results[target_id]["stations"][dir_key] = station_details
 
-    # 將字典轉換回 List 格式
-    final_output = list(merged_results.values())
+    # 移除暫存用的 route_id 並轉換為 List
+    final_output = []
+    for res in merged_results.values():
+        res.pop("route_id", None)  # 移除中間變數
+        final_output.append(res)
 
     # 儲存結果
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
