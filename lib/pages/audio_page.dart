@@ -28,6 +28,7 @@ class _AudioPageState extends State<AudioPage> {
   }
 
   void _performSearch() {
+    if (!mounted) return;
     setState(() {
       if (_searchQuery.isEmpty) {
         _filteredAudios = List.from(_cachedNames);
@@ -41,6 +42,7 @@ class _AudioPageState extends State<AudioPage> {
   }
 
   void _refresh() {
+    if (!mounted) return;
     _loadNames();
   }
 
@@ -72,7 +74,7 @@ class _AudioPageState extends State<AudioPage> {
                           icon: const Icon(Icons.close, size: 18),
                           onPressed: () {
                             _searchController.clear();
-                            setState(() => _searchQuery = "");
+                            if (mounted) setState(() => _searchQuery = "");
                             _performSearch();
                           },
                         )
@@ -96,8 +98,8 @@ class _AudioPageState extends State<AudioPage> {
                     padding: const EdgeInsets.fromLTRB(12, 0, 12, 80),
                     gridDelegate:
                         const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 150,
-                          mainAxisExtent: 130,
+                          maxCrossAxisExtent: 160,
+                          mainAxisExtent: 160,
                           crossAxisSpacing: 8,
                           mainAxisSpacing: 8,
                         ),
@@ -167,10 +169,7 @@ class _AudioPageState extends State<AudioPage> {
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                   icon: const Icon(Icons.delete, size: 18, color: Colors.red),
-                  onPressed: () async {
-                    await Static.audioManager.deleteAudio(name);
-                    _refresh();
-                  },
+                  onPressed: () => _handleDelete(name), // 修改此處
                 ),
               ],
             ),
@@ -179,6 +178,32 @@ class _AudioPageState extends State<AudioPage> {
         ],
       ),
     );
+  }
+
+  // 新增刪除處理邏輯
+  Future<void> _handleDelete(String name) async {
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (v) => AlertDialog(
+        title: const Text("確認刪除"),
+        content: Text("您確定要刪除「$name」嗎？\n此動作無法還原。"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(v, false),
+            child: const Text("取消"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(v, true),
+            child: const Text("刪除", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await Static.audioManager.deleteAudio(name);
+      _refresh();
+    }
   }
 
   Widget _buildMarqueeOrText(String text, ThemeData theme) {
@@ -297,7 +322,7 @@ class _AudioPageState extends State<AudioPage> {
             onPressed: () async {
               if (c.text.isNotEmpty) {
                 await Static.audioManager.pickAndSave(c.text);
-                Navigator.pop(v);
+                if (mounted) Navigator.pop(v);
                 _refresh();
               }
             },
@@ -324,7 +349,7 @@ class _AudioPageState extends State<AudioPage> {
             onPressed: () async {
               if (c.text.isNotEmpty && c.text != oldName) {
                 await Static.audioManager.renameAudio(oldName, c.text);
-                Navigator.pop(v);
+                if (mounted) Navigator.pop(v);
                 _refresh();
               }
             },

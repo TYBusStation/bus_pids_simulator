@@ -274,7 +274,7 @@ class _LedContentState extends State<LedContent> with TickerProviderStateMixin {
 
     double tw = rb.size.width;
     double vw = MediaQuery.of(context).size.width * 0.98;
-    _isLong = tw > (vw - 40);
+    _isLong = tw > (vw - 80);
 
     setState(() {
       if (!_isLong) {

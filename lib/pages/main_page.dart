@@ -58,7 +58,8 @@ class _MainPageState extends State<MainPage> {
           .read<RouteAnalysisProvider>()
           .eventStream
           .listen((event) {
-            if (event == "SPEED_WARNING") {
+            if (event == "SPEED_WARNING" &&
+                (selectedIndex == 0 || selectedIndex == 1)) {
               _showSpeedWarningDialog();
             }
           });

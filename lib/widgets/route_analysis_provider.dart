@@ -155,19 +155,17 @@ class RouteAnalysisProvider extends ChangeNotifier {
     for (var part in sequence) {
       if (thisId != _activeSequenceId || _isOffDutyAlert) return;
 
-      String audioKey = part['audioKey'];
-      String text = part['text'];
-      String locale = part['locale'];
-      double speed = part['speed'] * Static.globalSpeed;
+      String audioKey = part['audioKey'] as String;
+      String text = part['text'] as String;
+      String locale = part['locale'] as String;
+      double speed = (part['speed'] as double) * Static.globalSpeed;
 
-      if (Static.audioManager.hasAudio(audioKey)) {
+      if (audioKey.isNotEmpty && Static.audioManager.hasAudio(audioKey)) {
         await Static.audioManager.playAndWait(
           audioKey,
-          localSpeed: part['speed'],
+          localSpeed: part['speed'] as double,
         );
       } else if (text.isNotEmpty) {
-        if (audioKey.endsWith("_ho") || audioKey.endsWith("_hk")) continue;
-
         await Static.TTS.speak(
           text,
           rate: speed.clamp(0.5, 2.0),
@@ -259,12 +257,12 @@ class RouteAnalysisProvider extends ChangeNotifier {
     String nameEn,
     bool isTerminal,
   ) {
-    bool hasAudio = Static.audioManager.hasAudio(name);
+    bool hasFullAudio = Static.audioManager.hasAudio(name);
     List<String> expanded = [];
     for (var item in template) {
       if (item == "{station_voices}") {
-        if (hasAudio) {
-          expanded.add("{name_zh}");
+        if (hasFullAudio) {
+          expanded.add("{name_full}");
         } else {
           expanded.addAll(Static.stationVoiceSequence);
         }
@@ -274,24 +272,27 @@ class RouteAnalysisProvider extends ChangeNotifier {
     }
 
     return expanded
-        .map((item) {
+        .map<Map<String, dynamic>>((item) {
           String audioKey = "";
           String text = "";
           String locale = "zh-TW";
 
-          if (item.contains('{name_en}')) {
-            text = nameEn;
-            audioKey = nameEn;
-            locale = "en-US";
-          } else if (item.contains('{name_zh}')) {
-            text = name;
+          if (item == "{name_full}") {
             audioKey = name;
+            text = name;
+          } else if (item.contains('{name_zh}')) {
+            audioKey = "${name}_國";
+            text = name;
+          } else if (item.contains('{name_en}')) {
+            audioKey = "${name}_英";
+            text = nameEn;
+            locale = "en-US";
           } else if (item.contains('{name_ho}')) {
-            text = name;
-            audioKey = "${name}_ho";
+            audioKey = "${name}_閩";
+            text = "";
           } else if (item.contains('{name_hk}')) {
-            text = name;
-            audioKey = "${name}_hk";
+            audioKey = "${name}_客";
+            text = "";
           } else {
             text = item
                 .replaceAll('{terminal}', isTerminal ? "終點站" : "")
@@ -306,7 +307,14 @@ class RouteAnalysisProvider extends ChangeNotifier {
             'speed': (text == "到了" || text == "終點站") ? 0.9 : 1.0,
           };
         })
-        .where((m) => m['text'].toString().trim().isNotEmpty)
+        .where((m) {
+          final String ak = m['audioKey'] as String;
+          final String txt = m['text'] as String;
+          if (ak.endsWith("_閩") || ak.endsWith("_客")) {
+            return Static.audioManager.hasAudio(ak);
+          }
+          return ak.isNotEmpty || txt.isNotEmpty;
+        })
         .toList();
   }
 
