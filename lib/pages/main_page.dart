@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:bus_pids_simulator/data/status.dart';
 import 'package:bus_pids_simulator/pages/settings_page.dart';
 import 'package:bus_pids_simulator/widgets/landscape_provider.dart';
 import 'package:bus_pids_simulator/widgets/location_provider.dart';
+import 'package:bus_pids_simulator/widgets/route_analysis_provider.dart';
 import 'package:bus_pids_simulator/widgets/status_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -22,6 +25,7 @@ class _MainPageState extends State<MainPage> {
   int selectedIndex = 0;
   bool _showNavBar = true;
   bool _showBottomInfo = true;
+  StreamSubscription? _eventSubscription;
 
   static final List<NavigationDestination> _allDestinations = const [
     NavigationDestination(
@@ -47,11 +51,78 @@ class _MainPageState extends State<MainPage> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _eventSubscription = context
+          .read<RouteAnalysisProvider>()
+          .eventStream
+          .listen((event) {
+            if (event == "SPEED_WARNING") {
+              _showSpeedWarningDialog();
+            }
+          });
+    });
+  }
+
+  @override
+  void dispose() {
+    _eventSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _showSpeedWarningDialog() {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) {
+        Timer(const Duration(seconds: 3), () {
+          if (Navigator.of(context).canPop()) {
+            Navigator.of(context).pop();
+          }
+        });
+        return AlertDialog(
+          backgroundColor: Colors.red.shade900,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.warning, color: Colors.white),
+              SizedBox(width: 10),
+              Text("警告", style: TextStyle(color: Colors.white)),
+            ],
+          ),
+          content: const Text(
+            "進站速度過快",
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text(
+                "關閉",
+                style: TextStyle(color: Colors.white, fontSize: 16),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     return LandscapeProvider(
       builder: (context, landscape) {
         if (!landscape) {
           return const Scaffold(
+            resizeToAvoidBottomInset: false,
             body: Center(
               child: Text(
                 "請將螢幕打橫",
@@ -62,6 +133,7 @@ class _MainPageState extends State<MainPage> {
         }
 
         return Scaffold(
+          resizeToAvoidBottomInset: false,
           appBar: AppBar(
             toolbarHeight: 40,
             titleSpacing: 15,

@@ -38,6 +38,27 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
             ),
           ),
         ),
+        ListTile(
+          title: const Text("LED 顯示區域高度", style: TextStyle(fontSize: 14)),
+          trailing: SizedBox(
+            width: 80,
+            child: TextField(
+              textAlign: TextAlign.end,
+              controller: TextEditingController(
+                text: Static.ledHeight.toStringAsFixed(0),
+              ),
+              keyboardType: TextInputType.number,
+              onSubmitted: (s) {
+                final n = double.tryParse(s);
+                if (n != null) {
+                  Static.ledHeight = n;
+                  Static.saveSettings();
+                  setState(() {});
+                }
+              },
+            ),
+          ),
+        ),
         SwitchListTile(
           title: const Text("顯示即將接近站點標語", style: TextStyle(fontSize: 14)),
           value: Static.showStationListSlogan,
@@ -48,50 +69,29 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
           },
         ),
         const Divider(),
-        SequenceManagerWidget<String>(
+        SequenceManagerWidget<LedSequence>(
           title: "LED 輪播標語設定",
           items: Static.sloganList,
-          onAdd: () => "歡迎搭乘",
-          onEdit: (val) async => await _showTextDialog(val),
+          onAdd: () => LedSequence(template: "歡迎搭乘"),
+          onEdit: (val) async => await _showLedDialog(val, "編輯輪播標語"),
         ),
         SequenceManagerWidget<LedSequence>(
           title: "下站 LED 顯示序列",
           items: Static.ledNextStationSeq,
           onAdd: () => LedSequence(template: "下一站"),
-          onEdit: (val) async => await _showLedDialog(val),
+          onEdit: (val) async => await _showLedDialog(val, "編輯下站序列"),
         ),
         SequenceManagerWidget<LedSequence>(
           title: "到站 LED 顯示序列",
           items: Static.ledArrivalSeq,
           onAdd: () => LedSequence(template: "到了"),
-          onEdit: (val) async => await _showLedDialog(val),
+          onEdit: (val) async => await _showLedDialog(val, "編輯到站序列"),
         ),
       ],
     );
   }
 
-  Future<String?> _showTextDialog(String initial) async {
-    final c = TextEditingController(text: initial);
-    return await showDialog<String>(
-      context: context,
-      builder: (v) => AlertDialog(
-        title: const Text("編輯標語"),
-        content: TextField(controller: c, autofocus: true),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(v),
-            child: const Text("取消"),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(v, c.text),
-            child: const Text("確定"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<LedSequence?> _showLedDialog(LedSequence item) async {
+  Future<LedSequence?> _showLedDialog(LedSequence item, String title) async {
     final tC = TextEditingController(text: item.template);
     final eC = TextEditingController(text: item.entrySpeed.toStringAsFixed(0));
     final sC = TextEditingController(text: item.scrollSpeed.toStringAsFixed(0));
@@ -102,73 +102,110 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
     return await showDialog<LedSequence>(
       context: context,
       builder: (v) => AlertDialog(
-        title: const Text("編輯 LED 片段"),
+        titlePadding: const EdgeInsets.fromLTRB(20, 15, 20, 0),
+        contentPadding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+        actionsPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        title: Text(title, style: const TextStyle(fontSize: 18)),
         content: SizedBox(
-          width: MediaQuery.of(context).size.width * 0.9,
+          width: 500,
           child: SingleChildScrollView(
-            child: Wrap(
-              spacing: 20,
-              runSpacing: 16,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                _box(
-                  260,
-                  TextField(
-                    controller: tC,
-                    decoration: const InputDecoration(labelText: "範本"),
+                TextField(
+                  controller: tC,
+                  decoration: const InputDecoration(
+                    labelText: "範本内容 (支援 {name}, {nameEn}, {terminal})",
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(vertical: 8),
                   ),
                 ),
-                _box(
-                  260,
-                  DropdownButtonFormField<LedEntryShort>(
-                    value: shortE,
-                    decoration: const InputDecoration(labelText: "短文字進入方式"),
-                    items: LedEntryShort.values
-                        .map(
-                          (v) =>
-                              DropdownMenuItem(value: v, child: Text(v.name)),
-                        )
-                        .toList(),
-                    onChanged: (v) => shortE = v!,
-                  ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<LedEntryShort>(
+                        value: shortE,
+                        decoration: const InputDecoration(
+                          labelText: "短文字進入",
+                          isDense: true,
+                        ),
+                        items: LedEntryShort.values
+                            .map(
+                              (v) => DropdownMenuItem(
+                                value: v,
+                                child: Text(
+                                  v.name,
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (v) => shortE = v!,
+                      ),
+                    ),
+                    const SizedBox(width: 15),
+                    Expanded(
+                      child: DropdownButtonFormField<LedEntryLong>(
+                        value: longE,
+                        decoration: const InputDecoration(
+                          labelText: "長文字進入",
+                          isDense: true,
+                        ),
+                        items: LedEntryLong.values
+                            .map(
+                              (v) => DropdownMenuItem(
+                                value: v,
+                                child: Text(
+                                  v.name,
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (v) => longE = v!,
+                      ),
+                    ),
+                  ],
                 ),
-                _box(
-                  260,
-                  DropdownButtonFormField<LedEntryLong>(
-                    value: longE,
-                    decoration: const InputDecoration(labelText: "長文字進入方式"),
-                    items: LedEntryLong.values
-                        .map(
-                          (v) =>
-                              DropdownMenuItem(value: v, child: Text(v.name)),
-                        )
-                        .toList(),
-                    onChanged: (v) => longE = v!,
-                  ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: eC,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: "進入耗時(ms)",
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextField(
+                        controller: sC,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: "滾動速度",
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextField(
+                        controller: dC,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: "停留(ms)",
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                _box(
-                  120,
-                  TextField(
-                    controller: eC,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: "進入耗時"),
-                  ),
-                ),
-                _box(
-                  120,
-                  TextField(
-                    controller: sC,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: "滾動速度"),
-                  ),
-                ),
-                _box(
-                  120,
-                  TextField(
-                    controller: dC,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: "停留時間"),
-                  ),
-                ),
+                const SizedBox(height: 10),
               ],
             ),
           ),
@@ -186,6 +223,7 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
               item.entrySpeed = double.tryParse(eC.text) ?? 500;
               item.scrollSpeed = double.tryParse(sC.text) ?? 400;
               item.stayMs = int.tryParse(dC.text) ?? 800;
+              Static.saveSettings();
               Navigator.pop(v, item);
             },
             child: const Text("確定"),
@@ -194,9 +232,4 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
       ),
     );
   }
-
-  Widget _box(double w, Widget child) => SizedBox(
-    width: w,
-    child: Padding(padding: const EdgeInsets.only(bottom: 8), child: child),
-  );
 }

@@ -43,12 +43,13 @@ abstract class Static {
     "{terminal}",
     "{station_voices}",
   ];
-  static List<String> sloganList = [
-    "搭車請招手、上車請刷卡、下車請按鈴",
-    "TPASS 2.0 常客優惠，月月領優惠回饋金",
+  static List<LedSequence> sloganList = [
+    LedSequence(template: "搭車請招手、上車請刷卡、下車請按鈴"),
+    LedSequence(template: "TPASS 2.0 常客優惠，月月領優惠回饋金"),
   ];
   static bool showStationListSlogan = true;
   static double ledScrollSpeed = 400.0;
+  static double ledHeight = 150.0;
 
   static List<LedSequence> ledNextStationSeq = [
     LedSequence(template: "下一站"),
@@ -93,14 +94,20 @@ abstract class Static {
     nextStationTemplate = List<String>.from(
       _box.get('nextStationTemplate', defaultValue: nextStationTemplate),
     );
-    sloganList = List<String>.from(
-      _box.get('sloganList', defaultValue: sloganList),
-    );
+
+    if (_box.containsKey('sloganList')) {
+      sloganList = (jsonDecode(_box.get('sloganList')) as List)
+          .map((e) => LedSequence.fromJson(e))
+          .toList();
+    }
+
     showStationListSlogan = _box.get(
       'showStationListSlogan',
       defaultValue: true,
     );
     ledScrollSpeed = _box.get('ledScrollSpeed', defaultValue: 400.0);
+    ledHeight = _box.get('ledHeight', defaultValue: 150.0);
+
     if (_box.containsKey('ledNextStationSeq')) {
       ledNextStationSeq = (jsonDecode(_box.get('ledNextStationSeq')) as List)
           .map((e) => LedSequence.fromJson(e))
@@ -125,9 +132,13 @@ abstract class Static {
     await _box.put('stationVoiceSequence', stationVoiceSequence);
     await _box.put('arrivalTemplate', arrivalTemplate);
     await _box.put('nextStationTemplate', nextStationTemplate);
-    await _box.put('sloganList', sloganList);
+    await _box.put(
+      'sloganList',
+      jsonEncode(sloganList.map((e) => e.toJson()).toList()),
+    );
     await _box.put('showStationListSlogan', showStationListSlogan);
     await _box.put('ledScrollSpeed', ledScrollSpeed);
+    await _box.put('ledHeight', ledHeight);
     await _box.put(
       'ledNextStationSeq',
       jsonEncode(ledNextStationSeq.map((e) => e.toJson()).toList()),

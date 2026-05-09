@@ -29,6 +29,7 @@ class RouteAnalysisProvider extends ChangeNotifier {
   RouteAnalysisResult? _currentAnalysis;
   int? _lastSpokenStationOrder;
   int? _lastArrivedStationOrder;
+  int? _lastSpeedWarningStationOrder;
   DutyStatus? _lastDutyStatus;
   int _activeSequenceId = 0;
   bool _isOffDutyAlert = false;
@@ -38,6 +39,10 @@ class RouteAnalysisProvider extends ChangeNotifier {
     nameEn: "",
   );
 
+  final _eventController = StreamController<String>.broadcast();
+
+  Stream<String> get eventStream => _eventController.stream;
+
   RouteAnalysisResult? get currentAnalysis => _currentAnalysis;
 
   bool get isOffDutyAlert => _isOffDutyAlert;
@@ -45,7 +50,7 @@ class RouteAnalysisProvider extends ChangeNotifier {
   LedEvent get currentLedEvent => _currentLedEvent;
 
   void update(LatLng? location, double speed, Status status) {
-    if (status.dutyStatus == DutyStatus.offDuty && speed >= 20) {
+    if (status.dutyStatus == DutyStatus.offDuty && speed >= 10) {
       if (!_isOffDutyAlert) {
         _isOffDutyAlert = true;
         _startOffDutyLoop();
@@ -68,6 +73,7 @@ class RouteAnalysisProvider extends ChangeNotifier {
       _lastDutyStatus = DutyStatus.onDuty;
       _lastSpokenStationOrder = null;
       _lastArrivedStationOrder = null;
+      _lastSpeedWarningStationOrder = null;
       _triggerNextStationBroadcast(
         stations.isNotEmpty ? stations.first : null,
         stations.isNotEmpty ? stations.last.order : null,
@@ -100,15 +106,29 @@ class RouteAnalysisProvider extends ChangeNotifier {
 
     if (result != null) {
       _handleLogic(result, status.dutyStatus, stations);
+      _checkSpeeding(result, speed);
     }
 
     notifyListeners();
+  }
+
+  void _checkSpeeding(RouteAnalysisResult result, double speed) {
+    final nextStation = result.nextStation;
+    if (nextStation == null) return;
+    final double distNext = result.distToNextStation ?? 10000;
+    if (distNext < Static.arrivalDistance && speed > 60) {
+      if (_lastSpeedWarningStationOrder != nextStation.order) {
+        _lastSpeedWarningStationOrder = nextStation.order;
+        _eventController.add("SPEED_WARNING");
+      }
+    }
   }
 
   void _resetLogicOnly() {
     _currentAnalysis = null;
     _lastSpokenStationOrder = null;
     _lastArrivedStationOrder = null;
+    _lastSpeedWarningStationOrder = null;
     _currentLedEvent = LedEvent(
       type: LedBroadcastType.slogan,
       name: "",
@@ -175,6 +195,7 @@ class RouteAnalysisProvider extends ChangeNotifier {
       nameEn: nameEn,
       isTerminal: isTerminal,
     );
+    notifyListeners();
     _executeVoice(
       _buildSeq(Static.nextStationTemplate, name, nameEn, isTerminal),
     );
@@ -202,7 +223,9 @@ class RouteAnalysisProvider extends ChangeNotifier {
             type: LedBroadcastType.arrival,
             name: nextStation.name,
             nameEn: nextStation.nameEn,
+            isTerminal: isTerminal,
           );
+          notifyListeners();
           _executeVoice(
             _buildSeq(
               Static.arrivalTemplate,
@@ -236,9 +259,7 @@ class RouteAnalysisProvider extends ChangeNotifier {
     String nameEn,
     bool isTerminal,
   ) {
-    // 檢查是否有站點名稱的音檔 (假設音檔 Key 即為站名)
     bool hasAudio = Static.audioManager.hasAudio(name);
-
     List<String> expanded = [];
     for (var item in template) {
       if (item == "{station_voices}") {
@@ -287,5 +308,11 @@ class RouteAnalysisProvider extends ChangeNotifier {
         })
         .where((m) => m['text'].toString().trim().isNotEmpty)
         .toList();
+  }
+
+  @override
+  void dispose() {
+    _eventController.close();
+    super.dispose();
   }
 }

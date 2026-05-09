@@ -25,7 +25,7 @@ class LedSequence {
   LedSequence({
     required this.template,
     this.entryShort = LedEntryShort.bottomLeft,
-    this.entryLong = LedEntryLong.bottomLeftScroll,
+    this.entryLong = LedEntryLong.rightScrollIn,
     this.scrollSpeed = 400.0,
     this.stayMs = 800,
     this.entrySpeed = 500,
@@ -48,7 +48,7 @@ class LedSequence {
     ),
     entryLong: LedEntryLong.values.firstWhere(
       (e) => e.name == json['entryLong'],
-      orElse: () => LedEntryLong.bottomLeftScroll,
+      orElse: () => LedEntryLong.rightScrollIn,
     ),
     scrollSpeed: (json['scrollSpeed'] as num).toDouble(),
     stayMs: json['stayMs'] as int,
