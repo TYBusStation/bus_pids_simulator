@@ -44,23 +44,24 @@ class _AudioPackPageState extends State<AudioPackPage> {
 
     final packName = await showDialog<String>(
       context: context,
-      builder: (v) => AlertDialog(
-        title: const Text("匯入語音包"),
-        content: TextField(
-          controller: nameController,
-          decoration: const InputDecoration(hintText: "請輸入語音包名稱"),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(v),
-            child: const Text("取消"),
+      builder: (v) =>
+          AlertDialog(
+            title: const Text("匯入語音包"),
+            content: TextField(
+              controller: nameController,
+              decoration: const InputDecoration(hintText: "請輸入語音包名稱"),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(v),
+                child: const Text("取消"),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(v, nameController.text),
+                child: const Text("匯入"),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(v, nameController.text),
-            child: const Text("匯入"),
-          ),
-        ],
-      ),
     );
 
     if (packName != null && packName.isNotEmpty) {
@@ -125,20 +126,21 @@ class _AudioPackPageState extends State<AudioPackPage> {
   void _confirmDelete(int index, String name) async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (v) => AlertDialog(
-        title: const Text("確認刪除"),
-        content: Text("確定要刪除語音包「$name」嗎？\n此動作無法還原。"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(v, false),
-            child: const Text("取消"),
+      builder: (v) =>
+          AlertDialog(
+            title: const Text("確認刪除"),
+            content: Text("確定要刪除語音包「$name」嗎？\n此動作無法還原。"),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(v, false),
+                child: const Text("取消"),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(v, true),
+                child: const Text("刪除", style: TextStyle(color: Colors.red)),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(v, true),
-            child: const Text("刪除", style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
     );
     if (ok == true) {
       await Static.audioManager.removePack(index);
@@ -173,7 +175,7 @@ class _AudioPackPageState extends State<AudioPackPage> {
                     const SizedBox(width: 12),
                     const Expanded(
                       child: Text(
-                        "尚未有語音包？前往 Release 頁面下載",
+                        "前往 Release 頁面下載語音包(不定期更新，請留意是否更新)",
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
@@ -191,58 +193,59 @@ class _AudioPackPageState extends State<AudioPackPage> {
               Expanded(
                 child: packs.isEmpty
                     ? Center(
-                        child: const Text(
-                          "尚未加入任何語音包",
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      )
+                  child: const Text(
+                    "尚未加入任何語音包",
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                )
                     : ListView.builder(
-                        itemCount: packs.length,
-                        itemBuilder: (context, index) {
-                          final pack = packs[index];
-                          return Card(
-                            margin: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            child: ListTile(
-                              leading: const Icon(
-                                Icons.folder_zip,
-                                color: Colors.blue,
-                              ),
-                              title: Text(pack.name),
-                              subtitle: Text("檔案數: ${pack.files.length}"),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.sync,
-                                      color: Colors.orange,
-                                    ),
-                                    onPressed: () => _replacePack(index),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.delete,
-                                      color: Colors.red,
-                                    ),
-                                    onPressed: () =>
-                                        _confirmDelete(index, pack.name),
-                                  ),
-                                ],
-                              ),
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (c) =>
-                                      AudioPackDetailPage(pack: pack),
-                                ),
-                              ),
-                            ),
-                          );
-                        },
+                  itemCount: packs.length,
+                  itemBuilder: (context, index) {
+                    final pack = packs[index];
+                    return Card(
+                      margin: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
                       ),
+                      child: ListTile(
+                        leading: const Icon(
+                          Icons.folder_zip,
+                          color: Colors.blue,
+                        ),
+                        title: Text(pack.name),
+                        subtitle: Text("檔案數: ${pack.files.length}"),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(
+                                Icons.sync,
+                                color: Colors.orange,
+                              ),
+                              onPressed: () => _replacePack(index),
+                            ),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.delete,
+                                color: Colors.red,
+                              ),
+                              onPressed: () =>
+                                  _confirmDelete(index, pack.name),
+                            ),
+                          ],
+                        ),
+                        onTap: () =>
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (c) =>
+                                    AudioPackDetailPage(pack: pack),
+                              ),
+                            ),
+                      ),
+                    );
+                  },
+                ),
               ),
             ],
           ),
