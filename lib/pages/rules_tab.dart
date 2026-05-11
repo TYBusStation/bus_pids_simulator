@@ -32,22 +32,31 @@ class _RulesTabState extends State<RulesTab> {
         ),
         const Divider(height: 32),
         SequenceManagerWidget<String>(
-          title: "共用站名語音序列 ({station_voices})",
+          title: "{name}",
           items: Static.stationVoiceSequence,
           onAdd: () => "{name_zh}",
-          onEdit: (val) async => await _showTextDialog(val),
+          onEdit: (val) async => await _showTextDialog(
+            val,
+            "可用參數：\n{name_zh} - 中文\n{name_ho} - 台語\n{name_hk} - 客語\n{name_en} - 英文",
+          ),
         ),
         SequenceManagerWidget<String>(
           title: "下站報站語音序列",
           items: Static.nextStationTemplate,
           onAdd: () => "下一站",
-          onEdit: (val) async => await _showTextDialog(val),
+          onEdit: (val) async => await _showTextDialog(
+            val,
+            "可用參數：\n{name} - 引用上方定義的完整序列\n{name_zh} - 中文\n{name_ho} - 台語\n{name_hk} - 客語\n{name_en} - 英文\n{terminal} - 「終點站」字樣",
+          ),
         ),
         SequenceManagerWidget<String>(
           title: "到站報站語音序列",
           items: Static.arrivalTemplate,
           onAdd: () => "到了",
-          onEdit: (val) async => await _showTextDialog(val),
+          onEdit: (val) async => await _showTextDialog(
+            val,
+            "可用參數：\n{name} - 引用上方定義的完整序列\n{name_zh} - 中文\n{name_ho} - 台語\n{name_hk} - 客語\n{name_en} - 英文\n{terminal} - 「終點站」字樣",
+          ),
         ),
       ],
     );
@@ -78,13 +87,32 @@ class _RulesTabState extends State<RulesTab> {
     );
   }
 
-  Future<String?> _showTextDialog(String initial) async {
+  Future<String?> _showTextDialog(String initial, String hint) async {
     final c = TextEditingController(text: initial);
     return await showDialog<String>(
       context: context,
       builder: (v) => AlertDialog(
         title: const Text("編輯片段"),
-        content: TextField(controller: c, autofocus: true),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: c,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: "內容"),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              hint,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+                height: 1.5,
+              ),
+            ),
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(v),

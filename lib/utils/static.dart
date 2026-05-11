@@ -37,12 +37,8 @@ abstract class Static {
     "{name_hk}",
     "{name_en}",
   ];
-  static List<String> arrivalTemplate = ["{station_voices}", "到了"];
-  static List<String> nextStationTemplate = [
-    "下一站",
-    "{terminal}",
-    "{station_voices}",
-  ];
+  static List<String> arrivalTemplate = ["{name}", "到了"];
+  static List<String> nextStationTemplate = ["下一站", "{terminal}", "{name}"];
   static List<LedSequence> sloganList = [
     LedSequence(template: "搭車請招手、上車請刷卡、下車請按鈴"),
     LedSequence(template: "TPASS 2.0 常客優惠，月月領優惠回饋金"),

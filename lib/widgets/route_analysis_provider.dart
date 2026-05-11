@@ -257,10 +257,24 @@ class RouteAnalysisProvider extends ChangeNotifier {
     String nameEn,
     bool isTerminal,
   ) {
+    if (name.isEmpty) {
+      return template
+          .where((item) => item == "下一站" || item == "到了")
+          .map(
+            (item) => {
+              'text': item,
+              'audioKey': item,
+              'locale': "zh-TW",
+              'speed': 1.0,
+            },
+          )
+          .toList();
+    }
+
     bool hasFullAudio = Static.audioManager.hasAudio(name);
     List<String> expanded = [];
     for (var item in template) {
-      if (item == "{station_voices}") {
+      if (item == "{name}") {
         if (hasFullAudio) {
           expanded.add("{name_full}");
         } else {
@@ -280,23 +294,27 @@ class RouteAnalysisProvider extends ChangeNotifier {
           if (item == "{name_full}") {
             audioKey = name;
             text = name;
-          } else if (item.contains('{name_zh}')) {
+          } else if (item == "{name_zh}") {
             audioKey = "${name}_國";
             text = name;
-          } else if (item.contains('{name_en}')) {
+          } else if (item == "{name_en}") {
             audioKey = "${name}_英";
             text = nameEn;
             locale = "en-US";
-          } else if (item.contains('{name_ho}')) {
+          } else if (item == "{name_ho}") {
             audioKey = "${name}_閩";
             text = "";
-          } else if (item.contains('{name_hk}')) {
+          } else if (item == "{name_hk}") {
             audioKey = "${name}_客";
             text = "";
           } else {
             text = item
                 .replaceAll('{terminal}', isTerminal ? "終點站" : "")
-                .replaceAll('{name_zh}', name);
+                .replaceAll('{name_zh}', name)
+                .replaceAll('{name_ho}', "")
+                .replaceAll('{name_hk}', "")
+                .replaceAll('{name_en}', nameEn)
+                .replaceAll('{name}', name);
             audioKey = text;
           }
 
@@ -313,7 +331,7 @@ class RouteAnalysisProvider extends ChangeNotifier {
           if (ak.endsWith("_閩") || ak.endsWith("_客")) {
             return Static.audioManager.hasAudio(ak);
           }
-          return ak.isNotEmpty || txt.isNotEmpty;
+          return ak.trim().isNotEmpty || txt.trim().isNotEmpty;
         })
         .toList();
   }
