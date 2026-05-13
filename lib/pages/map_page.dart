@@ -1,6 +1,7 @@
 import 'package:bus_pids_simulator/data/bus_station.dart';
 import 'package:bus_pids_simulator/widgets/location_provider.dart';
 import 'package:bus_pids_simulator/widgets/route_analysis_provider.dart';
+import 'package:bus_pids_simulator/widgets/status_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -8,7 +9,6 @@ import 'package:provider/provider.dart';
 
 import '../data/status.dart';
 import '../utils/route_engine.dart';
-import '../utils/static.dart';
 import '../widgets/map_bottom_panel.dart';
 
 class MapPage extends StatefulWidget {
@@ -30,9 +30,6 @@ class _MapPageState extends State<MapPage> {
   bool _isFollowing = true;
   double _brightness = 0.6;
   bool _isFabMenuExpanded = false;
-  List<Polyline> _userSelectedPolylines = [];
-  List<Marker> _stationMarkers = [];
-
   final GlobalKey<MapBottomPanelState> _bottomPanelKey = GlobalKey();
 
   @override
@@ -61,13 +58,12 @@ class _MapPageState extends State<MapPage> {
     }
   }
 
-  void _recenterMap() {
+  void _recenterMap(List<Polyline> polylines, List<Marker> markers) {
     setState(() => _isFollowing = false);
     final List<LatLng> allPoints = [
-      ..._userSelectedPolylines.expand((p) => p.points),
-      ..._stationMarkers.map((m) => m.point),
+      ...polylines.expand((p) => p.points),
+      ...markers.map((m) => m.point),
     ].where((p) => p.latitude.isFinite && p.longitude.isFinite).toList();
-
     if (allPoints.isNotEmpty) {
       _mapController.fitCamera(
         CameraFit.bounds(
@@ -116,64 +112,53 @@ class _MapPageState extends State<MapPage> {
     );
   }
 
-  void _updateRouteLayers() {
-    final route = Static.currentStatus.route;
-    final direction = Static.currentStatus.direction;
-    const color = Colors.red;
-    List<LatLng> points =
-        (direction == Direction.go
-                ? route.path.goPoints
-                : route.path.backPoints)
-            .where((p) => p.latitude.isFinite && p.longitude.isFinite)
-            .toList();
-
-    _userSelectedPolylines = points.isNotEmpty
-        ? [
-            Polyline(
-              points: points,
-              color: color.withOpacity(0.9),
-              strokeWidth: 5.0,
-            ),
-          ]
-        : [];
-
-    _stationMarkers = points.isNotEmpty
-        ? (direction == Direction.go ? route.stations.go : route.stations.back)
-              .where(
-                (s) =>
-                    s.position.latitude.isFinite &&
-                    s.position.longitude.isFinite,
-              )
-              .map((s) => _createStationMarker(s, color.withOpacity(0.9)))
-              .toList()
-        : [];
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_isFollowing) {
-        _bottomPanelKey.currentState?.scrollToCurrent();
-      }
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
-    _updateRouteLayers();
-    return Consumer2<LocationChangeNotifier, RouteAnalysisProvider>(
-      builder: (context, locNotifier, analysisProvider, child) {
+    final theme = Theme.of(context);
+    return Consumer3<
+      LocationChangeNotifier,
+      RouteAnalysisProvider,
+      StatusChangeNotifier
+    >(
+      builder: (context, locNotifier, analysisProvider, statusNotifier, child) {
+        final status = statusNotifier.currentStatus;
+        final route = status.route;
+        final direction = status.direction;
         final currentLocation = locNotifier.currentLocation;
         final analysis = analysisProvider.currentAnalysis;
-
         final bool isValidLocation =
             currentLocation != null &&
             currentLocation.latitude.isFinite &&
             currentLocation.longitude.isFinite;
-
         _handleAutoMove(currentLocation, analysis);
-
+        List<LatLng> points =
+            (direction == Direction.go
+                    ? route.path.goPoints
+                    : route.path.backPoints)
+                .where((p) => p.latitude.isFinite && p.longitude.isFinite)
+                .toList();
+        final List<Polyline> polylines = points.isNotEmpty
+            ? [
+                Polyline(
+                  points: points,
+                  color: Colors.red.withOpacity(0.9),
+                  strokeWidth: 5.0,
+                ),
+              ]
+            : [];
+        final List<Marker> stationMarkers =
+            (direction == Direction.go
+                    ? route.stations.go
+                    : route.stations.back)
+                .where(
+                  (s) =>
+                      s.position.latitude.isFinite &&
+                      s.position.longitude.isFinite,
+                )
+                .map(
+                  (s) => _createStationMarker(s, Colors.red.withOpacity(0.9)),
+                )
+                .toList();
         return Stack(
           children: [
             FlutterMap(
@@ -222,10 +207,10 @@ class _MapPageState extends State<MapPage> {
                       'https://wmts.nlsc.gov.tw/wmts/EMAP2/default/GoogleMapsCompatible/{z}/{y}/{x}',
                   tileProvider: NetworkTileProvider(),
                 ),
-                PolylineLayer(polylines: _userSelectedPolylines),
+                PolylineLayer(polylines: polylines),
                 MarkerLayer(
                   markers: [
-                    ..._stationMarkers,
+                    ...stationMarkers,
                     if (isValidLocation)
                       Marker(
                         point: currentLocation,
@@ -251,9 +236,9 @@ class _MapPageState extends State<MapPage> {
                 child: MapBottomPanel(
                   key: _bottomPanelKey,
                   analysis: analysis,
-                  stations: Static.currentStatus.direction == Direction.go
-                      ? Static.currentStatus.route.stations.go
-                      : Static.currentStatus.route.stations.back,
+                  stations: direction == Direction.go
+                      ? route.stations.go
+                      : route.stations.back,
                 ),
               ),
             Positioned(
@@ -286,7 +271,7 @@ class _MapPageState extends State<MapPage> {
             Positioned(
               bottom: widget.showBottomInfo ? 45 : 10,
               right: 15,
-              child: _buildMapControls(),
+              child: _buildMapControls(polylines, stationMarkers),
             ),
           ],
         );
@@ -294,7 +279,7 @@ class _MapPageState extends State<MapPage> {
     );
   }
 
-  Widget _buildMapControls() {
+  Widget _buildMapControls(List<Polyline> polylines, List<Marker> markers) {
     final theme = Theme.of(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -352,7 +337,7 @@ class _MapPageState extends State<MapPage> {
                 width: 34,
                 height: 34,
                 child: FloatingActionButton.small(
-                  onPressed: _recenterMap,
+                  onPressed: () => _recenterMap(polylines, markers),
                   heroTag: 'rec',
                   child: const Icon(Icons.center_focus_strong, size: 16),
                 ),
@@ -372,7 +357,10 @@ class _MapPageState extends State<MapPage> {
                       ? theme.colorScheme.primaryContainer
                       : null,
                   heroTag: 'fol',
-                  child: const Icon(Icons.my_location, size: 16),
+                  child: Icon(
+                    _isFollowing ? Icons.my_location : Icons.location_searching,
+                    size: 16,
+                  ),
                 ),
               ),
               const SizedBox(width: 4),

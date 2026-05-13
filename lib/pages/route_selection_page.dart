@@ -1,22 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
 
-import 'package:flutter/gestures.dart';
+import 'package:bus_pids_simulator/pages/route_editor_page.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../data/bus_route.dart';
 import '../data/status.dart';
 import '../utils/formatter_utils.dart';
 import '../utils/static.dart';
-
-class AppScrollBehavior extends MaterialScrollBehavior {
-  @override
-  Set<PointerDeviceKind> get dragDevices => {
-    PointerDeviceKind.touch,
-    PointerDeviceKind.mouse,
-    PointerDeviceKind.trackpad,
-    PointerDeviceKind.stylus,
-  };
-}
 
 class RouteSelectionPage extends StatefulWidget {
   const RouteSelectionPage({super.key});
@@ -32,6 +24,7 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
   String _activeCityKey = 'Taoyuan';
   List<BusRoute> _displayRoutes = [];
   final ScrollController _horizontalController = ScrollController();
+  final TextEditingController _searchCtrl = TextEditingController();
   Timer? _debounceTimer;
 
   final Map<String, String> _cityNames = {
@@ -40,6 +33,7 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
     'NewTaipei': '新北市',
     'Taichung': '臺中市',
     'InterCity': '公路客運',
+    'Custom': '自定義',
   };
 
   @override
@@ -47,22 +41,7 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
     super.initState();
     _selectedRoute = Static.currentStatus.route;
     _selectedDirection = Static.currentStatus.direction;
-    for (var entry in Static.routeData.entries) {
-      if (entry.value.any(
-        (r) => r.id == _selectedRoute.id && r.name == _selectedRoute.name,
-      )) {
-        _activeCityKey = entry.key;
-        break;
-      }
-    }
     _performSearch();
-  }
-
-  @override
-  void dispose() {
-    _debounceTimer?.cancel();
-    _horizontalController.dispose();
-    super.dispose();
   }
 
   void _onSearchChanged(String v) {
@@ -75,52 +54,64 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
 
   void _performSearch() {
     final query = _searchQuery.toLowerCase();
-    final tokens = query.split(RegExp(r'\s+')).where((t) => t.isNotEmpty);
     final routes = Static.routeData[_activeCityKey] ?? [];
-    final List<BusRoute> matchingRoutes = routes.where((route) {
-      if (query.isEmpty) return true;
+    _displayRoutes = routes.where((route) {
       final content =
           '${route.id} ${route.name} ${route.description} ${route.departure} ${route.destination}'
               .toLowerCase();
-      return tokens.every((token) {
-        try {
-          return RegExp(token).hasMatch(content);
-        } catch (_) {
-          return content.contains(token);
-        }
-      });
+      return content.contains(query);
     }).toList();
+    _displayRoutes.sort((a, b) => FormatterUtils.compareRoutes(a.name, b.name));
+    setState(() {});
+  }
 
-    matchingRoutes.sort((a, b) {
-      bool isA = a.id == _selectedRoute.id && a.name == _selectedRoute.name;
-      bool isB = b.id == _selectedRoute.id && b.name == _selectedRoute.name;
-      if (isA) return -1;
-      if (isB) return 1;
-      return FormatterUtils.compareRoutes(a.name, b.name);
-    });
-
+  void _refreshList() {
     setState(() {
-      _displayRoutes = matchingRoutes;
+      _activeCityKey = 'Custom';
+      _searchQuery = "";
+      _searchCtrl.clear();
+      _performSearch();
+      final routes = Static.routeData['Custom'] ?? [];
+      final idx = routes.indexWhere((r) => r.id == _selectedRoute.id);
+      if (idx != -1) {
+        _selectedRoute = routes[idx];
+      }
     });
   }
 
-  void _toggleSelection(BusRoute route, Direction direction) {
-    setState(() {
-      _selectedRoute = route;
-      _selectedDirection = direction;
-    });
+  void _confirmDelete(BusRoute route) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("刪除路線"),
+        content: Text("確定要刪除「${route.name}」嗎？"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("取消"),
+          ),
+          TextButton(
+            onPressed: () {
+              Static.deleteCustomRoute(route.id);
+              Navigator.pop(ctx);
+              _performSearch();
+            },
+            child: const Text("刪除", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 40,
         title: Text(
-          '選擇路線 (當前選擇：${_selectedRoute.name} 往 ${_selectedDirection == Direction.go ? _selectedRoute.destination : _selectedRoute.departure})',
+          '選擇路線 (當前：${_selectedRoute.name})',
           style: const TextStyle(fontSize: 15),
         ),
         actions: [
@@ -144,9 +135,10 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
             child: SizedBox(
               height: 38,
               child: TextField(
+                controller: _searchCtrl,
                 style: const TextStyle(fontSize: 13),
                 decoration: InputDecoration(
-                  hintText: '搜尋 ${_cityNames[_activeCityKey]} 路線...',
+                  hintText: '搜尋...',
                   prefixIcon: const Icon(Icons.search, size: 18),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
@@ -173,79 +165,71 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
               ),
             ),
             child: ListView(
-              children: _cityNames.entries.map((e) {
-                final isSelected = _activeCityKey == e.key;
-                return InkWell(
-                  onTap: () {
-                    setState(() {
-                      _activeCityKey = e.key;
-                      _performSearch();
-                    });
-                  },
-                  child: Container(
-                    height: 40,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? colorScheme.primary.withOpacity(0.1)
-                          : null,
-                      border: isSelected
-                          ? Border(
-                              left: BorderSide(
-                                color: colorScheme.primary,
-                                width: 3,
-                              ),
-                            )
-                          : null,
-                    ),
-                    child: Text(
-                      e.value,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 12,
-                        height: 1.2,
-                        fontWeight: isSelected
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                        color: isSelected
-                            ? colorScheme.primary
-                            : colorScheme.onSurfaceVariant,
+              children: _cityNames.entries
+                  .map(
+                    (e) => InkWell(
+                      onTap: () {
+                        setState(() {
+                          _activeCityKey = e.key;
+                          _performSearch();
+                        });
+                      },
+                      child: Container(
+                        height: 40,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: _activeCityKey == e.key
+                              ? colorScheme.primary.withOpacity(0.1)
+                              : null,
+                          border: _activeCityKey == e.key
+                              ? Border(
+                                  left: BorderSide(
+                                    color: colorScheme.primary,
+                                    width: 3,
+                                  ),
+                                )
+                              : null,
+                        ),
+                        child: Text(
+                          e.value,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: _activeCityKey == e.key
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            color: _activeCityKey == e.key
+                                ? colorScheme.primary
+                                : colorScheme.onSurfaceVariant,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                );
-              }).toList(),
+                  )
+                  .toList(),
             ),
           ),
           Expanded(
-            child: ScrollConfiguration(
-              behavior: AppScrollBehavior(),
-              child: Scrollbar(
+            child: Scrollbar(
+              controller: _horizontalController,
+              thumbVisibility: true,
+              child: ListView.builder(
                 controller: _horizontalController,
-                thumbVisibility: true,
-                thickness: 8,
-                radius: const Radius.circular(4),
-                child: ListView.builder(
-                  controller: _horizontalController,
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 12,
-                  ),
-                  itemCount: _displayRoutes.length,
-                  itemBuilder: (context, index) {
-                    final route = _displayRoutes[index];
-                    final isRouteSelected =
-                        _selectedRoute.id == route.id &&
-                        _selectedRoute.name == route.name;
-                    return _buildRouteCard(
-                      route,
-                      isRouteSelected,
-                      colorScheme,
-                      theme,
-                    );
-                  },
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 12,
                 ),
+                itemCount: _displayRoutes.length + 1,
+                itemBuilder: (context, index) {
+                  if (index == _displayRoutes.length)
+                    return _buildAddCard(colorScheme);
+                  return _buildRouteCard(
+                    _displayRoutes[index],
+                    colorScheme,
+                    theme,
+                  );
+                },
               ),
             ),
           ),
@@ -254,26 +238,19 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
     );
   }
 
-  Widget _buildRouteCard(
-    BusRoute route,
-    bool isRouteSelected,
-    ColorScheme colorScheme,
-    ThemeData theme,
-  ) {
+  Widget _buildRouteCard(BusRoute route, ColorScheme cs, ThemeData theme) {
+    bool isSel = _selectedRoute.id == route.id;
+    bool isCustom = _activeCityKey == 'Custom';
     return Container(
       width: 260,
       margin: const EdgeInsets.only(right: 12, bottom: 12),
       child: Card(
-        elevation: isRouteSelected ? 4 : 1,
-        color: isRouteSelected
-            ? colorScheme.primaryContainer.withOpacity(0.3)
-            : null,
+        elevation: isSel ? 4 : 1,
+        color: isSel ? cs.primaryContainer.withOpacity(0.3) : null,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10),
           side: BorderSide(
-            color: isRouteSelected
-                ? colorScheme.primary
-                : theme.dividerColor.withOpacity(0.1),
+            color: isSel ? cs.primary : theme.dividerColor.withOpacity(0.1),
             width: 1.5,
           ),
         ),
@@ -291,27 +268,100 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: colorScheme.primary,
-                        letterSpacing: -0.5,
+                        color: cs.primary,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  Text(
-                    'ID: ${route.id}',
-                    style: TextStyle(fontSize: 11, color: colorScheme.outline),
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert, size: 20),
+                    onSelected: (val) {
+                      if (val == 'copy') {
+                        Static.saveCustomRoute(
+                          route,
+                        ).then((_) => _refreshList());
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(const SnackBar(content: Text("已複製")));
+                      } else if (val == 'export') {
+                        Clipboard.setData(
+                          ClipboardData(text: jsonEncode(route.toJson())),
+                        );
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("JSON 已複製")),
+                        );
+                      } else if (val == 'edit') {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (c) =>
+                                RouteEditorPage(initialRoute: route),
+                          ),
+                        ).then((res) {
+                          if (res == true) _refreshList();
+                        });
+                      } else if (val == 'delete') {
+                        _confirmDelete(route);
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      if (isCustom)
+                        const PopupMenuItem(value: 'edit', child: Text("編輯")),
+                      const PopupMenuItem(value: 'copy', child: Text("複製")),
+                      const PopupMenuItem(value: 'export', child: Text("匯出")),
+                      if (isCustom)
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Text(
+                            "刪除",
+                            style: TextStyle(color: Colors.red),
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ),
+              Text(
+                'ID: ${route.id}',
+                style: TextStyle(fontSize: 11, color: cs.outline),
+              ),
               const SizedBox(height: 6),
-              _buildHorizontalStations(route),
+              Row(
+                children: [
+                  const Icon(Icons.circle, size: 8, color: Colors.green),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      route.departure,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const Icon(Icons.arrow_forward, size: 12, color: Colors.grey),
+                  const Icon(Icons.circle, size: 8, color: Colors.red),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      route.destination,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 6),
               Expanded(
                 child: Text(
                   route.description,
                   style: TextStyle(
                     fontSize: 12,
-                    color: colorScheme.onSurface.withOpacity(0.8),
+                    color: cs.onSurface.withOpacity(0.8),
                     height: 1.2,
                   ),
                   overflow: TextOverflow.fade,
@@ -322,16 +372,16 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
                 route,
                 Direction.go,
                 '往 ${route.destination}',
-                isRouteSelected && _selectedDirection == Direction.go,
-                colorScheme,
+                isSel && _selectedDirection == Direction.go,
+                cs,
               ),
               const SizedBox(height: 4),
               _buildCompactDirectionBtn(
                 route,
                 Direction.back,
                 '往 ${route.departure}',
-                isRouteSelected && _selectedDirection == Direction.back,
-                colorScheme,
+                isSel && _selectedDirection == Direction.back,
+                cs,
               ),
             ],
           ),
@@ -340,71 +390,38 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
     );
   }
 
-  Widget _buildHorizontalStations(BusRoute route) {
-    const textStyle = TextStyle(
-      fontSize: 13,
-      fontWeight: FontWeight.w600,
-      letterSpacing: -0.2,
-    );
-    return Row(
-      children: [
-        const Icon(Icons.circle, size: 8, color: Colors.green),
-        const SizedBox(width: 4),
-        Expanded(
-          child: Text(
-            route.departure,
-            style: textStyle,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 4),
-          child: Icon(Icons.arrow_forward, size: 12, color: Colors.grey),
-        ),
-        const Icon(Icons.circle, size: 8, color: Colors.red),
-        const SizedBox(width: 4),
-        Expanded(
-          child: Text(
-            route.destination,
-            style: textStyle,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildCompactDirectionBtn(
-    BusRoute route,
-    Direction dir,
-    String label,
-    bool active,
-    ColorScheme colorScheme,
+    BusRoute r,
+    Direction d,
+    String l,
+    bool a,
+    ColorScheme cs,
   ) {
     return InkWell(
-      onTap: () => _toggleSelection(route, dir),
+      onTap: () => setState(() {
+        _selectedRoute = r;
+        _selectedDirection = d;
+      }),
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
         decoration: BoxDecoration(
-          color: active
-              ? colorScheme.primary
-              : colorScheme.surfaceVariant.withOpacity(0.4),
+          color: a ? cs.primary : cs.surfaceVariant.withOpacity(0.4),
           borderRadius: BorderRadius.circular(6),
         ),
         child: Row(
           children: [
             Icon(
-              active ? Icons.check_circle : Icons.circle_outlined,
+              a ? Icons.check_circle : Icons.circle_outlined,
               size: 14,
-              color: active ? Colors.white : colorScheme.onSurfaceVariant,
+              color: a ? Colors.white : cs.onSurfaceVariant,
             ),
             const SizedBox(width: 6),
             Expanded(
               child: Text(
-                label,
+                l,
                 style: TextStyle(
-                  color: active ? Colors.white : colorScheme.onSurfaceVariant,
+                  color: a ? Colors.white : cs.onSurfaceVariant,
                   fontWeight: FontWeight.bold,
                   fontSize: 12,
                 ),
@@ -412,6 +429,42 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAddCard(ColorScheme cs) {
+    return Container(
+      width: 150,
+      margin: const EdgeInsets.only(right: 12, bottom: 12),
+      child: InkWell(
+        onTap: () =>
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (c) => const RouteEditorPage()),
+            ).then((res) {
+              if (res == true) _refreshList();
+            }),
+        child: Card(
+          color: cs.primaryContainer.withOpacity(0.2),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.add_circle_outline, size: 32, color: cs.primary),
+              const SizedBox(height: 8),
+              Text(
+                "新增",
+                style: TextStyle(
+                  color: cs.primary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

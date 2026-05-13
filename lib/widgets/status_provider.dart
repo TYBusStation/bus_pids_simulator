@@ -12,9 +12,8 @@ class StatusChangeNotifier extends ChangeNotifier implements ReassembleHandler {
   StatusChangeNotifier(this._currentStatus);
 
   void setStatus(Status status) {
-    if (_currentStatus == status) return;
     _currentStatus = status;
-    Static.currentStatus = status; // 同步回全域靜態變數
+    Static.currentStatus = status;
     notifyListeners();
   }
 

@@ -21,7 +21,9 @@ abstract class Static {
   static final TTS = getTTS();
   static final audioManager = AudioManager();
   static const String _settingsBoxName = "settings_box";
+  static const String _customRoutesBoxName = "custom_routes_box";
   static late Box _box;
+  static late Box _customBox;
 
   static final ChangeNotifier settingsNotifier = ChangeNotifier();
 
@@ -65,6 +67,7 @@ abstract class Static {
   static Future<void> init() async {
     await Hive.initFlutter();
     _box = await Hive.openBox(_settingsBoxName);
+    _customBox = await Hive.openBox(_customRoutesBoxName);
     await _loadSettings();
     await audioManager.init();
     await _loadRoutes();
@@ -96,7 +99,6 @@ abstract class Static {
           .map((e) => LedSequence.fromJson(e))
           .toList();
     }
-
     showStationListSlogan = _box.get(
       'showStationListSlogan',
       defaultValue: true,
@@ -146,6 +148,25 @@ abstract class Static {
     settingsNotifier.notifyListeners();
   }
 
+  static Future<void> saveCustomRoute(BusRoute route, {String? oldId}) async {
+    if (oldId != null && oldId != route.id) {
+      await _customBox.delete("route_$oldId");
+      if (routeData.containsKey('Custom')) {
+        routeData['Custom']!.removeWhere((r) => r.id == oldId);
+      }
+    }
+    final String key = "route_${route.id}";
+    await _customBox.put(key, jsonEncode(route.toJson()));
+    if (routeData['Custom'] == null) routeData['Custom'] = [];
+    int index = routeData['Custom']!.indexWhere((r) => r.id == route.id);
+    if (index != -1) {
+      routeData['Custom']![index] = route;
+    } else {
+      routeData['Custom']!.add(route);
+    }
+    settingsNotifier.notifyListeners();
+  }
+
   static Future<bool> hasStationAudio(String stationId) async {
     try {
       await rootBundle.load("assets/audio/stations/$stationId.mp3");
@@ -189,6 +210,21 @@ abstract class Static {
       } catch (e) {
         log("Load failed $c: $e");
       }
+    }
+    List<BusRoute> customList = [];
+    for (var key in _customBox.keys) {
+      final rawJson = _customBox.get(key);
+      customList.add(BusRoute.fromJson(jsonDecode(rawJson)));
+    }
+    routeData['Custom'] = customList;
+  }
+
+  static Future<void> deleteCustomRoute(String id) async {
+    if (routeData.containsKey('Custom')) {
+      final String key = "route_$id";
+      await _customBox.delete(key);
+      routeData['Custom']!.removeWhere((r) => r.id == id);
+      settingsNotifier.notifyListeners();
     }
   }
 
