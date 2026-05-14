@@ -73,9 +73,7 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
       _performSearch();
       final routes = Static.routeData['Custom'] ?? [];
       final idx = routes.indexWhere((r) => r.id == _selectedRoute.id);
-      if (idx != -1) {
-        _selectedRoute = routes[idx];
-      }
+      if (idx != -1) _selectedRoute = routes[idx];
     });
   }
 
@@ -109,14 +107,13 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
     final colorScheme = theme.colorScheme;
     return Scaffold(
       appBar: AppBar(
-        toolbarHeight: 40,
+        toolbarHeight: 35,
         title: Text(
           '選擇路線 (當前：${_selectedRoute.name})',
-          style: const TextStyle(fontSize: 15),
+          style: const TextStyle(fontSize: 14),
         ),
         actions: [
-          FilledButton.icon(
-            label: const Text("確認"),
+          IconButton(
             onPressed: () => Navigator.pop(
               context,
               Status(
@@ -125,21 +122,21 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
                 dutyStatus: DutyStatus.offDuty,
               ),
             ),
-            icon: const Icon(Icons.check, size: 28),
+            icon: const Icon(Icons.check_circle, size: 24),
           ),
         ],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(44),
+          preferredSize: const Size.fromHeight(34),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
             child: SizedBox(
-              height: 38,
+              height: 30,
               child: TextField(
                 controller: _searchCtrl,
                 style: const TextStyle(fontSize: 13),
                 decoration: InputDecoration(
                   hintText: '搜尋...',
-                  prefixIcon: const Icon(Icons.search, size: 18),
+                  prefixIcon: const Icon(Icons.search, size: 16),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -157,7 +154,7 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
       body: Row(
         children: [
           Container(
-            width: 60,
+            width: 55,
             decoration: BoxDecoration(
               color: colorScheme.surfaceVariant.withOpacity(0.2),
               border: Border(
@@ -175,7 +172,7 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
                         });
                       },
                       child: Container(
-                        height: 40,
+                        height: 32,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           color: _activeCityKey == e.key
@@ -194,7 +191,7 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
                           e.value,
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 11,
                             fontWeight: _activeCityKey == e.key
                                 ? FontWeight.bold
                                 : FontWeight.normal,
@@ -216,10 +213,7 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
               child: ListView.builder(
                 controller: _horizontalController,
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 12,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                 itemCount: _displayRoutes.length + 1,
                 itemBuilder: (context, index) {
                   if (index == _displayRoutes.length)
@@ -242,20 +236,20 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
     bool isSel = _selectedRoute.id == route.id;
     bool isCustom = _activeCityKey == 'Custom';
     return Container(
-      width: 260,
-      margin: const EdgeInsets.only(right: 12, bottom: 12),
+      width: 250,
+      margin: const EdgeInsets.only(right: 8, bottom: 4),
       child: Card(
-        elevation: isSel ? 4 : 1,
+        elevation: isSel ? 3 : 1,
         color: isSel ? cs.primaryContainer.withOpacity(0.3) : null,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(8),
           side: BorderSide(
             color: isSel ? cs.primary : theme.dividerColor.withOpacity(0.1),
             width: 1.5,
           ),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -266,66 +260,70 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
                     child: Text(
                       route.name,
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: 17,
                         fontWeight: FontWeight.bold,
                         color: cs.primary,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert, size: 20),
-                    onSelected: (val) {
-                      if (val == 'copy') {
-                        Static.saveCustomRoute(
-                          route,
-                        ).then((_) => _refreshList());
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(const SnackBar(content: Text("已複製")));
-                      } else if (val == 'export') {
-                        Clipboard.setData(
-                          ClipboardData(text: jsonEncode(route.toJson())),
-                        );
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("JSON 已複製")),
-                        );
-                      } else if (val == 'edit') {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (c) =>
-                                RouteEditorPage(initialRoute: route),
+                  SizedBox(
+                    height: 24,
+                    child: PopupMenuButton<String>(
+                      padding: EdgeInsets.zero,
+                      icon: const Icon(Icons.more_vert, size: 18),
+                      onSelected: (val) {
+                        if (val == 'copy') {
+                          Static.saveCustomRoute(
+                            route,
+                          ).then((_) => _refreshList());
+                          ScaffoldMessenger.of(
+                            context,
+                          ).showSnackBar(const SnackBar(content: Text("已複製")));
+                        } else if (val == 'export') {
+                          Clipboard.setData(
+                            ClipboardData(text: jsonEncode(route.toJson())),
+                          );
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("JSON 已複製")),
+                          );
+                        } else if (val == 'edit') {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (c) =>
+                                  RouteEditorPage(initialRoute: route),
+                            ),
+                          ).then((res) {
+                            if (res == true) _refreshList();
+                          });
+                        } else if (val == 'delete') {
+                          _confirmDelete(route);
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        if (isCustom)
+                          const PopupMenuItem(value: 'edit', child: Text("編輯")),
+                        const PopupMenuItem(value: 'copy', child: Text("複製")),
+                        const PopupMenuItem(value: 'export', child: Text("匯出")),
+                        if (isCustom)
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Text(
+                              "刪除",
+                              style: TextStyle(color: Colors.red),
+                            ),
                           ),
-                        ).then((res) {
-                          if (res == true) _refreshList();
-                        });
-                      } else if (val == 'delete') {
-                        _confirmDelete(route);
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      if (isCustom)
-                        const PopupMenuItem(value: 'edit', child: Text("編輯")),
-                      const PopupMenuItem(value: 'copy', child: Text("複製")),
-                      const PopupMenuItem(value: 'export', child: Text("匯出")),
-                      if (isCustom)
-                        const PopupMenuItem(
-                          value: 'delete',
-                          child: Text(
-                            "刪除",
-                            style: TextStyle(color: Colors.red),
-                          ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ],
               ),
               Text(
                 'ID: ${route.id}',
-                style: TextStyle(fontSize: 11, color: cs.outline),
+                style: TextStyle(fontSize: 10, color: cs.outline),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               Row(
                 children: [
                   const Icon(Icons.circle, size: 8, color: Colors.green),
@@ -334,7 +332,7 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
                     child: Text(
                       route.departure,
                       style: const TextStyle(
-                        fontSize: 13,
+                        fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
                       overflow: TextOverflow.ellipsis,
@@ -347,7 +345,7 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
                     child: Text(
                       route.destination,
                       style: const TextStyle(
-                        fontSize: 13,
+                        fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
                       overflow: TextOverflow.ellipsis,
@@ -355,19 +353,19 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
                   ),
                 ],
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               Expanded(
                 child: Text(
                   route.description,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 11,
                     color: cs.onSurface.withOpacity(0.8),
-                    height: 1.2,
+                    height: 1.1,
                   ),
                   overflow: TextOverflow.fade,
                 ),
               ),
-              const Divider(height: 12),
+              const Divider(height: 8),
               _buildCompactDirectionBtn(
                 route,
                 Direction.go,
@@ -375,7 +373,7 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
                 isSel && _selectedDirection == Direction.go,
                 cs,
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 3),
               _buildCompactDirectionBtn(
                 route,
                 Direction.back,
@@ -404,7 +402,7 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
       }),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
         decoration: BoxDecoration(
           color: a ? cs.primary : cs.surfaceVariant.withOpacity(0.4),
           borderRadius: BorderRadius.circular(6),
@@ -413,7 +411,7 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
           children: [
             Icon(
               a ? Icons.check_circle : Icons.circle_outlined,
-              size: 14,
+              size: 12,
               color: a ? Colors.white : cs.onSurfaceVariant,
             ),
             const SizedBox(width: 6),
@@ -423,7 +421,7 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
                 style: TextStyle(
                   color: a ? Colors.white : cs.onSurfaceVariant,
                   fontWeight: FontWeight.bold,
-                  fontSize: 12,
+                  fontSize: 11,
                 ),
                 overflow: TextOverflow.ellipsis,
               ),
@@ -436,8 +434,8 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
 
   Widget _buildAddCard(ColorScheme cs) {
     return Container(
-      width: 150,
-      margin: const EdgeInsets.only(right: 12, bottom: 12),
+      width: 120,
+      margin: const EdgeInsets.only(right: 8, bottom: 4),
       child: InkWell(
         onTap: () =>
             Navigator.push(
@@ -448,19 +446,18 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
             }),
         child: Card(
           color: cs.primaryContainer.withOpacity(0.2),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.add_circle_outline, size: 32, color: cs.primary),
-              const SizedBox(height: 8),
+              Icon(Icons.add_circle_outline, size: 28, color: cs.primary),
+              const SizedBox(height: 4),
               Text(
                 "新增",
                 style: TextStyle(
                   color: cs.primary,
                   fontWeight: FontWeight.bold,
+                  fontSize: 13,
                 ),
               ),
             ],

@@ -1,5 +1,6 @@
 import 'package:bus_pids_simulator/widgets/status_panal.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // 必須導入此庫以控制系統 UI
 import 'package:provider/provider.dart';
 
 import '../data/status.dart';
@@ -60,6 +61,11 @@ class _InfoPageState extends State<InfoPage>
       Static.globalSpeed = v.clamp(0.5, 2.0);
       _speedController.text = Static.globalSpeed.toStringAsFixed(2);
     });
+  }
+
+  // 全螢幕切換方法
+  void _toggleFullscreen() {
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   }
 
   @override
@@ -179,16 +185,33 @@ class _InfoPageState extends State<InfoPage>
             Colors.white,
           ),
           const SizedBox(height: 4),
-          FilledButton(
-            onPressed: () {
-              Static.TTS.speak(" ");
-              loc.forceRefresh();
-            },
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              minimumSize: const Size(0, 30),
-            ),
-            child: const Text("手動重定位", style: TextStyle(fontSize: 11)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              FilledButton(
+                onPressed: () {
+                  Static.TTS.speak(" ");
+                  loc.forceRefresh();
+                },
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  minimumSize: const Size(0, 30),
+                ),
+                child: const Text("重定位", style: TextStyle(fontSize: 11)),
+              ),
+              const SizedBox(width: 4),
+              // 全螢幕按鈕
+              FilledButton.icon(
+                onPressed: _toggleFullscreen,
+                icon: const Icon(Icons.fullscreen, size: 16),
+                label: const Text("全螢幕", style: TextStyle(fontSize: 11)),
+                style: FilledButton.styleFrom(
+                  backgroundColor: theme.colorScheme.secondary,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  minimumSize: const Size(0, 30),
+                ),
+              ),
+            ],
           ),
           const Spacer(),
           _buildControlRow(
