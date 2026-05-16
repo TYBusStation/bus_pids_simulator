@@ -10,16 +10,12 @@ import 'package:provider/provider.dart';
 import '../data/status.dart';
 import '../utils/route_engine.dart';
 import '../widgets/map_bottom_panel.dart';
+import 'main_page.dart';
 
 class MapPage extends StatefulWidget {
-  final bool showBottomInfo;
-  final VoidCallback onToggleBottomInfo;
+  final GlobalKey<MapBottomPanelState> bottomPanelKey;
 
-  const MapPage({
-    super.key,
-    required this.showBottomInfo,
-    required this.onToggleBottomInfo,
-  });
+  const MapPage({super.key, required this.bottomPanelKey});
 
   @override
   State<MapPage> createState() => _MapPageState();
@@ -30,7 +26,6 @@ class _MapPageState extends State<MapPage> {
   bool _isFollowing = true;
   double _brightness = 0.6;
   bool _isFabMenuExpanded = false;
-  final GlobalKey<MapBottomPanelState> _bottomPanelKey = GlobalKey();
 
   @override
   void dispose() {
@@ -114,7 +109,9 @@ class _MapPageState extends State<MapPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final mainPage = context.findAncestorWidgetOfExactType<MainPage>();
+    final double bottomPadding = (mainPage?.showBottomInfo ?? true) ? 45 : 15;
+
     return Consumer3<
       LocationChangeNotifier,
       RouteAnalysisProvider,
@@ -130,13 +127,16 @@ class _MapPageState extends State<MapPage> {
             currentLocation != null &&
             currentLocation.latitude.isFinite &&
             currentLocation.longitude.isFinite;
+
         _handleAutoMove(currentLocation, analysis);
+
         List<LatLng> points =
             (direction == Direction.go
                     ? route.path.goPoints
                     : route.path.backPoints)
                 .where((p) => p.latitude.isFinite && p.longitude.isFinite)
                 .toList();
+
         final List<Polyline> polylines = points.isNotEmpty
             ? [
                 Polyline(
@@ -146,6 +146,7 @@ class _MapPageState extends State<MapPage> {
                 ),
               ]
             : [];
+
         final List<Marker> stationMarkers =
             (direction == Direction.go
                     ? route.stations.go
@@ -159,6 +160,7 @@ class _MapPageState extends State<MapPage> {
                   (s) => _createStationMarker(s, Colors.red.withOpacity(0.9)),
                 )
                 .toList();
+
         return Stack(
           children: [
             FlutterMap(
@@ -228,48 +230,8 @@ class _MapPageState extends State<MapPage> {
                 ),
               ],
             ),
-            if (widget.showBottomInfo)
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: MapBottomPanel(
-                  key: _bottomPanelKey,
-                  analysis: analysis,
-                  stations: direction == Direction.go
-                      ? route.stations.go
-                      : route.stations.back,
-                ),
-              ),
             Positioned(
-              bottom: widget.showBottomInfo ? 35 : 0,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: GestureDetector(
-                  onTap: widget.onToggleBottomInfo,
-                  child: Container(
-                    width: 40,
-                    height: 18,
-                    decoration: const BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(8),
-                      ),
-                    ),
-                    child: Icon(
-                      widget.showBottomInfo
-                          ? Icons.keyboard_arrow_down
-                          : Icons.keyboard_arrow_up,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: widget.showBottomInfo ? 45 : 10,
+              bottom: bottomPadding,
               right: 15,
               child: _buildMapControls(polylines, stationMarkers),
             ),
@@ -350,7 +312,7 @@ class _MapPageState extends State<MapPage> {
                   onPressed: () {
                     setState(() => _isFollowing = !_isFollowing);
                     if (_isFollowing) {
-                      _bottomPanelKey.currentState?.scrollToCurrent();
+                      widget.bottomPanelKey.currentState?.scrollToCurrent();
                     }
                   },
                   backgroundColor: _isFollowing

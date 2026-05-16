@@ -1,6 +1,8 @@
+import 'package:bus_pids_simulator/utils/web_interop.dart'
+    if (dart.library.html) 'package:bus_pids_simulator/utils/web_interop_web.dart'
+    if (dart.library.io) 'package:bus_pids_simulator/utils/web_interop_stub.dart';
 import 'package:bus_pids_simulator/widgets/status_panal.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // 必須導入此庫以控制系統 UI
 import 'package:provider/provider.dart';
 
 import '../data/status.dart';
@@ -63,9 +65,9 @@ class _InfoPageState extends State<InfoPage>
     });
   }
 
-  // 全螢幕切換方法
   void _toggleFullscreen() {
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    FocusScope.of(context).unfocus();
+    getWebInterop().toggleFullscreen();
   }
 
   @override
@@ -200,7 +202,6 @@ class _InfoPageState extends State<InfoPage>
                 child: const Text("重定位", style: TextStyle(fontSize: 11)),
               ),
               const SizedBox(width: 4),
-              // 全螢幕按鈕
               FilledButton.icon(
                 onPressed: _toggleFullscreen,
                 icon: const Icon(Icons.fullscreen, size: 16),

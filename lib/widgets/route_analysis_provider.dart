@@ -96,12 +96,15 @@ class RouteAnalysisProvider extends ChangeNotifier {
       _lastDutyStatus = DutyStatus.onDuty;
       _lastSpokenStationOrder = null;
       _lastArrivedStationOrder = null;
+
       if (stations.isNotEmpty) {
         _triggerNextStationBroadcast(
           stations.first,
           stations.last.order,
           status,
         );
+      } else {
+        _executeVoice(_buildSeq(Static.nextStationTemplate, "", "", false));
       }
     }
 
@@ -155,7 +158,7 @@ class RouteAnalysisProvider extends ChangeNotifier {
     for (var part in sequence) {
       if (thisId != _activeSequenceId ||
           _isOffDutyAlert ||
-          Static.currentStatus.dutyStatus != DutyStatus.onDuty)
+          _lastDutyStatus != DutyStatus.onDuty)
         return;
       String audioKey = part['audioKey'] as String;
       String text = part['text'] as String;
@@ -183,7 +186,7 @@ class RouteAnalysisProvider extends ChangeNotifier {
     int terminalOrder,
     Status status,
   ) {
-    if (status.dutyStatus != DutyStatus.onDuty) return;
+    if (_lastDutyStatus != DutyStatus.onDuty) return;
     if (_lastSpokenStationOrder == station.order) return;
     final bool isTerminal = station.order == terminalOrder;
     _lastSpokenStationOrder = station.order;
@@ -209,12 +212,25 @@ class RouteAnalysisProvider extends ChangeNotifier {
     Status status,
     List<BusStation> stations,
   ) {
-    if (_isOffDutyAlert || status.dutyStatus != DutyStatus.onDuty) return;
+    if (_isOffDutyAlert || _lastDutyStatus != DutyStatus.onDuty) return;
     final BusStation? nextStation = result.nextStation;
     final int terminalOrder = stations.isNotEmpty ? stations.last.order : -1;
+
     if (nextStation != null) {
-      final bool isTerminal = nextStation.order == terminalOrder;
       final double distNext = result.distToNextStation ?? 10000;
+      final double distPrev = result.distToPrevStation ?? 0;
+
+      bool distCond =
+          !result.isOffRoute &&
+          (distPrev > Static.nextStationDepartureDistance ||
+              (Static.nextStationDistance >= 0 &&
+                  distNext < Static.nextStationDistance));
+
+      if (distCond || _lastSpokenStationOrder == null) {
+        _triggerNextStationBroadcast(nextStation, terminalOrder, status);
+      }
+
+      final bool isTerminal = nextStation.order == terminalOrder;
       if (Static.arrivalDistance >= 0 &&
           !result.isOffRoute &&
           distNext < Static.arrivalDistance) {
@@ -227,27 +243,18 @@ class RouteAnalysisProvider extends ChangeNotifier {
             isTerminal: isTerminal,
           );
           notifyListeners();
-          _executeVoice(
-            _buildSeq(
-              Static.arrivalTemplate,
-              nextStation.name,
-              nextStation.nameEn,
-              isTerminal,
-            ),
-          );
+          if (Static.enableArrivalBroadcast) {
+            _executeVoice(
+              _buildSeq(
+                Static.arrivalTemplate,
+                nextStation.name,
+                nextStation.nameEn,
+                isTerminal,
+              ),
+            );
+          }
         }
-        return;
       }
-    }
-    final double distNext = result.distToNextStation ?? 10000;
-    final double distPrev = result.distToPrevStation ?? 0;
-    bool distCond =
-        !result.isOffRoute &&
-        (distPrev > Static.nextStationDepartureDistance ||
-            (Static.nextStationDistance >= 0 &&
-                distNext < Static.nextStationDistance));
-    if (nextStation != null && (distCond || _lastSpokenStationOrder == null)) {
-      _triggerNextStationBroadcast(nextStation, terminalOrder, status);
     }
   }
 

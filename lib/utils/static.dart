@@ -32,6 +32,7 @@ abstract class Static {
   static double arrivalDistance = 100.0;
   static double nextStationDistance = 250.0;
   static double nextStationDepartureDistance = 50.0;
+  static bool enableArrivalBroadcast = true;
 
   static List<String> stationVoiceSequence = [
     "{name_zh}",
@@ -84,6 +85,10 @@ abstract class Static {
       'nextStationDepartureDistance',
       defaultValue: 50.0,
     );
+    enableArrivalBroadcast = _box.get(
+      'enableArrivalBroadcast',
+      defaultValue: true,
+    );
     stationVoiceSequence = List<String>.from(
       _box.get('stationVoiceSequence', defaultValue: stationVoiceSequence),
     );
@@ -127,6 +132,7 @@ abstract class Static {
       'nextStationDepartureDistance',
       nextStationDepartureDistance,
     );
+    await _box.put('enableArrivalBroadcast', enableArrivalBroadcast);
     await _box.put('stationVoiceSequence', stationVoiceSequence);
     await _box.put('arrivalTemplate', arrivalTemplate);
     await _box.put('nextStationTemplate', nextStationTemplate);

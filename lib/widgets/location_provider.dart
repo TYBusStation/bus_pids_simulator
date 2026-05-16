@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
+enum GpsMode { auto, manual, none }
+
 class LocationChangeNotifier extends ChangeNotifier {
   LatLng? _currentLocation;
   double _currentSpeed = 0;
@@ -11,10 +13,13 @@ class LocationChangeNotifier extends ChangeNotifier {
   LocationPermission _permission = LocationPermission.denied;
   StreamSubscription<Position>? _subscription;
   bool _isDisposed = false;
+  GpsMode _gpsMode = GpsMode.auto;
 
   LatLng? get currentLocation => _currentLocation;
 
   double get currentSpeed => _currentSpeed;
+
+  GpsMode get gpsMode => _gpsMode;
 
   bool get isGpsReady =>
       _serviceEnabled &&
@@ -48,6 +53,27 @@ class LocationChangeNotifier extends ChangeNotifier {
     if (!_isDisposed) notifyListeners();
   }
 
+  void setGpsMode(GpsMode mode) {
+    _gpsMode = mode;
+    if (_gpsMode != GpsMode.auto) {
+      _subscription?.cancel();
+      _subscription = null;
+    } else {
+      _currentLocation = null;
+      _currentSpeed = 0;
+      _startListening();
+      forceRefresh();
+    }
+    if (!_isDisposed) notifyListeners();
+  }
+
+  void updateManualLocation(LatLng loc, double speed) {
+    if (_gpsMode == GpsMode.auto || _isDisposed) return;
+    _currentLocation = loc;
+    _currentSpeed = speed;
+    notifyListeners();
+  }
+
   void _startListening() {
     _subscription?.cancel();
     late LocationSettings locationSettings;
@@ -79,7 +105,7 @@ class LocationChangeNotifier extends ChangeNotifier {
     _subscription =
         Geolocator.getPositionStream(locationSettings: locationSettings).listen(
           (Position position) {
-            if (_isDisposed) return;
+            if (_isDisposed || _gpsMode != GpsMode.auto) return;
             _currentLocation = LatLng(position.latitude, position.longitude);
             _currentSpeed = position.speed > 0 ? position.speed * 3.6 : 0;
             notifyListeners();
@@ -99,11 +125,13 @@ class LocationChangeNotifier extends ChangeNotifier {
       if (isGpsReady) {
         Position pos = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 5),
         );
-        _currentLocation = LatLng(pos.latitude, pos.longitude);
-        _currentSpeed = pos.speed > 0 ? pos.speed * 3.6 : 0;
-        _startListening();
-        notifyListeners();
+        if (_gpsMode == GpsMode.auto) {
+          _currentLocation = LatLng(pos.latitude, pos.longitude);
+          _currentSpeed = pos.speed > 0 ? pos.speed * 3.6 : 0;
+          if (!_isDisposed) notifyListeners();
+        }
       }
     } catch (e) {
       debugPrint(e.toString());

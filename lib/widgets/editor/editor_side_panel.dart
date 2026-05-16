@@ -171,7 +171,7 @@ class EditorSidePanel extends StatelessWidget {
 
   Widget _compactStationTile(int i, BusStation s) => Padding(
     key: ValueKey("${isEditingGo ? 'g' : 'b'}$i"),
-    padding: const EdgeInsets.symmetric(vertical: 1, horizontal: 4),
+    padding: const EdgeInsets.symmetric(horizontal: 4),
     child: Row(
       children: [
         ReorderableDragStartListener(

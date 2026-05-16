@@ -3,6 +3,7 @@ import 'package:bus_pids_simulator/utils/static.dart';
 import 'package:bus_pids_simulator/utils/web_interop.dart'
     if (dart.library.html) 'package:bus_pids_simulator/utils/web_interop_web.dart'
     if (dart.library.io) 'package:bus_pids_simulator/utils/web_interop_stub.dart';
+import 'package:bus_pids_simulator/widgets/gps_control_provider.dart';
 import 'package:bus_pids_simulator/widgets/landscape_provider.dart';
 import 'package:bus_pids_simulator/widgets/location_provider.dart';
 import 'package:bus_pids_simulator/widgets/route_analysis_provider.dart';
@@ -49,8 +50,15 @@ class AppLoader extends StatelessWidget {
   }
 }
 
-class App extends StatelessWidget {
+class App extends StatefulWidget {
   const App({super.key});
+
+  @override
+  State<App> createState() => _AppState();
+}
+
+class _AppState extends State<App> {
+  bool _showBottomInfo = true;
 
   @override
   Widget build(BuildContext context) {
@@ -62,12 +70,19 @@ class App extends StatelessWidget {
         ),
         ChangeNotifierProvider(create: (_) => LocationChangeNotifier()),
         ChangeNotifierProvider(create: (_) => RouteAnalysisProvider()),
+        ChangeNotifierProvider(create: (_) => GpsControlProvider()),
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         title: '公車 PIDS 模擬器',
         theme: ThemeData.dark(useMaterial3: true),
-        home: const LandscapeWatcher(child: MainPage()),
+        home: LandscapeWatcher(
+          child: MainPage(
+            showBottomInfo: _showBottomInfo,
+            onToggleBottomInfo: () =>
+                setState(() => _showBottomInfo = !_showBottomInfo),
+          ),
+        ),
       ),
     );
   }

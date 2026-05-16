@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bus_pids_simulator/data/status.dart';
+import 'package:bus_pids_simulator/pages/gps_control_page.dart';
 import 'package:bus_pids_simulator/pages/settings_page.dart';
 import 'package:bus_pids_simulator/widgets/landscape_provider.dart';
 import 'package:bus_pids_simulator/widgets/location_provider.dart';
@@ -10,22 +11,29 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../widgets/map_bottom_panel.dart';
 import 'info_page.dart';
 import 'led_page.dart';
 import 'map_page.dart';
 
 class MainPage extends StatefulWidget {
-  const MainPage({super.key});
+  final bool showBottomInfo;
+  final VoidCallback onToggleBottomInfo;
 
   @override
   State<MainPage> createState() => _MainPageState();
+
+  const MainPage({
+    super.key,
+    this.showBottomInfo = true,
+    required this.onToggleBottomInfo,
+  });
 }
 
 class _MainPageState extends State<MainPage> {
   int selectedIndex = 0;
-  bool _showNavBar = true;
-  bool _showBottomInfo = true;
   StreamSubscription? _eventSubscription;
+  final GlobalKey<MapBottomPanelState> _bottomPanelKey = GlobalKey();
 
   static final List<NavigationDestination> _allDestinations = const [
     NavigationDestination(
@@ -42,6 +50,11 @@ class _MainPageState extends State<MainPage> {
       icon: Icon(Icons.text_fields_outlined, size: 20),
       selectedIcon: Icon(Icons.text_fields, size: 20),
       label: 'LED',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.location_on_outlined, size: 20),
+      selectedIcon: Icon(Icons.location_on, size: 20),
+      label: '定位',
     ),
     NavigationDestination(
       icon: Icon(Icons.settings_outlined, size: 20),
@@ -119,6 +132,11 @@ class _MainPageState extends State<MainPage> {
 
   @override
   Widget build(BuildContext context) {
+    final status = context.watch<StatusChangeNotifier>().currentStatus;
+    final analysis = context.watch<RouteAnalysisProvider>().currentAnalysis;
+    final direction = status.direction;
+    final route = status.route;
+
     return LandscapeProvider(
       builder: (context, landscape) {
         if (!landscape) {
@@ -143,43 +161,30 @@ class _MainPageState extends State<MainPage> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             actions: [
-              Selector<StatusChangeNotifier, Status>(
-                selector: (_, n) => n.currentStatus,
-                builder: (context, status, _) {
-                  final isOnDuty = status.dutyStatus == DutyStatus.onDuty;
-                  final String dirText = status.direction == Direction.go
-                      ? "去程"
-                      : "返程";
-                  final String destText = status.direction == Direction.go
-                      ? status.route.destination
-                      : status.route.departure;
-                  return Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isOnDuty ? Colors.green : Colors.red,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          isOnDuty ? "營運中" : "非營運",
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        "${status.route.name} $dirText 往 $destText",
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                    ],
-                  );
-                },
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: status.dutyStatus == DutyStatus.onDuty
+                          ? Colors.green
+                          : Colors.red,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      status.dutyStatus == DutyStatus.onDuty ? "營運中" : "非營運",
+                      style: const TextStyle(fontSize: 12, color: Colors.white),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    "${status.route.name} ${status.direction == Direction.go ? '去程' : '返程'} 往 ${status.direction == Direction.go ? status.route.destination : status.route.departure}",
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                ],
               ),
               const SizedBox(width: 10),
               Selector<LocationChangeNotifier, double>(
@@ -231,31 +236,42 @@ class _MainPageState extends State<MainPage> {
           body: SafeArea(
             child: Row(
               children: [
-                if (_showNavBar || selectedIndex != 1) ...[
-                  SizedBox(
-                    width: 60,
-                    child: NavigationRail(
-                      minWidth: 60,
-                      selectedIndex: selectedIndex,
-                      onDestinationSelected: (index) =>
-                          setState(() => selectedIndex = index),
-                      labelType: NavigationRailLabelType.all,
-                      destinations: _allDestinations
-                          .map(
-                            (d) => NavigationRailDestination(
-                              icon: d.icon,
-                              selectedIcon: d.selectedIcon,
-                              label: Text(
-                                d.label,
-                                style: const TextStyle(fontSize: 10),
-                              ),
+                SizedBox(
+                  width: 60,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return SingleChildScrollView(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minHeight: constraints.maxHeight,
+                          ),
+                          child: IntrinsicHeight(
+                            child: NavigationRail(
+                              minWidth: 60,
+                              selectedIndex: selectedIndex,
+                              onDestinationSelected: (index) =>
+                                  setState(() => selectedIndex = index),
+                              labelType: NavigationRailLabelType.all,
+                              destinations: _allDestinations
+                                  .map(
+                                    (d) => NavigationRailDestination(
+                                      icon: d.icon,
+                                      selectedIcon: d.selectedIcon,
+                                      label: Text(
+                                        d.label,
+                                        style: const TextStyle(fontSize: 10),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
                             ),
-                          )
-                          .toList(),
-                    ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
-                  const VerticalDivider(thickness: 1, width: 1),
-                ],
+                ),
+                const VerticalDivider(thickness: 1, width: 1),
                 Expanded(
                   child: Stack(
                     children: [
@@ -265,39 +281,51 @@ class _MainPageState extends State<MainPage> {
                           const InfoPage(),
                           MapPage(
                             key: const PageStorageKey('map_page_unique'),
-                            showBottomInfo: _showBottomInfo,
-                            onToggleBottomInfo: () => setState(
-                              () => _showBottomInfo = !_showBottomInfo,
-                            ),
+                            bottomPanelKey: _bottomPanelKey,
                           ),
                           const LedPage(),
+                          const GpsControlPage(),
                           const SettingsPage(),
                         ],
                       ),
-                      if (selectedIndex == 1)
+                      if (selectedIndex >= 1 &&
+                          selectedIndex <= 3 &&
+                          widget.showBottomInfo)
                         Positioned(
-                          top: 0,
                           bottom: 0,
                           left: 0,
+                          right: 0,
+                          child: MapBottomPanel(
+                            key: _bottomPanelKey,
+                            analysis: analysis,
+                            stations: direction == Direction.go
+                                ? route.stations.go
+                                : route.stations.back,
+                          ),
+                        ),
+                      if (selectedIndex >= 1 && selectedIndex <= 3)
+                        Positioned(
+                          bottom: widget.showBottomInfo ? 35 : 0,
+                          left: 0,
+                          right: 0,
                           child: Center(
                             child: GestureDetector(
-                              onTap: () =>
-                                  setState(() => _showNavBar = !_showNavBar),
+                              onTap: widget.onToggleBottomInfo,
                               child: Container(
-                                width: 20,
-                                height: 40,
+                                width: 40,
+                                height: 18,
                                 decoration: const BoxDecoration(
                                   color: Colors.black54,
-                                  borderRadius: BorderRadius.horizontal(
-                                    right: Radius.circular(10),
+                                  borderRadius: BorderRadius.vertical(
+                                    top: Radius.circular(8),
                                   ),
                                 ),
                                 child: Icon(
-                                  _showNavBar
-                                      ? Icons.keyboard_arrow_left
-                                      : Icons.keyboard_arrow_right,
+                                  widget.showBottomInfo
+                                      ? Icons.keyboard_arrow_down
+                                      : Icons.keyboard_arrow_up,
                                   color: Colors.white,
-                                  size: 20,
+                                  size: 18,
                                 ),
                               ),
                             ),

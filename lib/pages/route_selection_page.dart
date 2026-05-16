@@ -113,7 +113,8 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
           style: const TextStyle(fontSize: 14),
         ),
         actions: [
-          IconButton(
+          FilledButton.icon(
+            label: const Text("確定"),
             onPressed: () => Navigator.pop(
               context,
               Status(
@@ -122,7 +123,7 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
                 dutyStatus: DutyStatus.offDuty,
               ),
             ),
-            icon: const Icon(Icons.check_circle, size: 24),
+            icon: const Icon(Icons.check_circle, size: 20),
           ),
         ],
         bottom: PreferredSize(

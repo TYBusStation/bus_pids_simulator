@@ -15,6 +15,17 @@ class _RulesTabState extends State<RulesTab> {
     return ListView(
       padding: const EdgeInsets.all(12),
       children: [
+        SwitchListTile(
+          title: const Text("啟用到站報站語音", style: TextStyle(fontSize: 14)),
+          value: Static.enableArrivalBroadcast,
+          onChanged: (v) {
+            setState(() {
+              Static.enableArrivalBroadcast = v;
+            });
+            Static.saveSettings();
+          },
+        ),
+        const Divider(),
         _dTile(
           "到站報站觸發距離 (公尺)",
           Static.arrivalDistance,
