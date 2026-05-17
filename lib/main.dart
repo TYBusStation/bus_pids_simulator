@@ -1,6 +1,7 @@
 import 'package:bus_pids_simulator/pages/main_page.dart';
 import 'package:bus_pids_simulator/utils/static.dart';
 import 'package:bus_pids_simulator/utils/web_interop.dart'
+    if (dart.library.js_interop) 'package:bus_pids_simulator/utils/web_interop_web.dart'
     if (dart.library.html) 'package:bus_pids_simulator/utils/web_interop_web.dart'
     if (dart.library.io) 'package:bus_pids_simulator/utils/web_interop_stub.dart';
 import 'package:bus_pids_simulator/widgets/gps_control_provider.dart';

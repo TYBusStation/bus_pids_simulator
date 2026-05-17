@@ -16,6 +16,14 @@ class WebInteropStub implements WebInterop {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     }
   }
+
+  @override
+  void lockLandscape() {
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+  }
 }
 
 WebInterop getWebInterop() => WebInteropStub();

@@ -1,9 +1,9 @@
 abstract class WebInterop {
   void hideFlutterLoader();
 
-  void toggleFullscreen();
+  void lockLandscape();
 
-  factory WebInterop() => getWebInterop();
+  void toggleFullscreen();
 }
 
 WebInterop getWebInterop() {

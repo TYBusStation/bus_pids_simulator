@@ -18,7 +18,7 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
       padding: const EdgeInsets.all(12),
       children: [
         ListTile(
-          title: const Text("全域 LED 滾動速度", style: TextStyle(fontSize: 14)),
+          title: const Text("全域字幕滾動速度", style: TextStyle(fontSize: 14)),
           trailing: SizedBox(
             width: 80,
             child: TextField(
@@ -39,7 +39,7 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
           ),
         ),
         ListTile(
-          title: const Text("LED 顯示區域高度", style: TextStyle(fontSize: 14)),
+          title: const Text("字幕顯示區域高度", style: TextStyle(fontSize: 14)),
           trailing: SizedBox(
             width: 80,
             child: TextField(
@@ -59,35 +59,142 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
             ),
           ),
         ),
-        SwitchListTile(
-          title: const Text("顯示即將接近站點標語", style: TextStyle(fontSize: 14)),
-          value: Static.showStationListSlogan,
-          onChanged: (v) {
-            Static.showStationListSlogan = v;
-            Static.saveSettings();
-            setState(() {});
-          },
+        ExpansionTile(
+          title: const Text(
+            "即將接近字幕設定",
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+          ),
+          children: [
+            SwitchListTile(
+              title: const Text("顯示即將接近字幕", style: TextStyle(fontSize: 14)),
+              value: Static.showStationListSlogan,
+              onChanged: (v) {
+                Static.showStationListSlogan = v;
+                Static.saveSettings();
+                setState(() {});
+              },
+            ),
+            SequenceManagerWidget<String>(
+              title: "即將接近字幕序列",
+              items: Static.nextStationListSequence,
+              onAdd: () => "{next_stations}",
+              onEdit: (val) async =>
+                  await _showTextDialog(val, "可用參數：\n{next_stations} - 站名串接列表"),
+            ),
+            ExpansionTile(
+              title: const Text(
+                "{next_stations}",
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+              children: [
+                SequenceManagerWidget<String>(
+                  title: "單站顯示",
+                  items: Static.nextStationSubSequence,
+                  onAdd: () => "{name}",
+                  onEdit: (val) async => await _showTextDialog(
+                    val,
+                    "可用參數：\n{name} - 中文\n{nameEn} - 英文",
+                  ),
+                ),
+                ListTile(
+                  title: const Text(
+                    "顯示站數、連接符號",
+                    style: TextStyle(fontSize: 14),
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 40,
+                        child: TextField(
+                          textAlign: TextAlign.center,
+                          keyboardType: TextInputType.number,
+                          controller: TextEditingController(
+                            text: Static.nextStationCount.toString(),
+                          ),
+                          onSubmitted: (v) {
+                            Static.nextStationCount = int.tryParse(v) ?? 5;
+                            Static.saveSettings();
+                            setState(() {});
+                          },
+                        ),
+                      ),
+                      const Text("、"),
+                      SizedBox(
+                        width: 40,
+                        child: TextField(
+                          textAlign: TextAlign.center,
+                          controller: TextEditingController(
+                            text: Static.nextStationSeparator,
+                          ),
+                          onSubmitted: (v) {
+                            Static.nextStationSeparator = v;
+                            Static.saveSettings();
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
-        const Divider(),
         SequenceManagerWidget<LedSequence>(
-          title: "LED 輪播標語設定",
+          title: "字幕輪播標語設定",
           items: Static.sloganList,
           onAdd: () => LedSequence(template: "歡迎搭乘"),
           onEdit: (val) async => await _showLedDialog(val, "編輯輪播標語"),
         ),
         SequenceManagerWidget<LedSequence>(
-          title: "下站 LED 顯示序列",
+          title: "下站字幕顯示序列",
           items: Static.ledNextStationSeq,
           onAdd: () => LedSequence(template: "下一站"),
           onEdit: (val) async => await _showLedDialog(val, "編輯下站序列"),
         ),
         SequenceManagerWidget<LedSequence>(
-          title: "到站 LED 顯示序列",
+          title: "到站字幕顯示序列",
           items: Static.ledArrivalSeq,
           onAdd: () => LedSequence(template: "到了"),
           onEdit: (val) async => await _showLedDialog(val, "編輯到站序列"),
         ),
       ],
+    );
+  }
+
+  Future<String?> _showTextDialog(String initial, String hint) async {
+    final c = TextEditingController(text: initial);
+    return await showDialog<String>(
+      context: context,
+      builder: (v) => AlertDialog(
+        title: const Text("編輯片段", style: TextStyle(fontSize: 16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(controller: c, autofocus: true),
+            const SizedBox(height: 10),
+            Text(
+              hint,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+                height: 1.5,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(v),
+            child: const Text("取消"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(v, c.text),
+            child: const Text("確定"),
+          ),
+        ],
+      ),
     );
   }
 
@@ -115,7 +222,7 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
                 TextField(
                   controller: tC,
                   decoration: const InputDecoration(
-                    labelText: "範本内容 (支援 {name}, {nameEn}, {terminal})",
+                    labelText: "內容內容",
                     isDense: true,
                     contentPadding: EdgeInsets.symmetric(vertical: 8),
                   ),

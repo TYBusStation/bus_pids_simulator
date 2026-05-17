@@ -1,9 +1,11 @@
 import 'package:bus_pids_simulator/utils/web_interop.dart'
+    if (dart.library.js_interop) 'package:bus_pids_simulator/utils/web_interop_web.dart'
     if (dart.library.html) 'package:bus_pids_simulator/utils/web_interop_web.dart'
     if (dart.library.io) 'package:bus_pids_simulator/utils/web_interop_stub.dart';
 import 'package:bus_pids_simulator/widgets/status_panal.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../data/status.dart';
 import '../utils/static.dart';
@@ -23,6 +25,7 @@ class _InfoPageState extends State<InfoPage>
   late TextEditingController _volController;
   late TextEditingController _speedController;
   late AnimationController _flashController;
+  bool _isWakeLocked = false;
 
   @override
   void initState() {
@@ -54,10 +57,6 @@ class _InfoPageState extends State<InfoPage>
     });
   }
 
-  void _playVolumeNotice() {
-    Static.audioManager.playAssetAndWait("notice.mp3");
-  }
-
   void _updateSpeed(double v) {
     setState(() {
       Static.globalSpeed = v.clamp(0.5, 2.0);
@@ -70,6 +69,13 @@ class _InfoPageState extends State<InfoPage>
     getWebInterop().toggleFullscreen();
   }
 
+  void _toggleWakeLock() {
+    setState(() {
+      _isWakeLocked = !_isWakeLocked;
+      WakelockPlus.toggle(enable: _isWakeLocked);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -80,8 +86,6 @@ class _InfoPageState extends State<InfoPage>
     >(
       builder: (context, locNotifier, statusNotifier, analysisProvider, child) {
         final currentStatus = statusNotifier.currentStatus;
-        final bool isOnDuty = currentStatus.dutyStatus == DutyStatus.onDuty;
-        final bool isOffDutyAlert = analysisProvider.isOffDutyAlert;
         final analysis = analysisProvider.currentAnalysis;
 
         String nextStationName = "(無停靠站)";
@@ -93,13 +97,13 @@ class _InfoPageState extends State<InfoPage>
         } else if (locNotifier.currentLocation == null) {
           nextStationName = "(無定位)";
         } else if (analysis != null) {
-          final double distPrev = analysis.distToPrevStation ?? double.infinity;
-
           if (analysis.prevStation != null &&
-              distPrev < Static.nextStationDepartureDistance) {
+              (analysis.distToPrevStation ?? double.infinity) <
+                  Static.nextStationDepartureDistance) {
             nextStationName = analysis.prevStation!.name;
             nextStationNameEn = analysis.prevStation!.nameEn;
-            distanceText = "0 m(離站 ${distPrev.toStringAsFixed(0)} m)";
+            distanceText =
+                "0 m(離站 ${analysis.distToPrevStation!.toStringAsFixed(0)} m)";
           } else if (analysis.nextStation != null) {
             nextStationName = analysis.nextStation!.name;
             nextStationNameEn = analysis.nextStation!.nameEn;
@@ -124,8 +128,8 @@ class _InfoPageState extends State<InfoPage>
                   nextStationName: nextStationName,
                   nextStationNameEn: nextStationNameEn,
                   distanceText: distanceText,
-                  isOnDuty: isOnDuty,
-                  isOffDutyAlert: isOffDutyAlert,
+                  isOnDuty: currentStatus.dutyStatus == DutyStatus.onDuty,
+                  isOffDutyAlert: analysisProvider.isOffDutyAlert,
                   flashController: _flashController,
                   statusNotifier: statusNotifier,
                 ),
@@ -139,77 +143,113 @@ class _InfoPageState extends State<InfoPage>
 
   Widget _buildLeftStatusPanel(LocationChangeNotifier loc, ThemeData theme) {
     bool hasLocation = loc.currentLocation != null;
-    double currentSpeed = loc.currentSpeed;
-    if (currentSpeed < 0) currentSpeed = 0;
-
     return Container(
-      width: 220,
+      width: 200,
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
         borderRadius: BorderRadius.circular(15),
         border: Border.all(color: Colors.white, width: 2),
       ),
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
       child: Column(
         children: [
-          Icon(
-            hasLocation ? Icons.location_on : Icons.location_off,
-            color: hasLocation ? Colors.green : Colors.red,
-            size: 32,
+          Row(
+            children: [
+              Column(
+                children: [
+                  Icon(
+                    hasLocation ? Icons.location_on : Icons.location_off,
+                    color: hasLocation ? Colors.green : Colors.red,
+                    size: 32,
+                  ),
+                  Text(
+                    hasLocation ? "定位正常" : "無定位",
+                    style: TextStyle(
+                      color: hasLocation ? Colors.green : Colors.red,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  children: [
+                    _buildInfoRow(
+                      "時速",
+                      "${loc.currentSpeed.toStringAsFixed(1)}",
+                      Colors.orangeAccent,
+                    ),
+                    _buildInfoRow(
+                      "緯度",
+                      hasLocation
+                          ? loc.currentLocation!.latitude.toStringAsFixed(4)
+                          : "N/A",
+                      Colors.white,
+                    ),
+                    _buildInfoRow(
+                      "經度",
+                      hasLocation
+                          ? loc.currentLocation!.longitude.toStringAsFixed(4)
+                          : "N/A",
+                      Colors.white,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            hasLocation ? "定位正常" : "等待定位",
-            style: TextStyle(
-              color: hasLocation ? Colors.green : Colors.red,
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: () {
+                Static.TTS.speak(" ");
+                loc.forceRefresh();
+              },
+              style: FilledButton.styleFrom(
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(0, 30),
+              ),
+              child: const Text("重新定位", style: TextStyle(fontSize: 10)),
             ),
           ),
           const SizedBox(height: 4),
-          _buildInfoRow(
-            "時速",
-            "${currentSpeed.toStringAsFixed(1)} km/h",
-            Colors.orangeAccent,
-          ),
-          _buildInfoRow(
-            "緯度",
-            hasLocation
-                ? loc.currentLocation!.latitude.toStringAsFixed(6)
-                : "N/A",
-            Colors.white,
-          ),
-          _buildInfoRow(
-            "經度",
-            hasLocation
-                ? loc.currentLocation!.longitude.toStringAsFixed(6)
-                : "N/A",
-            Colors.white,
-          ),
-          const SizedBox(height: 4),
           Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              FilledButton(
-                onPressed: () {
-                  Static.TTS.speak(" ");
-                  loc.forceRefresh();
-                },
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  minimumSize: const Size(0, 30),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: _toggleWakeLock,
+                  icon: Icon(
+                    _isWakeLocked ? Icons.lightbulb : Icons.lightbulb_outline,
+                    size: 12,
+                  ),
+                  label: Text(
+                    _isWakeLocked ? "螢幕恆亮" : "螢幕非恆亮",
+                    style: const TextStyle(fontSize: 9),
+                  ),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _isWakeLocked
+                        ? Colors.orange
+                        : theme.colorScheme.secondary,
+                    padding: EdgeInsets.zero,
+                    minimumSize: const Size(0, 30),
+                  ),
                 ),
-                child: const Text("重定位", style: TextStyle(fontSize: 11)),
               ),
               const SizedBox(width: 4),
-              FilledButton.icon(
-                onPressed: _toggleFullscreen,
-                icon: const Icon(Icons.fullscreen, size: 16),
-                label: const Text("全螢幕", style: TextStyle(fontSize: 11)),
-                style: FilledButton.styleFrom(
-                  backgroundColor: theme.colorScheme.secondary,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  minimumSize: const Size(0, 30),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: _toggleFullscreen,
+                  icon: const Icon(Icons.fullscreen, size: 12),
+                  label: const Text("全螢幕", style: TextStyle(fontSize: 9)),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: theme.colorScheme.secondary,
+                    padding: EdgeInsets.zero,
+                    minimumSize: const Size(0, 30),
+                  ),
                 ),
               ),
             ],
@@ -222,7 +262,6 @@ class _InfoPageState extends State<InfoPage>
             1.0,
             _updateVolume,
             _volController,
-            onChangedEnd: (v) => _playVolumeNotice(),
           ),
           const SizedBox(height: 4),
           _buildControlRow(
@@ -240,19 +279,19 @@ class _InfoPageState extends State<InfoPage>
 
   Widget _buildInfoRow(String label, String value, Color valueColor) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 1),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
             label,
-            style: const TextStyle(color: Colors.white70, fontSize: 11),
+            style: const TextStyle(color: Colors.white70, fontSize: 9),
           ),
           Text(
             value,
             style: TextStyle(
               color: valueColor,
-              fontSize: 12,
+              fontSize: 10,
               fontWeight: FontWeight.bold,
               fontFamily: 'monospace',
             ),
@@ -268,19 +307,17 @@ class _InfoPageState extends State<InfoPage>
     double min,
     double max,
     Function(double) onSlider,
-    TextEditingController ctrl, {
-    Function(double)? onChangedEnd,
-  }) {
+    TextEditingController ctrl,
+  ) {
     return Row(
       children: [
-        Icon(icon, size: 18),
+        Icon(icon, size: 16),
         Expanded(
-          flex: 4,
           child: SliderTheme(
             data: SliderTheme.of(context).copyWith(
               trackHeight: 2,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-              overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
             ),
             child: Slider(
               value: value,
@@ -290,20 +327,16 @@ class _InfoPageState extends State<InfoPage>
                 Static.TTS.speak(" ");
                 onSlider(v);
               },
-              onChangeEnd: (v) {
-                if (onChangedEnd != null) onChangedEnd(v);
-              },
             ),
           ),
         ),
-        const SizedBox(width: 4),
         SizedBox(
-          width: 45,
-          height: 28,
+          width: 35,
+          height: 24,
           child: TextField(
             controller: ctrl,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold),
             decoration: const InputDecoration(
               contentPadding: EdgeInsets.zero,
               border: OutlineInputBorder(),
@@ -311,12 +344,8 @@ class _InfoPageState extends State<InfoPage>
             ),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             onSubmitted: (s) {
-              Static.TTS.speak(" ");
               final val = double.tryParse(s);
-              if (val != null) {
-                onSlider(val);
-                if (onChangedEnd != null) onChangedEnd(val);
-              }
+              if (val != null) onSlider(val);
             },
           ),
         ),

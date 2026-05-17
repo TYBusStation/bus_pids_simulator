@@ -130,10 +130,26 @@ class _LedPageState extends State<LedPage> {
           (s) => s.order == analysis!.nextStation!.order,
         );
         if (idx != -1) {
-          String text =
-              "即將接近：${stations.skip(idx).take(5).map((s) => s.name).join(">")}...下車的乘客請準備";
+          final itemTemplate = Static.nextStationSubSequence.join("");
+          final subList = stations
+              .skip(idx)
+              .take(Static.nextStationCount)
+              .map(
+                (s) => itemTemplate
+                    .replaceAll('{name}', s.name)
+                    .replaceAll('{nameEn}', s.nameEn),
+              )
+              .join(Static.nextStationSeparator);
+
+          String finalSlogan = Static.nextStationListSequence
+              .join("")
+              .replaceAll('{next_stations}', subList);
+
           slogans.add(
-            LedSequence(template: text, scrollSpeed: Static.ledScrollSpeed),
+            LedSequence(
+              template: finalSlogan,
+              scrollSpeed: Static.ledScrollSpeed,
+            ),
           );
         }
       }

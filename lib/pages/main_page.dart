@@ -1,10 +1,13 @@
 import 'dart:async';
 
 import 'package:bus_pids_simulator/data/status.dart';
-import 'package:bus_pids_simulator/pages/gps_control_page.dart';
 import 'package:bus_pids_simulator/pages/settings_page.dart';
+import 'package:bus_pids_simulator/utils/static.dart';
+import 'package:bus_pids_simulator/utils/web_interop.dart'
+    if (dart.library.js_interop) 'package:bus_pids_simulator/utils/web_interop_web.dart'
+    if (dart.library.html) 'package:bus_pids_simulator/utils/web_interop_web.dart'
+    if (dart.library.io) 'package:bus_pids_simulator/utils/web_interop_stub.dart';
 import 'package:bus_pids_simulator/widgets/landscape_provider.dart';
-import 'package:bus_pids_simulator/widgets/location_provider.dart';
 import 'package:bus_pids_simulator/widgets/route_analysis_provider.dart';
 import 'package:bus_pids_simulator/widgets/status_provider.dart';
 import 'package:flutter/material.dart';
@@ -12,6 +15,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../widgets/map_bottom_panel.dart';
+import 'contact_page.dart';
 import 'info_page.dart';
 import 'led_page.dart';
 import 'map_page.dart';
@@ -49,17 +53,17 @@ class _MainPageState extends State<MainPage> {
     NavigationDestination(
       icon: Icon(Icons.text_fields_outlined, size: 20),
       selectedIcon: Icon(Icons.text_fields, size: 20),
-      label: 'LED',
-    ),
-    NavigationDestination(
-      icon: Icon(Icons.location_on_outlined, size: 20),
-      selectedIcon: Icon(Icons.location_on, size: 20),
-      label: '定位',
+      label: '字幕',
     ),
     NavigationDestination(
       icon: Icon(Icons.settings_outlined, size: 20),
       selectedIcon: Icon(Icons.settings, size: 20),
       label: '設定',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.link_outlined, size: 20),
+      selectedIcon: Icon(Icons.link, size: 20),
+      label: '連結',
     ),
   ];
 
@@ -92,9 +96,7 @@ class _MainPageState extends State<MainPage> {
       barrierDismissible: true,
       builder: (context) {
         Timer(const Duration(seconds: 3), () {
-          if (Navigator.of(context).canPop()) {
-            Navigator.of(context).pop();
-          }
+          if (Navigator.of(context).canPop()) Navigator.of(context).pop();
         });
         return AlertDialog(
           backgroundColor: Colors.red.shade900,
@@ -130,6 +132,70 @@ class _MainPageState extends State<MainPage> {
     );
   }
 
+  void _editLicensePlate() {
+    final controller = TextEditingController(text: Static.licensePlate);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.directions_bus),
+            SizedBox(width: 10),
+            Text("設定車牌號碼"),
+          ],
+        ),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(labelText: "車牌號碼"),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("取消"),
+          ),
+          TextButton(
+            onPressed: () {
+              setState(() => Static.licensePlate = controller.text);
+              Static.saveSettings();
+              Navigator.pop(context);
+            },
+            child: const Text("確定"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _editDriverId() {
+    final controller = TextEditingController(text: Static.driverId);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [Icon(Icons.person), SizedBox(width: 10), Text("設定駕駛長編號")],
+        ),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(labelText: "駕駛長編號"),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("取消"),
+          ),
+          TextButton(
+            onPressed: () {
+              setState(() => Static.driverId = controller.text);
+              Static.saveSettings();
+              Navigator.pop(context);
+            },
+            child: const Text("確定"),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final status = context.watch<StatusChangeNotifier>().currentStatus;
@@ -137,15 +203,44 @@ class _MainPageState extends State<MainPage> {
     final direction = status.direction;
     final route = status.route;
 
+    final List<Widget> pages = [
+      const InfoPage(),
+      MapPage(
+        key: const PageStorageKey('map_page_unique'),
+        bottomPanelKey: _bottomPanelKey,
+      ),
+      const LedPage(),
+      const SettingsPage(),
+      const ContactPage(),
+    ];
+
     return LandscapeProvider(
       builder: (context, landscape) {
         if (!landscape) {
-          return const Scaffold(
-            resizeToAvoidBottomInset: false,
+          return Scaffold(
             body: Center(
-              child: Text(
-                "請將螢幕打橫",
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text(
+                    "請將螢幕打橫",
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      getWebInterop().lockLandscape();
+                    },
+                    icon: const Icon(Icons.screen_rotation),
+                    label: const Text("旋轉手機"),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           );
@@ -155,71 +250,46 @@ class _MainPageState extends State<MainPage> {
           resizeToAvoidBottomInset: false,
           appBar: AppBar(
             toolbarHeight: 40,
-            titleSpacing: 15,
-            title: const Text(
-              "公車 PIDS 模擬器",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            titleSpacing: 0,
+            title: Row(
+              children: [
+                const SizedBox(width: 15),
+                const Text(
+                  "公車 PIDS 模擬器",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
+                InkWell(
+                  onTap: _editLicensePlate,
+                  child: Row(
+                    children: [
+                      const Icon(Icons.directions_bus, size: 16),
+                      const SizedBox(width: 4),
+                      Text(
+                        Static.licensePlate,
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 30),
+                InkWell(
+                  onTap: _editDriverId,
+                  child: Row(
+                    children: [
+                      const Icon(Icons.person, size: 16),
+                      const SizedBox(width: 4),
+                      Text(
+                        Static.driverId,
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+              ],
             ),
             actions: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: status.dutyStatus == DutyStatus.onDuty
-                          ? Colors.green
-                          : Colors.red,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      status.dutyStatus == DutyStatus.onDuty ? "營運中" : "非營運",
-                      style: const TextStyle(fontSize: 12, color: Colors.white),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    "${status.route.name} ${status.direction == Direction.go ? '去程' : '返程'} 往 ${status.direction == Direction.go ? status.route.destination : status.route.departure}",
-                    style: const TextStyle(fontSize: 14),
-                  ),
-                ],
-              ),
-              const SizedBox(width: 10),
-              Selector<LocationChangeNotifier, double>(
-                selector: (_, n) => n.currentSpeed,
-                builder: (context, speed, _) => Text(
-                  "時速：${speed.toStringAsFixed(1)} km/h",
-                  style: const TextStyle(fontSize: 14),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Selector<LocationChangeNotifier, List<double?>>(
-                selector: (_, n) => [
-                  n.currentLocation?.latitude,
-                  n.currentLocation?.longitude,
-                ],
-                builder: (context, loc, _) => Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      loc[0] != null
-                          ? "緯度：${loc[0]!.toStringAsFixed(6)}"
-                          : "緯度：未知",
-                      style: const TextStyle(fontSize: 10, height: 1.2),
-                    ),
-                    Text(
-                      loc[1] != null
-                          ? "經度：${loc[1]!.toStringAsFixed(6)}"
-                          : "經度：未知",
-                      style: const TextStyle(fontSize: 10, height: 1.2),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 15),
               StreamBuilder(
                 stream: Stream.periodic(const Duration(seconds: 1)),
                 builder: (context, snapshot) => Text(
@@ -238,37 +308,27 @@ class _MainPageState extends State<MainPage> {
               children: [
                 SizedBox(
                   width: 60,
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      return SingleChildScrollView(
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            minHeight: constraints.maxHeight,
-                          ),
-                          child: IntrinsicHeight(
-                            child: NavigationRail(
-                              minWidth: 60,
-                              selectedIndex: selectedIndex,
-                              onDestinationSelected: (index) =>
-                                  setState(() => selectedIndex = index),
-                              labelType: NavigationRailLabelType.all,
-                              destinations: _allDestinations
-                                  .map(
-                                    (d) => NavigationRailDestination(
-                                      icon: d.icon,
-                                      selectedIcon: d.selectedIcon,
-                                      label: Text(
-                                        d.label,
-                                        style: const TextStyle(fontSize: 10),
-                                      ),
-                                    ),
-                                  )
-                                  .toList(),
+                  child: NavigationRail(
+                    minWidth: 60,
+                    selectedIndex: selectedIndex.clamp(
+                      0,
+                      _allDestinations.length - 1,
+                    ),
+                    onDestinationSelected: (index) =>
+                        setState(() => selectedIndex = index),
+                    labelType: NavigationRailLabelType.all,
+                    destinations: _allDestinations
+                        .map(
+                          (d) => NavigationRailDestination(
+                            icon: d.icon,
+                            selectedIcon: d.selectedIcon,
+                            label: Text(
+                              d.label,
+                              style: const TextStyle(fontSize: 10),
                             ),
                           ),
-                        ),
-                      );
-                    },
+                        )
+                        .toList(),
                   ),
                 ),
                 const VerticalDivider(thickness: 1, width: 1),
@@ -276,20 +336,11 @@ class _MainPageState extends State<MainPage> {
                   child: Stack(
                     children: [
                       IndexedStack(
-                        index: selectedIndex,
-                        children: [
-                          const InfoPage(),
-                          MapPage(
-                            key: const PageStorageKey('map_page_unique'),
-                            bottomPanelKey: _bottomPanelKey,
-                          ),
-                          const LedPage(),
-                          const GpsControlPage(),
-                          const SettingsPage(),
-                        ],
+                        index: selectedIndex.clamp(0, pages.length - 1),
+                        children: pages,
                       ),
                       if (selectedIndex >= 1 &&
-                          selectedIndex <= 3 &&
+                          selectedIndex <= 2 &&
                           widget.showBottomInfo)
                         Positioned(
                           bottom: 0,
@@ -303,7 +354,7 @@ class _MainPageState extends State<MainPage> {
                                 : route.stations.back,
                           ),
                         ),
-                      if (selectedIndex >= 1 && selectedIndex <= 3)
+                      if (selectedIndex >= 1 && selectedIndex <= 2)
                         Positioned(
                           bottom: widget.showBottomInfo ? 35 : 0,
                           left: 0,

@@ -21,6 +21,11 @@ class WebInteropWeb implements WebInterop {
       doc.exitFullscreen();
     }
   }
+
+  @override
+  void lockLandscape() {
+    web.window.screen.orientation.lock('landscape');
+  }
 }
 
 WebInterop getWebInterop() => WebInteropWeb();

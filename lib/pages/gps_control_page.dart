@@ -16,63 +16,61 @@ class GpsControlPage extends StatelessWidget {
     final simProvider = context.watch<GpsControlProvider>();
     final statusNotifier = context.read<StatusChangeNotifier>();
 
-    return Scaffold(
-      body: Padding(
-        padding: EdgeInsetsGeometry.only(bottom: 40),
-        child: Row(
-          children: [
-            Expanded(
-              flex: 2,
-              child: Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: Column(
-                  children: [
-                    SegmentedButton<GpsMode>(
-                      segments: const [
-                        ButtonSegment(
-                          value: GpsMode.auto,
-                          label: Text("自動"),
-                          icon: Icon(Icons.gps_fixed),
-                        ),
-                        ButtonSegment(
-                          value: GpsMode.manual,
-                          label: Text("模擬"),
-                          icon: Icon(Icons.tune),
-                        ),
-                        ButtonSegment(
-                          value: GpsMode.none,
-                          label: Text("關閉"),
-                          icon: Icon(Icons.gps_off),
-                        ),
-                      ],
-                      selected: {locNotifier.gpsMode},
-                      onSelectionChanged: (set) =>
-                          locNotifier.setGpsMode(set.first),
-                    ),
-                    const SizedBox(height: 12),
-                    if (locNotifier.gpsMode == GpsMode.manual) ...[
-                      _buildSimCard(
-                        simProvider,
-                        locNotifier,
-                        statusNotifier,
-                        context,
+    return Material(
+      color: Colors.transparent,
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Column(
+                children: [
+                  SegmentedButton<GpsMode>(
+                    segments: const [
+                      ButtonSegment(
+                        value: GpsMode.auto,
+                        label: Text("自動"),
+                        icon: Icon(Icons.gps_fixed),
+                      ),
+                      ButtonSegment(
+                        value: GpsMode.manual,
+                        label: Text("模擬"),
+                        icon: Icon(Icons.tune),
+                      ),
+                      ButtonSegment(
+                        value: GpsMode.none,
+                        label: Text("關閉"),
+                        icon: Icon(Icons.gps_off),
                       ),
                     ],
+                    selected: {locNotifier.gpsMode},
+                    onSelectionChanged: (set) =>
+                        locNotifier.setGpsMode(set.first),
+                  ),
+                  const SizedBox(height: 12),
+                  if (locNotifier.gpsMode == GpsMode.manual) ...[
+                    _buildSimCard(
+                      simProvider,
+                      locNotifier,
+                      statusNotifier,
+                      context,
+                    ),
                   ],
-                ),
+                ],
               ),
             ),
-            const VerticalDivider(width: 1),
-            Expanded(
-              flex: 1,
-              child: locNotifier.gpsMode != GpsMode.manual
-                  ? const SizedBox.shrink()
-                  : (simProvider.simRoute == null
-                        ? const Center(child: Text("未選擇模擬路線"))
-                        : _buildStationList(simProvider, locNotifier)),
-            ),
-          ],
-        ),
+          ),
+          const VerticalDivider(width: 1),
+          Expanded(
+            flex: 1,
+            child: locNotifier.gpsMode != GpsMode.manual
+                ? const SizedBox.shrink()
+                : (simProvider.simRoute == null
+                      ? const Center(child: Text("未選擇模擬路線"))
+                      : _buildStationList(simProvider, locNotifier)),
+          ),
+        ],
       ),
     );
   }
@@ -150,7 +148,6 @@ class GpsControlPage extends StatelessWidget {
         ? sim.simRoute!.stations.go
         : sim.simRoute!.stations.back;
     return ListView.builder(
-      shrinkWrap: true,
       itemCount: stations.length,
       itemBuilder: (context, i) => ListTile(
         dense: true,

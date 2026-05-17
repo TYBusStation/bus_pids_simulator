@@ -5,6 +5,7 @@ import '../utils/audio_manager.dart';
 import '../utils/static.dart';
 import '../utils/utils.dart'
     if (dart.library.js_interop) '../utils/utils_web.dart'
+    if (dart.library.html) '../utils/utils_web.dart'
     if (dart.library.io) '../utils/utils_stub.dart';
 
 class AudioPackDetailPage extends StatefulWidget {

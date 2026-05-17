@@ -10,6 +10,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'static.dart';
 import 'utils.dart'
     if (dart.library.js_interop) 'utils_web.dart'
+    if (dart.library.html) 'utils_web.dart'
     if (dart.library.io) 'utils_stub.dart';
 
 class VoicePack {

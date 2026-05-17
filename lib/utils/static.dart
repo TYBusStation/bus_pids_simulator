@@ -13,6 +13,7 @@ import '../data/status.dart';
 import 'audio_manager.dart';
 import 'tts.dart'
     if (dart.library.js_interop) 'tts_web.dart'
+    if (dart.library.html) 'tts_web.dart'
     if (dart.library.io) 'tts_stub.dart';
 
 abstract class Static {
@@ -26,6 +27,9 @@ abstract class Static {
   static late Box _customBox;
 
   static final ChangeNotifier settingsNotifier = ChangeNotifier();
+
+  static String licensePlate = "0";
+  static String driverId = "0";
 
   static double globalVolume = 0.7;
   static double globalSpeed = 1.0;
@@ -49,6 +53,15 @@ abstract class Static {
   static bool showStationListSlogan = true;
   static double ledScrollSpeed = 400.0;
   static double ledHeight = 150.0;
+
+  static List<String> nextStationListSequence = [
+    "即將接近：",
+    "{next_stations}",
+    "...下車乘客請準備",
+  ];
+  static List<String> nextStationSubSequence = ["{name}"];
+  static int nextStationCount = 5;
+  static String nextStationSeparator = ">";
 
   static List<LedSequence> ledNextStationSeq = [
     LedSequence(template: "下一站"),
@@ -77,6 +90,8 @@ abstract class Static {
   }
 
   static Future<void> _loadSettings() async {
+    licensePlate = _box.get('licensePlate', defaultValue: "0");
+    driverId = _box.get('driverId', defaultValue: "0");
     globalVolume = _box.get('globalVolume', defaultValue: 0.7);
     globalSpeed = _box.get('globalSpeed', defaultValue: 1.0);
     arrivalDistance = _box.get('arrivalDistance', defaultValue: 100.0);
@@ -111,6 +126,18 @@ abstract class Static {
     ledScrollSpeed = _box.get('ledScrollSpeed', defaultValue: 400.0);
     ledHeight = _box.get('ledHeight', defaultValue: 150.0);
 
+    nextStationListSequence = List<String>.from(
+      _box.get(
+        'nextStationListSequence',
+        defaultValue: nextStationListSequence,
+      ),
+    );
+    nextStationSubSequence = List<String>.from(
+      _box.get('nextStationSubSequence', defaultValue: nextStationSubSequence),
+    );
+    nextStationCount = _box.get('nextStationCount', defaultValue: 5);
+    nextStationSeparator = _box.get('nextStationSeparator', defaultValue: ">");
+
     if (_box.containsKey('ledNextStationSeq')) {
       ledNextStationSeq = (jsonDecode(_box.get('ledNextStationSeq')) as List)
           .map((e) => LedSequence.fromJson(e))
@@ -124,6 +151,8 @@ abstract class Static {
   }
 
   static Future<void> saveSettings() async {
+    await _box.put('licensePlate', licensePlate);
+    await _box.put('driverId', driverId);
     await _box.put('globalVolume', globalVolume);
     await _box.put('globalSpeed', globalSpeed);
     await _box.put('arrivalDistance', arrivalDistance);
@@ -143,6 +172,12 @@ abstract class Static {
     await _box.put('showStationListSlogan', showStationListSlogan);
     await _box.put('ledScrollSpeed', ledScrollSpeed);
     await _box.put('ledHeight', ledHeight);
+
+    await _box.put('nextStationListSequence', nextStationListSequence);
+    await _box.put('nextStationSubSequence', nextStationSubSequence);
+    await _box.put('nextStationCount', nextStationCount);
+    await _box.put('nextStationSeparator', nextStationSeparator);
+
     await _box.put(
       'ledNextStationSeq',
       jsonEncode(ledNextStationSeq.map((e) => e.toJson()).toList()),

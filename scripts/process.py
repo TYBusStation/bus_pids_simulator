@@ -1,23 +1,32 @@
 import json
-import os
 import polyline
 import re
 
-# --- 設定讀取的檔名 (請根據您的實際檔名修改) ---
-DATA_FILE = 'Taoyuan_data.json'  # 包含路線基本資訊
-ROUTE_FILE = 'Taoyuan_route.json'  # 包含 Geometry (Polyline)
-STOP_FILE = 'Taoyuan_stop_raw.json'  # 包含 Stops 資訊 (避免與輸出檔名衝突，暫稱 raw)
-OUTPUT_FILE = 'Taoyuan_stop.json'
+CITY = "Taichung"
+# --- 設定讀取的檔名 ---
+DATA_FILE = f'{CITY}_data.json'
+ROUTE_FILE = f'{CITY}_route.json'
+STOP_FILE = f'{CITY}_stop.json'
+OUTPUT_FILE = f'{CITY}.json'
 
 
-def polyline_to_wkt(encoded_str):
-    """將 Polyline 加密字串轉換為 WKT LINESTRING (lon lat) 格式"""
-    if not encoded_str:
+def process_geometry(geo_input):
+    """
+    處理幾何資訊：
+    1. 如果是 LINESTRING 格式則直接回傳。
+    2. 如果是加密 Polyline 則解碼為 LINESTRING。
+    """
+    if not geo_input:
         return ""
+
+    # 檢查是否已經是 LINESTRING 格式
+    if geo_input.strip().upper().startswith("LINESTRING"):
+        # 標準化格式：確保中間是逗號分隔 (有些原始資料空格較亂)
+        return geo_input.strip()
+
     try:
-        # polyline.decode 回傳的是 (lat, lon)
-        coords = polyline.decode(encoded_str)
-        # 轉換成 "lon lat" 並以逗號分隔
+        # 嘗試解碼 Polyline (回傳為 [(lat, lon), ...])
+        coords = polyline.decode(geo_input)
         wkt_points = [f"{lon} {lat}" for lat, lon in coords]
         return f"LINESTRING({','.join(wkt_points)})"
     except Exception:
@@ -25,7 +34,7 @@ def polyline_to_wkt(encoded_str):
 
 
 def main():
-    # 1. 讀取三個原始檔案
+    # 1. 讀取檔案
     try:
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
             data_list = json.load(f)
@@ -37,107 +46,92 @@ def main():
         print(f"錯誤: 找不到檔案 {e.filename}")
         return
 
-    # 整合結果的字典
+    # 整合結果 (Key: SubRouteUID)
     merged_results = {}
-    # 建立 RouteID 對應 SubRouteID 的索引 (用於 Step 2 & 3 的匹配)
+    # 建立 RouteUID -> [SubRouteUID] 的索引
     route_to_subs = {}
 
-    print("Step 1: 處理路線基礎資訊 (Data)...")
+    print("Step 1: 處理基礎資訊 (data.json)...")
     for item in data_list:
-        route_id_main = item.get("RouteID")
-        departure_main = item.get("DepartureStopNameZh", "")
-        destination_main = item.get("DestinationStopNameZh", "")
+        ruid = item.get("RouteUID")
+        dep = item.get("DepartureStopNameZh", "")
+        dest = item.get("DestinationStopNameZh", "")
 
-        if route_id_main not in route_to_subs:
-            route_to_subs[route_id_main] = []
+        if ruid and ruid not in route_to_subs:
+            route_to_subs[ruid] = []
 
         for sub in item.get("SubRoutes", []):
-            sid = sub.get("SubRouteID")
-            if not sid: continue
+            suid = sub.get("SubRouteUID")
+            if not suid: continue
 
-            route_to_subs[route_id_main].append(sid)
+            if ruid:
+                route_to_subs[ruid].append(suid)
 
-            # 初始化您要求的 JSON 結構
-            merged_results[sid] = {
-                "id": str(sid),
-                "route_id": route_id_main,  # 暫存用於匹配
+            # 初始化結構
+            merged_results[suid] = {
+                "id": suid,
                 "name": sub.get("SubRouteName", {}).get("Zh_tw", ""),
-                "description": sub.get("Headsign", "") or f"{departure_main} - {destination_main}",
-                "departure": departure_main,
-                "destination": destination_main,
+                "description": sub.get("Headsign", "") or f"{dep} - {dest}",
+                "departure": dep,
+                "destination": dest,
                 "path": {"go": "", "back": ""},
                 "stations": {"go": [], "back": []}
             }
 
-    print("Step 2: 轉換軌跡資訊為 WKT (Route)...")
+    def get_target_suids(obj):
+        """根據 SubRouteUID 或 RouteUID 找到對應的所有子路線 UID"""
+        suid = obj.get("SubRouteUID")
+        ruid = obj.get("RouteUID")
+
+        # 優先匹配 SubRouteUID
+        if suid in merged_results:
+            return [suid]
+        # 匹配不到時，改匹配 RouteUID 下的所有子路線
+        elif ruid in route_to_subs:
+            return route_to_subs[ruid]
+        return []
+
+    print("Step 2: 轉換軌跡資訊 (route.json)...")
     for r in route_list:
-        sid = r.get("SubRouteID")
-        rid = r.get("RouteID")
-        direction = r.get("Direction")  # 0: 去程, 1: 回程
-        geometry = r.get("Geometry", "")
+        direction = r.get("Direction")
+        dir_key = "go" if direction == 0 else "back"
+        # 處理 Geometry (相容 WKT 與 Polyline)
+        wkt_line = process_geometry(r.get("Geometry") or r.get("EncodedPolyline"))
 
-        # 轉換 Polyline 為 LINESTRING(lon lat)
-        wkt_line = polyline_to_wkt(geometry)
+        for target_id in get_target_suids(r):
+            merged_results[target_id]["path"][dir_key] = wkt_line
 
-        # 尋找目標 SubRouteID
-        target_sids = []
-        if sid in merged_results:
-            target_sids = [sid]
-        elif rid in route_to_subs:
-            target_sids = route_to_subs[rid]
-
-        for target_id in target_sids:
-            if direction == 0:
-                merged_results[target_id]["path"]["go"] = wkt_line
-            elif direction == 1:
-                merged_results[target_id]["path"]["back"] = wkt_line
-
-    print("Step 3: 處理中英文站點資訊 (Stop)...")
+    print("Step 3: 處理站點資訊 (stop.json)...")
     for s_group in stop_list:
-        sid = s_group.get("SubRouteID")
-        rid = s_group.get("RouteID")
-        direction = s_group.get("Direction")  # 0: 去程, 1: 回程
+        direction = s_group.get("Direction")
         dir_key = "go" if direction == 0 else "back"
 
         station_details = []
         for s in s_group.get("Stops", []):
-            stop_name_obj = s.get("StopName", {})
+            name_obj = s.get("StopName", {})
             pos = s.get("StopPosition", {})
-
             station_details.append({
                 "order": s.get("StopSequence"),
-                "name": stop_name_obj.get("Zh_tw", ""),
-                "name_en": stop_name_obj.get("En", ""),  # 這裡會填入英文站名
+                "name": name_obj.get("Zh_tw", ""),
+                "name_en": name_obj.get("En", ""),
                 "lat": pos.get("PositionLat"),
                 "lon": pos.get("PositionLon")
             })
 
-        # 依序號排序
+        # 排序
         station_details.sort(key=lambda x: x["order"] if x["order"] is not None else 0)
 
-        target_sids = []
-        if sid in merged_results:
-            target_sids = [sid]
-        elif rid in route_to_subs:
-            target_sids = route_to_subs[rid]
-
-        for target_id in target_sids:
+        for target_id in get_target_suids(s_group):
             merged_results[target_id]["stations"][dir_key] = station_details
 
-    # 4. 轉換為最終 List 並清理暫存欄位
-    final_output = []
-    # 依照 ID 排序讓輸出整齊一點
-    for sid in sorted(merged_results.keys()):
-        res = merged_results[sid]
-        res.pop("route_id", None)  # 移除用於匹配的暫存 ID
-        final_output.append(res)
+    # 4. 產出
+    final_output = [merged_results[k] for k in sorted(merged_results.keys())]
 
-    # 5. 儲存結果
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         json.dump(final_output, f, ensure_ascii=False, indent=4)
 
     print(f"\n✅ 處理完成！產出檔案：{OUTPUT_FILE}")
-    print(f"總共處理路線數：{len(final_output)}")
+    print(f"處理子路線總數：{len(final_output)}")
 
 
 if __name__ == "__main__":
