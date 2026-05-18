@@ -13,9 +13,9 @@ import '../data/led_sequence.dart';
 import '../data/status.dart';
 import 'audio_manager.dart';
 import 'tts.dart'
-    if (dart.library.js_interop) 'tts_web.dart'
-    if (dart.library.html) 'tts_web.dart'
-    if (dart.library.io) 'tts_stub.dart';
+if (dart.library.js_interop) 'tts_web.dart'
+if (dart.library.html) 'tts_web.dart'
+if (dart.library.io) 'tts_stub.dart';
 
 abstract class Static {
   static Map<String, List<BusRoute>> routeData = {};
@@ -27,7 +27,10 @@ abstract class Static {
   static const String _customRoutesBoxName = "custom_routes_box";
   static late Box _box;
   static late Box _customBox;
-  static const String API_BASE = "http://192.168.1.249:25567";
+
+  // static const String API_BASE = "http://192.168.1.249:25567";
+  static const String API_BASE = "https://myster.freeddns.org:25566/";
+
   static final ChangeNotifier settingsNotifier = ChangeNotifier();
   static String licensePlate = "KKA-0000";
   static String driverId = "000000";
@@ -241,11 +244,11 @@ abstract class Static {
     return stationVoiceSequence
         .where(
           (s) =>
-              s != "{name_zh}" &&
-              s != "{name_ho}" &&
-              s != "{name_hk}" &&
-              s != "{name_en}",
-        )
+      s != "{name_zh}" &&
+          s != "{name_ho}" &&
+          s != "{name_hk}" &&
+          s != "{name_en}",
+    )
         .toList();
   }
 
@@ -279,6 +282,6 @@ abstract class Static {
           .allMatches(wkt)
           .map(
             (m) => LatLng(double.parse(m.group(2)!), double.parse(m.group(1)!)),
-          )
+      )
           .toList();
 }
