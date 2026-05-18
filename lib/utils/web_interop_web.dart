@@ -23,8 +23,23 @@ class WebInteropWeb implements WebInterop {
   }
 
   @override
-  void lockLandscape() {
-    web.window.screen.orientation.lock('landscape');
+  Future<void> lockLandscape() async {
+    try {
+      final doc = web.document;
+      final screen = web.window.screen;
+
+      if (doc.fullscreenElement == null) {
+        await doc.documentElement?.requestFullscreen().toDart;
+      }
+
+      await screen.orientation.lock('landscape').toDart;
+
+      print("螢幕鎖定成功");
+    } catch (e) {
+      print("螢幕鎖定失敗或瀏覽器不支援: $e");
+
+      toggleFullscreen();
+    }
   }
 }
 

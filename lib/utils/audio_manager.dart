@@ -17,8 +17,14 @@ class VoicePack {
   final String name;
   final int timestamp;
   final Map<String, Uint8List> files;
+  bool isEnabled;
 
-  VoicePack({required this.name, required this.timestamp, required this.files});
+  VoicePack({
+    required this.name,
+    required this.timestamp,
+    required this.files,
+    this.isEnabled = true,
+  });
 }
 
 class AudioManager {
@@ -55,6 +61,7 @@ class AudioManager {
             name: data['name'] ?? key.toString(),
             timestamp: data['timestamp'] ?? 0,
             files: extractedFiles,
+            isEnabled: data['isEnabled'] ?? true,
           ),
         );
       }
@@ -79,12 +86,23 @@ class AudioManager {
         'name': name,
         'timestamp': DateTime.now().millisecondsSinceEpoch,
         'files': extracted,
+        'isEnabled': true,
       });
 
       await _loadStoredPacks();
       return true;
     } catch (e) {
       return false;
+    }
+  }
+
+  Future<void> togglePackStatus(int index, bool enabled) async {
+    final pack = voicePacks[index];
+    pack.isEnabled = enabled;
+    final data = _packBox.get(pack.name);
+    if (data != null) {
+      data['isEnabled'] = enabled;
+      await _packBox.put(pack.name, data);
     }
   }
 
@@ -115,6 +133,7 @@ class AudioManager {
     }
 
     for (var pack in voicePacks) {
+      if (!pack.isEnabled) continue;
       if (pack.files.containsKey(baseName)) {
         candidates.add(pack.files[baseName]!);
       }
@@ -135,8 +154,9 @@ class AudioManager {
     );
     bool packExists = voicePacks.any(
       (p) =>
-          p.files.containsKey(name) ||
-          p.files.keys.any((k) => k.startsWith("${name}_[")),
+          p.isEnabled &&
+          (p.files.containsKey(name) ||
+              p.files.keys.any((k) => k.startsWith("${name}_["))),
     );
     return localExists || packExists;
   }
@@ -188,29 +208,65 @@ class AudioManager {
   }
 
   Future<void> playAssetAndWait(String path, {double localSpeed = 1.0}) async {
-    await _player.stop();
-    await Future.delayed(const Duration(milliseconds: 100));
-    await _player.setSource(AssetSource(path));
-    await _applySettings(localSpeed);
-    final completer = Completer<void>();
-    StreamSubscription? sub;
-    sub = _player.onPlayerComplete.listen((_) {
-      if (!completer.isCompleted) completer.complete();
-      sub?.cancel();
-    });
-    await _player.resume();
-    await completer.future.timeout(
-      const Duration(seconds: 15),
-      onTimeout: () => sub?.cancel(),
-    );
+    try {
+      await _player.stop();
+      if (kIsWeb) await _player.release();
+
+      await _player.setSource(AssetSource(path));
+
+      await _player.setVolume(Static.globalVolume.clamp(0.0, 1.0));
+
+      final completer = Completer<void>();
+      StreamSubscription? sub;
+      sub = _player.onPlayerComplete.listen((_) {
+        if (!completer.isCompleted) completer.complete();
+        sub?.cancel();
+      });
+
+      await _player.resume();
+
+      await _player.setPlaybackRate(
+        (Static.globalSpeed * localSpeed).clamp(0.5, 2.0),
+      );
+
+      await completer.future.timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          sub?.cancel();
+          _player.stop();
+        },
+      );
+    } catch (e) {
+      debugPrint("播放資產檔案錯誤 ($path): $e");
+    }
   }
 
   Future<void> stop() async => await _player.stop();
 
   List<String> get allAudioNames => _audioBox.keys.cast<String>().toList();
 
-  Future<void> saveAudio(String n, Uint8List b) async =>
+  Future<bool> saveAudio(String n, Uint8List b) async {
+    try {
       await _audioBox.put(_stripExtension(n), b);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  bool hasLocalAudio(String name) {
+    return _audioBox.containsKey(_stripExtension(name));
+  }
+
+  String generateUniqueName(String base) {
+    String name = _stripExtension(base);
+    if (!_audioBox.containsKey(name)) return name;
+    int i = 1;
+    while (_audioBox.containsKey("${name}_[$i]")) {
+      i++;
+    }
+    return "${name}_[$i]";
+  }
 
   Future<void> renameAudio(String o, String n) async {
     final b = _audioBox.get(o);

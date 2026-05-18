@@ -167,12 +167,15 @@ class _RouteEditorPageState extends State<RouteEditorPage>
     final List<BusStation> temp = [];
     final Set<String> seen = {};
     for (var src in _selectedSources) {
-      for (var r in (Static.routeData[src] ?? [])) {
+      final routes = Static.routeData[src];
+      if (routes == null) continue;
+      for (var r in routes) {
         for (var s in [...r.stations.go, ...r.stations.back]) {
           if (seen.add(
             "${s.lat.toStringAsFixed(5)}_${s.lon.toStringAsFixed(5)}",
-          ))
+          )) {
             temp.add(s);
+          }
         }
       }
     }
@@ -214,7 +217,7 @@ class _RouteEditorPageState extends State<RouteEditorPage>
     }
   }
 
-  void _onStationTap(LatLng p, {BusStation? existing}) async {
+  void _onMapStationTap(LatLng p, {BusStation? existing}) async {
     final list = _isEditingGo ? _goStations : _backStations;
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -224,9 +227,9 @@ class _RouteEditorPageState extends State<RouteEditorPage>
 
     if (result != null) {
       setState(() {
-        if (result['action'] == 'delete') {
-          list.removeWhere((s) => s.lat == p.latitude && s.lon == p.longitude);
-        } else {
+        if (result['action'] == 'delete' && existing != null) {
+          list.remove(existing);
+        } else if (result['action'] == 'save') {
           final s = result['station'] as BusStation;
           final pos = result['order'] as int;
           if (pos > 0 && pos <= list.length) {
@@ -237,6 +240,26 @@ class _RouteEditorPageState extends State<RouteEditorPage>
         }
       });
       _syncPaths();
+    }
+  }
+
+  void _onStationListEdit(int index, BusStation s) async {
+    final list = _isEditingGo ? _goStations : _backStations;
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (ctx) => EditStationNameDialog(name: s.name, nameEn: s.nameEn),
+    );
+
+    if (result != null) {
+      setState(() {
+        list[index] = BusStation(
+          order: s.order,
+          name: result['name'] ?? "",
+          nameEn: result['nameEn'] ?? "",
+          lat: s.lat,
+          lon: s.lon,
+        );
+      });
     }
   }
 
@@ -326,6 +349,7 @@ class _RouteEditorPageState extends State<RouteEditorPage>
             );
             _syncPaths();
           },
+          onStationTap: (i, s) => _onStationListEdit(i, s),
         ),
         const VerticalDivider(width: 1),
         Expanded(
@@ -345,10 +369,10 @@ class _RouteEditorPageState extends State<RouteEditorPage>
                 onMapTap: (p) {
                   if (_isMapTapMode) {
                     setState(() => _isMapTapMode = false);
-                    _onStationTap(p);
+                    _onMapStationTap(p);
                   }
                 },
-                onMarkerTap: (p, s) => _onStationTap(p, existing: s),
+                onMarkerTap: (p, s) => _onMapStationTap(p, existing: s),
               ),
               Positioned(
                 bottom: 20,

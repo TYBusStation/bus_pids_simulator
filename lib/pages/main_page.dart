@@ -308,27 +308,31 @@ class _MainPageState extends State<MainPage> {
               children: [
                 SizedBox(
                   width: 60,
-                  child: NavigationRail(
-                    minWidth: 60,
-                    selectedIndex: selectedIndex.clamp(
-                      0,
-                      _allDestinations.length - 1,
+                  child: SingleChildScrollView(
+                    child: IntrinsicHeight(
+                      child: NavigationRail(
+                        minWidth: 60,
+                        selectedIndex: selectedIndex.clamp(
+                          0,
+                          _allDestinations.length - 1,
+                        ),
+                        onDestinationSelected: (index) =>
+                            setState(() => selectedIndex = index),
+                        labelType: NavigationRailLabelType.all,
+                        destinations: _allDestinations
+                            .map(
+                              (d) => NavigationRailDestination(
+                                icon: d.icon,
+                                selectedIcon: d.selectedIcon,
+                                label: Text(
+                                  d.label,
+                                  style: const TextStyle(fontSize: 10),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      ),
                     ),
-                    onDestinationSelected: (index) =>
-                        setState(() => selectedIndex = index),
-                    labelType: NavigationRailLabelType.all,
-                    destinations: _allDestinations
-                        .map(
-                          (d) => NavigationRailDestination(
-                            icon: d.icon,
-                            selectedIcon: d.selectedIcon,
-                            label: Text(
-                              d.label,
-                              style: const TextStyle(fontSize: 10),
-                            ),
-                          ),
-                        )
-                        .toList(),
                   ),
                 ),
                 const VerticalDivider(thickness: 1, width: 1),

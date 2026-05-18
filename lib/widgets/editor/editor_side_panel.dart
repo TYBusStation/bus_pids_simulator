@@ -16,6 +16,7 @@ class EditorSidePanel extends StatelessWidget {
   final VoidCallback onWktManualChanged;
   final Function(int, int) onReorder;
   final Function(int) onStationRemove;
+  final Function(int, BusStation) onStationTap;
 
   const EditorSidePanel({
     super.key,
@@ -33,6 +34,7 @@ class EditorSidePanel extends StatelessWidget {
     required this.onWktManualChanged,
     required this.onReorder,
     required this.onStationRemove,
+    required this.onStationTap,
   });
 
   InputDecoration _denseInp(String label) => InputDecoration(
@@ -109,6 +111,7 @@ class EditorSidePanel extends StatelessWidget {
                           fontFamily: 'monospace',
                         ),
                         decoration: const InputDecoration(
+                          labelText: "WKT LINESTRING",
                           isDense: true,
                           border: OutlineInputBorder(),
                           contentPadding: EdgeInsets.all(4),
@@ -189,10 +192,28 @@ class EditorSidePanel extends StatelessWidget {
         ),
         const SizedBox(width: 6),
         Expanded(
-          child: Text(
-            s.name,
-            style: const TextStyle(fontSize: 10),
-            overflow: TextOverflow.ellipsis,
+          child: InkWell(
+            onTap: () => onStationTap(i, s),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  s.name,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (s.nameEn.isNotEmpty)
+                  Text(
+                    s.nameEn,
+                    style: const TextStyle(fontSize: 8, color: Colors.grey),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+              ],
+            ),
           ),
         ),
         IconButton(

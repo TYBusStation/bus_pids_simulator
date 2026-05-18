@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:bus_pids_simulator/pages/route_editor_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 
 import '../data/bus_route.dart';
 import '../data/status.dart';
@@ -21,20 +22,12 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
   late BusRoute _selectedRoute;
   late Direction _selectedDirection;
   String _searchQuery = "";
-  String _activeCityKey = 'Taoyuan';
+  String _activeCityKey = 'Custom';
   List<BusRoute> _displayRoutes = [];
   final ScrollController _horizontalController = ScrollController();
   final TextEditingController _searchCtrl = TextEditingController();
   Timer? _debounceTimer;
-
-  final Map<String, String> _cityNames = {
-    'Taoyuan': '桃園市',
-    'Taipei': '臺北市',
-    'NewTaipei': '新北市',
-    'Taichung': '臺中市',
-    'InterCity': '公路客運',
-    'Custom': '自定義',
-  };
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -62,7 +55,41 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
       return content.contains(query);
     }).toList();
     _displayRoutes.sort((a, b) => FormatterUtils.compareRoutes(a.name, b.name));
-    setState(() {});
+    if (mounted) setState(() {});
+  }
+
+  void _onCityTabTap(String key) {
+    if (_isLoading) return;
+    setState(() {
+      _activeCityKey = key;
+      _performSearch();
+    });
+  }
+
+  Future<void> _fetchCityData() async {
+    if (_activeCityKey == 'Custom' || _isLoading) return;
+    setState(() => _isLoading = true);
+    try {
+      final res = await http
+          .get(
+            Uri.parse("${Static.API_BASE}/simulator_data?city=$_activeCityKey"),
+          )
+          .timeout(const Duration(seconds: 60));
+      if (res.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(utf8.decode(res.bodyBytes));
+        Static.routeData[_activeCityKey] = data
+            .map((r) => BusRoute.fromJson(r))
+            .toList();
+        _performSearch();
+      } else {
+        if (mounted)
+          FormatterUtils.showSnackbar(context, "伺服器錯誤: ${res.statusCode}");
+      }
+    } catch (e) {
+      if (mounted) FormatterUtils.showSnackbar(context, "連線失敗或逾時");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   void _refreshList() {
@@ -105,6 +132,10 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final bool isCityDataLoaded =
+        Static.routeData.containsKey(_activeCityKey) &&
+        Static.routeData[_activeCityKey]!.isNotEmpty;
+
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 35,
@@ -115,14 +146,16 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
         actions: [
           FilledButton.icon(
             label: const Text("確定"),
-            onPressed: () => Navigator.pop(
-              context,
-              Status(
-                route: _selectedRoute,
-                direction: _selectedDirection,
-                dutyStatus: DutyStatus.offDuty,
-              ),
-            ),
+            onPressed: _isLoading
+                ? null
+                : () => Navigator.pop(
+                    context,
+                    Status(
+                      route: _selectedRoute,
+                      direction: _selectedDirection,
+                      dutyStatus: DutyStatus.offDuty,
+                    ),
+                  ),
             icon: const Icon(Icons.check_circle, size: 20),
           ),
         ],
@@ -134,6 +167,7 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
               height: 30,
               child: TextField(
                 controller: _searchCtrl,
+                enabled: !_isLoading,
                 style: const TextStyle(fontSize: 13),
                 decoration: InputDecoration(
                   hintText: '搜尋...',
@@ -152,83 +186,138 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
           ),
         ),
       ),
-      body: Row(
-        children: [
-          Container(
-            width: 55,
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceVariant.withOpacity(0.2),
-              border: Border(
-                right: BorderSide(color: theme.dividerColor.withOpacity(0.08)),
+      body: AbsorbPointer(
+        absorbing: _isLoading,
+        child: Row(
+          children: [
+            Container(
+              width: 75,
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceVariant.withOpacity(0.2),
+                border: Border(
+                  right: BorderSide(
+                    color: theme.dividerColor.withOpacity(0.08),
+                  ),
+                ),
               ),
-            ),
-            child: ListView(
-              children: _cityNames.entries
-                  .map(
-                    (e) => InkWell(
-                      onTap: () {
-                        setState(() {
-                          _activeCityKey = e.key;
-                          _performSearch();
-                        });
-                      },
-                      child: Container(
-                        height: 32,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: _activeCityKey == e.key
-                              ? colorScheme.primary.withOpacity(0.1)
-                              : null,
-                          border: _activeCityKey == e.key
-                              ? Border(
-                                  left: BorderSide(
-                                    color: colorScheme.primary,
-                                    width: 3,
-                                  ),
-                                )
-                              : null,
-                        ),
-                        child: Text(
-                          e.value,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: _activeCityKey == e.key
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                            color: _activeCityKey == e.key
-                                ? colorScheme.primary
-                                : colorScheme.onSurfaceVariant,
-                          ),
+              child: ListView.builder(
+                itemCount: Static.availableCities.length,
+                itemBuilder: (context, index) {
+                  final key = Static.availableCities[index];
+                  final isSelected = _activeCityKey == key;
+                  return InkWell(
+                    onTap: () => _onCityTabTap(key),
+                    child: Container(
+                      height: 40,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? colorScheme.primary.withOpacity(0.1)
+                            : null,
+                        border: isSelected
+                            ? Border(
+                                left: BorderSide(
+                                  color: colorScheme.primary,
+                                  width: 3,
+                                ),
+                              )
+                            : null,
+                      ),
+                      child: Text(
+                        key == 'Custom' ? '自定義' : key,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                          color: isSelected
+                              ? colorScheme.primary
+                              : colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ),
-                  )
-                  .toList(),
-            ),
-          ),
-          Expanded(
-            child: Scrollbar(
-              controller: _horizontalController,
-              thumbVisibility: true,
-              child: ListView.builder(
-                controller: _horizontalController,
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                itemCount: _displayRoutes.length + 1,
-                itemBuilder: (context, index) {
-                  if (index == _displayRoutes.length)
-                    return _buildAddCard(colorScheme);
-                  return _buildRouteCard(
-                    _displayRoutes[index],
-                    colorScheme,
-                    theme,
                   );
                 },
               ),
             ),
-          ),
-        ],
+            Expanded(
+              child: _isLoading
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const CircularProgressIndicator(),
+                          const SizedBox(height: 16),
+                          Text(
+                            "數據載入中...",
+                            style: TextStyle(
+                              color: colorScheme.outline,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : (!isCityDataLoaded && _activeCityKey != 'Custom')
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.storage_rounded,
+                            size: 64,
+                            color: colorScheme.primary.withOpacity(0.2),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            "尚未取得 $_activeCityKey 的資料",
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          SizedBox(
+                            width: 200,
+                            height: 45,
+                            child: ElevatedButton.icon(
+                              onPressed: _fetchCityData,
+                              icon: const Icon(Icons.download),
+                              label: const Text(
+                                "取得資料",
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : Scrollbar(
+                      controller: _horizontalController,
+                      thumbVisibility: true,
+                      child: ListView.builder(
+                        controller: _horizontalController,
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 8,
+                        ),
+                        itemCount: _displayRoutes.length + 1,
+                        itemBuilder: (context, index) {
+                          if (index == _displayRoutes.length)
+                            return _buildAddCard(colorScheme);
+                          return _buildRouteCard(
+                            _displayRoutes[index],
+                            colorScheme,
+                            theme,
+                          );
+                        },
+                      ),
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -265,7 +354,6 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
                         fontWeight: FontWeight.bold,
                         color: cs.primary,
                       ),
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   SizedBox(
@@ -278,16 +366,12 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
                           Static.saveCustomRoute(
                             route,
                           ).then((_) => _refreshList());
-                          ScaffoldMessenger.of(
-                            context,
-                          ).showSnackBar(const SnackBar(content: Text("已複製")));
+                          FormatterUtils.showSnackbar(context, "已複製");
                         } else if (val == 'export') {
                           Clipboard.setData(
                             ClipboardData(text: jsonEncode(route.toJson())),
                           );
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text("JSON 已複製")),
-                          );
+                          FormatterUtils.showSnackbar(context, "JSON 已複製");
                         } else if (val == 'edit') {
                           Navigator.push(
                             context,
@@ -453,10 +537,10 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
             children: [
               Icon(Icons.add_circle_outline, size: 28, color: cs.primary),
               const SizedBox(height: 4),
-              Text(
+              const Text(
                 "新增",
                 style: TextStyle(
-                  color: cs.primary,
+                  color: Colors.blue,
                   fontWeight: FontWeight.bold,
                   fontSize: 13,
                 ),

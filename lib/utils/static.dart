@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
 import '../data/bus_route.dart';
@@ -18,6 +19,7 @@ import 'tts.dart'
 
 abstract class Static {
   static Map<String, List<BusRoute>> routeData = {};
+  static List<String> availableCities = ['Custom'];
   static Status currentStatus = Status.unknown;
   static final TTS = getTTS();
   static final audioManager = AudioManager();
@@ -25,19 +27,16 @@ abstract class Static {
   static const String _customRoutesBoxName = "custom_routes_box";
   static late Box _box;
   static late Box _customBox;
-
+  static const String API_BASE = "http://192.168.1.249:25567";
   static final ChangeNotifier settingsNotifier = ChangeNotifier();
-
-  static String licensePlate = "0";
-  static String driverId = "0";
-
+  static String licensePlate = "KKA-0000";
+  static String driverId = "000000";
   static double globalVolume = 0.7;
   static double globalSpeed = 1.0;
   static double arrivalDistance = 100.0;
   static double nextStationDistance = 250.0;
   static double nextStationDepartureDistance = 50.0;
   static bool enableArrivalBroadcast = true;
-
   static List<String> stationVoiceSequence = [
     "{name_zh}",
     "{name_ho}",
@@ -53,7 +52,6 @@ abstract class Static {
   static bool showStationListSlogan = true;
   static double ledScrollSpeed = 400.0;
   static double ledHeight = 150.0;
-
   static List<String> nextStationListSequence = [
     "即將接近：",
     "{next_stations}",
@@ -62,7 +60,6 @@ abstract class Static {
   static List<String> nextStationSubSequence = ["{name}"];
   static int nextStationCount = 5;
   static String nextStationSeparator = ">";
-
   static List<LedSequence> ledNextStationSeq = [
     LedSequence(template: "下一站"),
     LedSequence(template: "{terminal}"),
@@ -84,14 +81,41 @@ abstract class Static {
     _customBox = await Hive.openBox(_customRoutesBoxName);
     await _loadSettings();
     await audioManager.init();
-    await _loadRoutes();
+    await fetchAvailableCities();
+    await _loadCustomRoutes();
     await TTS.init();
     await requestLocationPermission();
   }
 
+  static Future<void> fetchAvailableCities() async {
+    try {
+      final res = await http
+          .get(Uri.parse("$API_BASE/simulator_cities"))
+          .timeout(const Duration(seconds: 5));
+      if (res.statusCode == 200) {
+        List<dynamic> cities = jsonDecode(res.body);
+        availableCities = ['Custom', ...cities.map((e) => e.toString())];
+      }
+    } catch (e) {
+      log("Fetch cities failed: $e");
+      availableCities = ['Custom'];
+    }
+  }
+
+  static Future<void> _loadCustomRoutes() async {
+    List<BusRoute> customList = [];
+    for (var key in _customBox.keys) {
+      final rawJson = _customBox.get(key);
+      if (rawJson != null)
+        customList.add(BusRoute.fromJson(jsonDecode(rawJson)));
+    }
+    routeData['Custom'] = customList;
+    settingsNotifier.notifyListeners();
+  }
+
   static Future<void> _loadSettings() async {
-    licensePlate = _box.get('licensePlate', defaultValue: "0");
-    driverId = _box.get('driverId', defaultValue: "0");
+    licensePlate = _box.get('licensePlate', defaultValue: "KKA-0000");
+    driverId = _box.get('driverId', defaultValue: "000000");
     globalVolume = _box.get('globalVolume', defaultValue: 0.7);
     globalSpeed = _box.get('globalSpeed', defaultValue: 1.0);
     arrivalDistance = _box.get('arrivalDistance', defaultValue: 100.0);
@@ -113,7 +137,6 @@ abstract class Static {
     nextStationTemplate = List<String>.from(
       _box.get('nextStationTemplate', defaultValue: nextStationTemplate),
     );
-
     if (_box.containsKey('sloganList')) {
       sloganList = (jsonDecode(_box.get('sloganList')) as List)
           .map((e) => LedSequence.fromJson(e))
@@ -125,7 +148,6 @@ abstract class Static {
     );
     ledScrollSpeed = _box.get('ledScrollSpeed', defaultValue: 400.0);
     ledHeight = _box.get('ledHeight', defaultValue: 150.0);
-
     nextStationListSequence = List<String>.from(
       _box.get(
         'nextStationListSequence',
@@ -137,7 +159,6 @@ abstract class Static {
     );
     nextStationCount = _box.get('nextStationCount', defaultValue: 5);
     nextStationSeparator = _box.get('nextStationSeparator', defaultValue: ">");
-
     if (_box.containsKey('ledNextStationSeq')) {
       ledNextStationSeq = (jsonDecode(_box.get('ledNextStationSeq')) as List)
           .map((e) => LedSequence.fromJson(e))
@@ -172,12 +193,10 @@ abstract class Static {
     await _box.put('showStationListSlogan', showStationListSlogan);
     await _box.put('ledScrollSpeed', ledScrollSpeed);
     await _box.put('ledHeight', ledHeight);
-
     await _box.put('nextStationListSequence', nextStationListSequence);
     await _box.put('nextStationSubSequence', nextStationSubSequence);
     await _box.put('nextStationCount', nextStationCount);
     await _box.put('nextStationSeparator', nextStationSeparator);
-
     await _box.put(
       'ledNextStationSeq',
       jsonEncode(ledNextStationSeq.map((e) => e.toJson()).toList()),
@@ -241,23 +260,9 @@ abstract class Static {
     }
   }
 
-  static Future<void> _loadRoutes() async {
-    for (var c in ["Taoyuan", "Taipei", "NewTaipei", "Taichung", "InterCity"]) {
-      try {
-        final d = await rootBundle.loadString("assets/routes/$c.json");
-        routeData[c] = (jsonDecode(d) as List)
-            .map((r) => BusRoute.fromJson(r))
-            .toList();
-      } catch (e) {
-        log("Load failed $c: $e");
-      }
-    }
-    List<BusRoute> customList = [];
-    for (var key in _customBox.keys) {
-      final rawJson = _customBox.get(key);
-      customList.add(BusRoute.fromJson(jsonDecode(rawJson)));
-    }
-    routeData['Custom'] = customList;
+  static Future<void> refreshRoutes() async {
+    await fetchAvailableCities();
+    await _loadCustomRoutes();
   }
 
   static Future<void> deleteCustomRoute(String id) async {

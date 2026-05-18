@@ -1,5 +1,6 @@
 import 'package:bus_pids_simulator/pages/audio_pack_page.dart';
 import 'package:bus_pids_simulator/pages/gps_control_page.dart';
+import 'package:bus_pids_simulator/pages/remote_audio_page.dart';
 import 'package:flutter/material.dart';
 
 import 'audio_page.dart';
@@ -17,7 +18,7 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 5,
+      length: 6,
       child: Scaffold(
         appBar: AppBar(
           toolbarHeight: 0,
@@ -29,6 +30,7 @@ class _SettingsPageState extends State<SettingsPage> {
               Tab(text: "字幕設定"),
               Tab(text: "單獨語音"),
               Tab(text: "語音包"),
+              Tab(text: "遠端語音"),
             ],
           ),
         ),
@@ -39,6 +41,7 @@ class _SettingsPageState extends State<SettingsPage> {
             LedSettingsTab(),
             AudioPage(),
             AudioPackPage(),
+            RemoteAudioPage(),
           ],
         ),
       ),

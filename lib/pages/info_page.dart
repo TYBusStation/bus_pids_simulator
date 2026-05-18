@@ -55,6 +55,7 @@ class _InfoPageState extends State<InfoPage>
       Static.globalVolume = v.clamp(0.0, 1.0);
       _volController.text = Static.globalVolume.toStringAsFixed(2);
     });
+    Static.audioManager.playAssetAndWait("notice.mp3");
   }
 
   void _updateSpeed(double v) {
@@ -97,14 +98,21 @@ class _InfoPageState extends State<InfoPage>
         } else if (locNotifier.currentLocation == null) {
           nextStationName = "(無定位)";
         } else if (analysis != null) {
+          final double distPrev = analysis.distToPrevStation ?? double.infinity;
+          final double distNext = analysis.distToNextStation ?? double.infinity;
+
+          // 條件一：距離上一站 < 50m (顯示上一站，代表還在站內或剛離站)
           if (analysis.prevStation != null &&
-              (analysis.distToPrevStation ?? double.infinity) <
-                  Static.nextStationDepartureDistance) {
+              distPrev < Static.nextStationDepartureDistance) {
             nextStationName = analysis.prevStation!.name;
             nextStationNameEn = analysis.prevStation!.nameEn;
-            distanceText =
-                "0 m(離站 ${analysis.distToPrevStation!.toStringAsFixed(0)} m)";
-          } else if (analysis.nextStation != null) {
+            distanceText = "0 m(離站 ${distPrev.toStringAsFixed(0)} m)";
+          }
+          // 條件二：滿足報下一站規則 (離上一站 > 50m 或 離下一站 < 250m)
+          else if (analysis.nextStation != null &&
+              (distPrev >= Static.nextStationDepartureDistance ||
+                  (Static.nextStationDistance >= 0 &&
+                      distNext < Static.nextStationDistance))) {
             nextStationName = analysis.nextStation!.name;
             nextStationNameEn = analysis.nextStation!.nameEn;
             String baseDist = analysis.distToNextStation != null

@@ -70,6 +70,7 @@ class RouteAnalysisProvider extends ChangeNotifier {
     if (status.dutyStatus == DutyStatus.offDuty && speed >= 10) {
       if (!_isOffDutyAlert) {
         _isOffDutyAlert = true;
+        Static.TTS.speak(" ");
         _startOffDutyLoop();
         notifyListeners();
       }
@@ -142,10 +143,16 @@ class RouteAnalysisProvider extends ChangeNotifier {
   }
 
   Future<void> _startOffDutyLoop() async {
-    while (_isOffDutyAlert) {
-      await Static.audioManager.playAssetAndWait("notice.mp3");
+    final int thisLoopId = _activeSequenceId;
+    while (_isOffDutyAlert && thisLoopId == _activeSequenceId) {
+      try {
+        await Static.audioManager.playAssetAndWait("notice.mp3");
+      } catch (e) {
+        debugPrint("OffDuty Loop Error: $e");
+      }
+
       if (!_isOffDutyAlert) break;
-      await Future.delayed(const Duration(milliseconds: 200));
+      await Future.delayed(const Duration(milliseconds: 300));
     }
   }
 

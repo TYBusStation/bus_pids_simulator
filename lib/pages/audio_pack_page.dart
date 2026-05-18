@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:bus_pids_simulator/utils/formatter_utils.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -24,9 +25,7 @@ class _AudioPackPageState extends State<AudioPackPage> {
     );
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text("無法開啟連結")));
+        FormatterUtils.showSnackbar(context, "無法開啟連結");
       }
     }
   }
@@ -69,7 +68,6 @@ class _AudioPackPageState extends State<AudioPackPage> {
         _loadingText = "正在解壓並儲存語音包...";
       });
 
-      // 重要：延遲一小段時間讓 UI 先渲染出 Loading 動畫，避免同步運算直接卡死第一幀
       await Future.delayed(const Duration(milliseconds: 300));
 
       final ok = await Static.audioManager.importZipAsPack(
@@ -80,9 +78,7 @@ class _AudioPackPageState extends State<AudioPackPage> {
       if (mounted) {
         setState(() => _loading = false);
         if (!ok) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text("匯入失敗")));
+          FormatterUtils.showSnackbar(context, "匯入失敗", color: Colors.red);
         }
       }
     }
@@ -111,13 +107,9 @@ class _AudioPackPageState extends State<AudioPackPage> {
     if (mounted) {
       setState(() => _loading = false);
       if (!ok) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text("替換失敗")));
+        FormatterUtils.showSnackbar(context, "替換失敗", color: Colors.red);
       } else {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text("替換成功")));
+        FormatterUtils.showSnackbar(context, "替換成功");
       }
     }
   }
@@ -149,7 +141,6 @@ class _AudioPackPageState extends State<AudioPackPage> {
   @override
   Widget build(BuildContext context) {
     final packs = Static.audioManager.voicePacks;
-    final theme = Theme.of(context);
 
     return Stack(
       children: [
@@ -158,100 +149,84 @@ class _AudioPackPageState extends State<AudioPackPage> {
             onPressed: _loading ? null : _importLocalZip,
             child: const Icon(Icons.add_to_photos),
           ),
-          body: Column(
-            children: [
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
-                ),
-                color: theme.colorScheme.primaryContainer.withOpacity(0.4),
-                child: Row(
-                  children: [
-                    const Icon(Icons.info_outline, size: 20),
-                    const SizedBox(width: 12),
-                    const Expanded(
-                      child: Text(
-                        "前往 Release 頁面下載語音包(不定期更新，請留意是否更新)",
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
+          body: packs.isEmpty
+              ? const Center(
+                  child: Text(
+                    "尚未加入任何語音包",
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: packs.length,
+                  itemBuilder: (context, index) {
+                    final pack = packs[index];
+                    return Card(
+                      margin: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
                       ),
-                    ),
-                    TextButton.icon(
-                      onPressed: _launchDownloadUrl,
-                      icon: const Icon(Icons.open_in_new, size: 12),
-                      label: const Text("前往"),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: packs.isEmpty
-                    ? Center(
-                        child: const Text(
-                          "尚未加入任何語音包",
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount: packs.length,
-                        itemBuilder: (context, index) {
-                          final pack = packs[index];
-                          return Card(
-                            margin: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
+                      child: Opacity(
+                        opacity: pack.isEnabled ? 1.0 : 0.6,
+                        child: ListTile(
+                          leading: Icon(
+                            Icons.folder_zip,
+                            color: pack.isEnabled ? Colors.blue : Colors.grey,
+                          ),
+                          title: Text(
+                            pack.name,
+                            style: TextStyle(
+                              decoration: pack.isEnabled
+                                  ? null
+                                  : TextDecoration.lineThrough,
                             ),
-                            child: ListTile(
-                              leading: const Icon(
-                                Icons.folder_zip,
-                                color: Colors.blue,
+                          ),
+                          subtitle: Text("檔案數: ${pack.files.length}"),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Switch(
+                                value: pack.isEnabled,
+                                onChanged: (val) async {
+                                  await Static.audioManager.togglePackStatus(
+                                    index,
+                                    val,
+                                  );
+                                  setState(() {});
+                                },
                               ),
-                              title: Text(pack.name),
-                              subtitle: Text("檔案數: ${pack.files.length}"),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.sync,
-                                      color: Colors.orange,
-                                    ),
-                                    onPressed: () => _replacePack(index),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.delete,
-                                      color: Colors.red,
-                                    ),
-                                    onPressed: () =>
-                                        _confirmDelete(index, pack.name),
-                                  ),
-                                ],
-                              ),
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (c) =>
-                                      AudioPackDetailPage(pack: pack),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.sync,
+                                  color: Colors.orange,
                                 ),
+                                onPressed: () => _replacePack(index),
                               ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.delete,
+                                  color: Colors.red,
+                                ),
+                                onPressed: () =>
+                                    _confirmDelete(index, pack.name),
+                              ),
+                            ],
+                          ),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (c) => AudioPackDetailPage(pack: pack),
                             ),
-                          );
-                        },
+                          ),
+                        ),
                       ),
-              ),
-            ],
-          ),
+                    );
+                  },
+                ),
         ),
-        // 加強版的加載動畫
         if (_loading)
           Positioned.fill(
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4), // 背景模糊
+              filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
               child: Container(
                 color: Colors.black.withOpacity(0.4),
                 child: Center(
