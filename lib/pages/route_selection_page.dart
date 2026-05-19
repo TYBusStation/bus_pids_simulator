@@ -144,7 +144,7 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
           style: const TextStyle(fontSize: 14),
         ),
         actions: [
-          FilledButton.icon(
+          ElevatedButton.icon(
             label: const Text("確定"),
             onPressed: _isLoading
                 ? null
@@ -157,6 +157,9 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
                     ),
                   ),
             icon: const Icon(Icons.check_circle, size: 20),
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+            ),
           ),
         ],
         bottom: PreferredSize(

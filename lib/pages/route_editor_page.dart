@@ -80,6 +80,7 @@ class _RouteEditorPageState extends State<RouteEditorPage>
     }
     _syncPaths();
     _loadSourceStations();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _recenterMap());
   }
 
   void _syncPaths() {
@@ -144,7 +145,129 @@ class _RouteEditorPageState extends State<RouteEditorPage>
     ),
   );
 
+  double _getDistanceToPath(LatLng point, List<LatLng> path) {
+    if (path.isEmpty) return double.infinity;
+    if (path.length == 1)
+      return Geolocator.distanceBetween(
+        point.latitude,
+        point.longitude,
+        path[0].latitude,
+        path[0].longitude,
+      );
+    double minDistance = double.infinity;
+    for (int i = 0; i < path.length - 1; i++) {
+      LatLng a = path[i];
+      LatLng b = path[i + 1];
+      double x = point.longitude;
+      double y = point.latitude;
+      double x1 = a.longitude;
+      double y1 = a.latitude;
+      double x2 = b.longitude;
+      double y2 = b.latitude;
+      double dx = x2 - x1;
+      double dy = y2 - y1;
+      if (dx == 0 && dy == 0) {
+        double d = Geolocator.distanceBetween(y, x, y1, x1);
+        if (d < minDistance) minDistance = d;
+        continue;
+      }
+      double t = ((x - x1) * dx + (y - y1) * dy) / (dx * dx + dy * dy);
+      t = t.clamp(0.0, 1.0);
+      double closestX = x1 + t * dx;
+      double closestY = y1 + t * dy;
+      double d = Geolocator.distanceBetween(y, x, closestY, closestX);
+      if (d < minDistance) minDistance = d;
+    }
+    return minDistance;
+  }
+
   Future<void> _handleSave() async {
+    List<String> wktErrors = [];
+    List<String> distanceErrors = [];
+    if (!_autoWktGo && _goStations.isNotEmpty) {
+      if (_wktGoCtrl.text.trim().isEmpty)
+        wktErrors.add("去程路線線形 WKT 為空");
+      else {
+        List<String> far = [];
+        for (var s in _goStations) {
+          if (_getDistanceToPath(LatLng(s.lat, s.lon), _goPath) > 100)
+            far.add(s.name);
+        }
+        if (far.isNotEmpty) distanceErrors.add("去程站點偏離：${far.join('、')}");
+      }
+    }
+    if (!_autoWktBack && _backStations.isNotEmpty) {
+      if (_wktBackCtrl.text.trim().isEmpty)
+        wktErrors.add("回程路線線形 WKT 為空");
+      else {
+        List<String> far = [];
+        for (var s in _backStations) {
+          if (_getDistanceToPath(LatLng(s.lat, s.lon), _backPath) > 100)
+            far.add(s.name);
+        }
+        if (far.isNotEmpty) distanceErrors.add("回程站點偏離：${far.join('、')}");
+      }
+    }
+    if (wktErrors.isNotEmpty || distanceErrors.isNotEmpty) {
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text("儲存警告", style: TextStyle(fontSize: 16)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (wktErrors.isNotEmpty) ...[
+                  const Text(
+                    "【路線線形缺失】",
+                    style: TextStyle(
+                      color: Colors.redAccent,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                  ...wktErrors.map(
+                    (e) => Text("• $e", style: const TextStyle(fontSize: 12)),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                if (distanceErrors.isNotEmpty) ...[
+                  const Text(
+                    "【站點偏離】",
+                    style: TextStyle(
+                      color: Colors.orangeAccent,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                  ...distanceErrors.map(
+                    (e) => Text("• $e", style: const TextStyle(fontSize: 12)),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                const Divider(),
+                const Text(
+                  "可開啟「自動」模式，將自動連線站點位置生成路線線形。",
+                  style: TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("返回修改"),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text("仍要儲存", style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        ),
+      );
+      if (proceed != true) return;
+    }
     final route = _prepareRouteData();
     final oldId = widget.initialRoute?.id;
     await Static.saveCustomRoute(route, oldId: oldId);
@@ -173,9 +296,8 @@ class _RouteEditorPageState extends State<RouteEditorPage>
         for (var s in [...r.stations.go, ...r.stations.back]) {
           if (seen.add(
             "${s.lat.toStringAsFixed(5)}_${s.lon.toStringAsFixed(5)}",
-          )) {
+          ))
             temp.add(s);
-          }
         }
       }
     }
@@ -206,7 +328,7 @@ class _RouteEditorPageState extends State<RouteEditorPage>
       ..._backPath,
       ..._goStations.map((e) => e.position),
       ..._backStations.map((e) => e.position),
-    ].where((p) => p.latitude.isFinite).toList();
+    ].where((p) => p.latitude.isFinite && p.longitude.isFinite).toList();
     if (all.isNotEmpty) {
       _mapController.fitCamera(
         CameraFit.bounds(
@@ -224,19 +346,17 @@ class _RouteEditorPageState extends State<RouteEditorPage>
       builder: (ctx) =>
           StationDialog(point: p, existing: existing, currentList: list),
     );
-
     if (result != null) {
       setState(() {
-        if (result['action'] == 'delete' && existing != null) {
+        if (result['action'] == 'delete' && existing != null)
           list.remove(existing);
-        } else if (result['action'] == 'save') {
+        else if (result['action'] == 'save') {
           final s = result['station'] as BusStation;
           final pos = result['order'] as int;
-          if (pos > 0 && pos <= list.length) {
+          if (pos > 0 && pos <= list.length)
             list.insert(pos - 1, s);
-          } else {
+          else
             list.add(s);
-          }
         }
       });
       _syncPaths();
@@ -249,7 +369,6 @@ class _RouteEditorPageState extends State<RouteEditorPage>
       context: context,
       builder: (ctx) => EditStationNameDialog(name: s.name, nameEn: s.nameEn),
     );
-
     if (result != null) {
       setState(() {
         list[index] = BusStation(

@@ -28,9 +28,7 @@ class _StationDialogState extends State<StationDialog> {
   void initState() {
     super.initState();
     _nameCtrl = TextEditingController(text: widget.existing?.name ?? "");
-    _nameEnCtrl = TextEditingController(
-      text: widget.existing?.nameEn ?? "",
-    ); // 初始化英文
+    _nameEnCtrl = TextEditingController(text: widget.existing?.nameEn ?? "");
     _orderCtrl = TextEditingController(
       text: (widget.currentList.length + 1).toString(),
     );
@@ -49,7 +47,7 @@ class _StationDialogState extends State<StationDialog> {
         children: [
           TextField(
             controller: _nameCtrl,
-            decoration: const InputDecoration(labelText: "站名"), // 還原標籤
+            decoration: const InputDecoration(labelText: "站名"),
           ),
           TextField(
             controller: _nameEnCtrl,

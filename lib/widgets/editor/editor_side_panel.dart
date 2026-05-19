@@ -111,7 +111,7 @@ class EditorSidePanel extends StatelessWidget {
                           fontFamily: 'monospace',
                         ),
                         decoration: const InputDecoration(
-                          labelText: "WKT LINESTRING",
+                          helperText: "WKT LINESTRING",
                           isDense: true,
                           border: OutlineInputBorder(),
                           contentPadding: EdgeInsets.all(4),

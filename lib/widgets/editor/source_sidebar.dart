@@ -50,7 +50,7 @@ class SourceSidebar extends StatelessWidget {
                       : null,
                 ),
                 child: Text(
-                  "${key == 'Custom' ? '自定義' : key}${isLoaded || key == 'Custom' ? '' : '*'}",
+                  "${key == 'Custom' ? '自定義' : key}${isLoaded || key == 'Custom' ? '' : '\n(未載入)'}",
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 11,

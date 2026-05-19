@@ -77,51 +77,57 @@ class MapViewSection extends StatelessWidget {
         ),
         PolylineLayer(
           polylines: [
-            if (goPath.isNotEmpty)
-              Polyline(
-                points: goPath,
-                color: isEditingGo ? Colors.orange : Colors.blue,
-                strokeWidth: 5,
-              ),
-            if (backPath.isNotEmpty)
+            if (isEditingGo && backPath.isNotEmpty)
               Polyline(
                 points: backPath,
-                color: !isEditingGo ? Colors.orange : Colors.blue,
-                strokeWidth: 5,
+                color: Colors.blue.withOpacity(0.5),
+                strokeWidth: 4,
               ),
+            if (!isEditingGo && goPath.isNotEmpty)
+              Polyline(
+                points: goPath,
+                color: Colors.blue.withOpacity(0.5),
+                strokeWidth: 4,
+              ),
+            if (isEditingGo && goPath.isNotEmpty)
+              Polyline(points: goPath, color: Colors.orange, strokeWidth: 6),
+            if (!isEditingGo && backPath.isNotEmpty)
+              Polyline(points: backPath, color: Colors.orange, strokeWidth: 6),
           ],
         ),
         MarkerLayer(
           markers: [
             ...nearbySourceStations.map((s) => _buildMarker(s, Colors.green)),
-            ..._getRouteMarkers(),
+            ..._getSortedRouteMarkers(),
           ],
         ),
       ],
     );
   }
 
-  List<Marker> _getRouteMarkers() {
-    final status = <String, int>{};
-    for (var s in goStations) status["${s.lat}_${s.lon}"] = 1;
-    for (var s in backStations)
-      status["${s.lat}_${s.lon}"] = (status["${s.lat}_${s.lon}"] ?? 0) | 2;
-    final processed = <String>{};
-    final markers = <Marker>[];
-    for (var s in [...goStations, ...backStations]) {
-      if (!processed.add("${s.lat}_${s.lon}")) continue;
-      int state = status["${s.lat}_${s.lon}"]!;
-      markers.add(
-        _buildMarker(
-          s,
-          state == 3
-              ? Colors.red
-              : ((state == 1 && isEditingGo) || (state == 2 && !isEditingGo)
-                    ? Colors.orange
-                    : Colors.blue),
-        ),
-      );
+  List<Marker> _getSortedRouteMarkers() {
+    final activeList = isEditingGo ? goStations : backStations;
+    final inactiveList = isEditingGo ? backStations : goStations;
+    final activeKeys = activeList.map((s) => "${s.lat}_${s.lon}").toSet();
+    final inactiveKeys = inactiveList.map((s) => "${s.lat}_${s.lon}").toSet();
+
+    final List<Marker> markers = [];
+    final Set<String> processed = {};
+
+    for (var s in inactiveList) {
+      final key = "${s.lat}_${s.lon}";
+      if (activeKeys.contains(key)) continue;
+      if (!processed.add(key)) continue;
+      markers.add(_buildMarker(s, Colors.blue));
     }
+
+    for (var s in activeList) {
+      final key = "${s.lat}_${s.lon}";
+      if (!processed.add(key)) continue;
+      bool overlap = inactiveKeys.contains(key);
+      markers.add(_buildMarker(s, overlap ? Colors.red : Colors.orange));
+    }
+
     return markers;
   }
 
