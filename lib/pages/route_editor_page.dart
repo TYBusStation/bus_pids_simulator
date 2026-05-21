@@ -64,8 +64,15 @@ class _RouteEditorPageState extends State<RouteEditorPage>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() {
-      if (_tabController.index == 1) _updateJsonField();
+      if (!_tabController.indexIsChanging) {
+        if (_tabController.index == 1) {
+          _updateJsonField();
+        } else {
+          _parseJsonField();
+        }
+      }
     });
+
     if (widget.initialRoute != null) {
       final r = widget.initialRoute!;
       _idCtrl.text = r.id;
@@ -81,6 +88,54 @@ class _RouteEditorPageState extends State<RouteEditorPage>
     _syncPaths();
     _loadSourceStations();
     WidgetsBinding.instance.addPostFrameCallback((_) => _recenterMap());
+  }
+
+  void _updateJsonField() {
+    _jsonCtrl.text = const JsonEncoder.withIndent(
+      '  ',
+    ).convert(_prepareRouteData().toJson());
+  }
+
+  bool _parseJsonField() {
+    if (_jsonCtrl.text.trim().isEmpty) return false;
+    try {
+      final Map<String, dynamic> data = jsonDecode(_jsonCtrl.text);
+      final newRoute = BusRoute.fromJson(data);
+
+      setState(() {
+        _idCtrl.text = newRoute.id;
+        _nameCtrl.text = newRoute.name;
+        _descCtrl.text = newRoute.description;
+        _depCtrl.text = newRoute.departure;
+        _destCtrl.text = newRoute.destination;
+        _wktGoCtrl.text = newRoute.path.go;
+        _wktBackCtrl.text = newRoute.path.back;
+        _goStations = List.from(newRoute.stations.go);
+        _backStations = List.from(newRoute.stations.back);
+
+        _autoWktGo = false;
+        _autoWktBack = false;
+      });
+      _syncPaths();
+      return true;
+    } catch (e) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text("JSON 格式錯誤"),
+            content: Text(e.toString()),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text("確定"),
+              ),
+            ],
+          ),
+        );
+      }
+      return false;
+    }
   }
 
   void _syncPaths() {
@@ -103,12 +158,6 @@ class _RouteEditorPageState extends State<RouteEditorPage>
   String _generateWktFromStations(List<BusStation> stations) {
     if (stations.length < 2) return "";
     return "LINESTRING (${stations.map((s) => "${s.lon} ${s.lat}").join(", ")})";
-  }
-
-  void _updateJsonField() {
-    _jsonCtrl.text = const JsonEncoder.withIndent(
-      '  ',
-    ).convert(_prepareRouteData().toJson());
   }
 
   BusRoute _prepareRouteData() {
@@ -182,6 +231,10 @@ class _RouteEditorPageState extends State<RouteEditorPage>
   }
 
   Future<void> _handleSave() async {
+    if (_tabController.index == 1) {
+      if (!_parseJsonField()) return;
+    }
+
     List<String> wktErrors = [];
     List<String> distanceErrors = [];
     if (!_autoWktGo && _goStations.isNotEmpty) {
@@ -534,7 +587,69 @@ class _RouteEditorPageState extends State<RouteEditorPage>
       maxLines: null,
       expands: true,
       style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
-      decoration: const InputDecoration(border: OutlineInputBorder()),
+      decoration: const InputDecoration(
+        border: OutlineInputBorder(),
+        hintText: "在此貼上 JSON 格式的路線資料...",
+      ),
     ),
   );
+}
+
+class EditStationNameDialog extends StatefulWidget {
+  final String name;
+  final String nameEn;
+
+  const EditStationNameDialog({
+    super.key,
+    required this.name,
+    required this.nameEn,
+  });
+
+  @override
+  State<EditStationNameDialog> createState() => _EditStationNameDialogState();
+}
+
+class _EditStationNameDialogState extends State<EditStationNameDialog> {
+  late TextEditingController _nCtrl;
+  late TextEditingController _eCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _nCtrl = TextEditingController(text: widget.name);
+    _eCtrl = TextEditingController(text: widget.nameEn);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text("編輯站點資訊", style: TextStyle(fontSize: 16)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _nCtrl,
+            decoration: const InputDecoration(labelText: "中文名稱"),
+          ),
+          TextField(
+            controller: _eCtrl,
+            decoration: const InputDecoration(labelText: "英文名稱"),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("取消"),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, {
+            'name': _nCtrl.text,
+            'nameEn': _eCtrl.text,
+          }),
+          child: const Text("完成"),
+        ),
+      ],
+    );
+  }
 }
