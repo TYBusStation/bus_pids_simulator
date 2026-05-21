@@ -12,7 +12,7 @@ class GpsControlProvider extends ChangeNotifier {
   Timer? _simTimer;
   bool _isSimulating = false;
   double _simSpeedKmh = 40.0;
-  int _updateIntervalMs = 500;
+  int _updateIntervalMs = 1000;
   BusRoute? _simRoute;
   Direction _simDirection = Direction.go;
   int _currentPathIndex = 0;
@@ -78,7 +78,7 @@ class GpsControlProvider extends ChangeNotifier {
       double t =
           ((sPos.longitude - p1.longitude) * dx +
               (sPos.latitude - p1.latitude) * dy) /
-          (dx * dx + dy * dy);
+              (dx * dx + dy * dy);
       t = t.clamp(0.0, 1.0);
 
       final double projLon = p1.longitude + t * dx;
@@ -130,7 +130,7 @@ class GpsControlProvider extends ChangeNotifier {
         pStart.latitude + (pEnd.latitude - pStart.latitude) * _segmentProgress;
     final double finalLon =
         pStart.longitude +
-        (pEnd.longitude - pStart.longitude) * _segmentProgress;
+            (pEnd.longitude - pStart.longitude) * _segmentProgress;
 
     locNotifier.updateManualLocation(LatLng(finalLat, finalLon), _simSpeedKmh);
     notifyListeners();
@@ -154,68 +154,67 @@ class GpsControlProvider extends ChangeNotifier {
 
   void _startSimLoop(LocationChangeNotifier locNotifier) {
     _simTimer?.cancel();
-    _simTimer = Timer.periodic(Duration(milliseconds: _updateIntervalMs), (
-      timer,
-    ) {
-      if (locNotifier.gpsMode != GpsMode.manual || _simRoute == null) {
-        _stopSim();
-        notifyListeners();
-        return;
-      }
-      final points = _simDirection == Direction.go
-          ? _simRoute!.path.goPoints
-          : _simRoute!.path.backPoints;
-      if (points.length < 2) return;
+    _simTimer =
+        Timer.periodic(Duration(milliseconds: _updateIntervalMs), (timer,) {
+          if (locNotifier.gpsMode != GpsMode.manual || _simRoute == null) {
+            _stopSim();
+            notifyListeners();
+            return;
+          }
+          final points = _simDirection == Direction.go
+              ? _simRoute!.path.goPoints
+              : _simRoute!.path.backPoints;
+          if (points.length < 2) return;
 
-      if (_currentPathIndex >= points.length - 1) {
-        _currentPathIndex = 0;
-        _segmentProgress = 0.0;
-      }
+          if (_currentPathIndex >= points.length - 1) {
+            _currentPathIndex = 0;
+            _segmentProgress = 0.0;
+          }
 
-      LatLng p1 = points[_currentPathIndex];
-      LatLng p2 = points[_currentPathIndex + 1];
-      final distance = const Distance().as(LengthUnit.Meter, p1, p2);
+          LatLng p1 = points[_currentPathIndex];
+          LatLng p2 = points[_currentPathIndex + 1];
+          final distance = const Distance().as(LengthUnit.Meter, p1, p2);
 
-      if (distance <= 0) {
-        _currentPathIndex++;
-        if (_currentPathIndex >= points.length - 1) _currentPathIndex = 0;
-        return;
-      }
+          if (distance <= 0) {
+            _currentPathIndex++;
+            if (_currentPathIndex >= points.length - 1) _currentPathIndex = 0;
+            return;
+          }
 
-      double step = (_simSpeedKmh / 3.6) * (_updateIntervalMs / 1000.0);
-      _segmentProgress += (step / distance);
+          double step = (_simSpeedKmh / 3.6) * (_updateIntervalMs / 1000.0);
+          _segmentProgress += (step / distance);
 
-      while (_segmentProgress >= 1.0) {
-        double overshotDist = (_segmentProgress - 1.0) * distance;
-        _currentPathIndex++;
-        if (_currentPathIndex >= points.length - 1) {
-          _currentPathIndex = 0;
-          _segmentProgress = 0.0;
-          break;
-        }
-        p1 = points[_currentPathIndex];
-        p2 = points[_currentPathIndex + 1];
-        double nextDist = const Distance().as(LengthUnit.Meter, p1, p2);
-        if (nextDist > 0) {
-          _segmentProgress = overshotDist / nextDist;
-          break;
-        } else {
-          _segmentProgress = 1.0;
-        }
-      }
+          while (_segmentProgress >= 1.0) {
+            double overshotDist = (_segmentProgress - 1.0) * distance;
+            _currentPathIndex++;
+            if (_currentPathIndex >= points.length - 1) {
+              _currentPathIndex = 0;
+              _segmentProgress = 0.0;
+              break;
+            }
+            p1 = points[_currentPathIndex];
+            p2 = points[_currentPathIndex + 1];
+            double nextDist = const Distance().as(LengthUnit.Meter, p1, p2);
+            if (nextDist > 0) {
+              _segmentProgress = overshotDist / nextDist;
+              break;
+            } else {
+              _segmentProgress = 1.0;
+            }
+          }
 
-      final double lat =
-          points[_currentPathIndex].latitude +
-          (points[_currentPathIndex + 1].latitude -
-                  points[_currentPathIndex].latitude) *
-              _segmentProgress;
-      final double lon =
-          points[_currentPathIndex].longitude +
-          (points[_currentPathIndex + 1].longitude -
-                  points[_currentPathIndex].longitude) *
-              _segmentProgress;
-      locNotifier.updateManualLocation(LatLng(lat, lon), _simSpeedKmh);
-    });
+          final double lat =
+              points[_currentPathIndex].latitude +
+                  (points[_currentPathIndex + 1].latitude -
+                      points[_currentPathIndex].latitude) *
+                      _segmentProgress;
+          final double lon =
+              points[_currentPathIndex].longitude +
+                  (points[_currentPathIndex + 1].longitude -
+                      points[_currentPathIndex].longitude) *
+                      _segmentProgress;
+          locNotifier.updateManualLocation(LatLng(lat, lon), _simSpeedKmh);
+        });
   }
 
   @override
