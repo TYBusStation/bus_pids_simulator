@@ -60627,7 +60627,7 @@ if(s!=null)s.ao(0)
 this.b=!1},
 azF(a){var s=this.a
 if(s!=null)s.ao(0)
-this.a=A.Km(A.dk(0,500,0),new A.akN(this,a))},
+this.a=A.Km(A.dk(0,1000,0),new A.akN(this,a))},
 l(){var s=this.a
 if(s!=null)s.ao(0)
 this.dg()}}
@@ -60650,7 +60650,7 @@ r=q>=r-1?s.w=s.r=0:q
 o=B.ik.ER(0,B.fQ,p[r],p[r+1])
 if(o<=0){if(++s.r>=p.length-1)s.r=0
 return}r=s.c
-r=s.w+r/3.6*0.5/o
+r=s.w+r/3.6/o
 s.w=r
 for(;r>=1;r=1){n=(r-1)*o
 r=++s.r
