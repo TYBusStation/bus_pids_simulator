@@ -183,17 +183,6 @@ class _RouteEditorPageState extends State<RouteEditorPage>
     );
   }
 
-  List<BusStation> _assignOrders(List<BusStation> stations) => List.generate(
-    stations.length,
-    (i) => BusStation(
-      order: i + 1,
-      name: stations[i].name,
-      nameEn: stations[i].nameEn,
-      lat: stations[i].lat,
-      lon: stations[i].lon,
-    ),
-  );
-
   double _getDistanceToPath(LatLng point, List<LatLng> path) {
     if (path.isEmpty) return double.infinity;
     if (path.length == 1)
@@ -418,9 +407,9 @@ class _RouteEditorPageState extends State<RouteEditorPage>
 
   void _onStationListEdit(int index, BusStation s) async {
     final list = _isEditingGo ? _goStations : _backStations;
-    final result = await showDialog<Map<String, String>>(
+    final result = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (ctx) => EditStationNameDialog(name: s.name, nameEn: s.nameEn),
+      builder: (ctx) => EditStationNameDialog(station: s),
     );
     if (result != null) {
       setState(() {
@@ -430,10 +419,33 @@ class _RouteEditorPageState extends State<RouteEditorPage>
           nameEn: result['nameEn'] ?? "",
           lat: s.lat,
           lon: s.lon,
+          useGlobalNext: result['useGlobalNext'] ?? true,
+          useGlobalArrival: result['useGlobalArrival'] ?? true,
+          nextTemplate: (result['useGlobalNext'] ?? true)
+              ? null
+              : List<String>.from(result['nextTemplate']),
+          arrivalTemplate: (result['useGlobalArrival'] ?? true)
+              ? null
+              : List<String>.from(result['arrivalTemplate']),
         );
       });
     }
   }
+
+  List<BusStation> _assignOrders(List<BusStation> stations) => List.generate(
+    stations.length,
+    (i) => BusStation(
+      order: i + 1,
+      name: stations[i].name,
+      nameEn: stations[i].nameEn,
+      lat: stations[i].lat,
+      lon: stations[i].lon,
+      useGlobalNext: stations[i].useGlobalNext,
+      useGlobalArrival: stations[i].useGlobalArrival,
+      nextTemplate: stations[i].nextTemplate,
+      arrivalTemplate: stations[i].arrivalTemplate,
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -593,63 +605,4 @@ class _RouteEditorPageState extends State<RouteEditorPage>
       ),
     ),
   );
-}
-
-class EditStationNameDialog extends StatefulWidget {
-  final String name;
-  final String nameEn;
-
-  const EditStationNameDialog({
-    super.key,
-    required this.name,
-    required this.nameEn,
-  });
-
-  @override
-  State<EditStationNameDialog> createState() => _EditStationNameDialogState();
-}
-
-class _EditStationNameDialogState extends State<EditStationNameDialog> {
-  late TextEditingController _nCtrl;
-  late TextEditingController _eCtrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _nCtrl = TextEditingController(text: widget.name);
-    _eCtrl = TextEditingController(text: widget.nameEn);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text("編輯站點資訊", style: TextStyle(fontSize: 16)),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: _nCtrl,
-            decoration: const InputDecoration(labelText: "中文名稱"),
-          ),
-          TextField(
-            controller: _eCtrl,
-            decoration: const InputDecoration(labelText: "英文名稱"),
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text("取消"),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, {
-            'name': _nCtrl.text,
-            'nameEn': _eCtrl.text,
-          }),
-          child: const Text("完成"),
-        ),
-      ],
-    );
-  }
 }

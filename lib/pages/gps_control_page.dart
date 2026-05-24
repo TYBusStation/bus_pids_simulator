@@ -12,7 +12,9 @@ class GpsControlPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final locNotifier = context.watch<LocationChangeNotifier>();
+    final gpsMode = context.select<LocationChangeNotifier, GpsMode>(
+      (n) => n.gpsMode,
+    );
     final simProvider = context.watch<GpsControlProvider>();
     final statusNotifier = context.read<StatusChangeNotifier>();
 
@@ -49,18 +51,14 @@ class GpsControlPage extends StatelessWidget {
                           icon: Icon(Icons.gps_off, size: 18),
                         ),
                       ],
-                      selected: {locNotifier.gpsMode},
-                      onSelectionChanged: (set) =>
-                          locNotifier.setGpsMode(set.first),
+                      selected: {gpsMode},
+                      onSelectionChanged: (set) => context
+                          .read<LocationChangeNotifier>()
+                          .setGpsMode(set.first),
                     ),
                     const SizedBox(height: 8),
-                    if (locNotifier.gpsMode == GpsMode.manual) ...[
-                      _buildSimCard(
-                        simProvider,
-                        locNotifier,
-                        statusNotifier,
-                        context,
-                      ),
+                    if (gpsMode == GpsMode.manual) ...[
+                      _buildSimCard(simProvider, statusNotifier, context),
                     ],
                   ],
                 ),
@@ -70,11 +68,11 @@ class GpsControlPage extends StatelessWidget {
           const VerticalDivider(width: 1),
           Expanded(
             flex: 1,
-            child: locNotifier.gpsMode != GpsMode.manual
+            child: gpsMode != GpsMode.manual
                 ? const SizedBox.shrink()
                 : (simProvider.simRoute == null
                       ? const Center(child: Text("未選擇模擬路線"))
-                      : _buildStationList(simProvider, locNotifier)),
+                      : _buildStationList(simProvider)),
           ),
         ],
       ),
@@ -83,7 +81,6 @@ class GpsControlPage extends StatelessWidget {
 
   Widget _buildSimCard(
     GpsControlProvider sim,
-    LocationChangeNotifier loc,
     StatusChangeNotifier status,
     BuildContext context,
   ) {
@@ -123,7 +120,9 @@ class GpsControlPage extends StatelessWidget {
                   visualDensity: VisualDensity.compact,
                   onPressed: sim.simRoute == null
                       ? null
-                      : () => sim.toggleSimulation(loc),
+                      : () => sim.toggleSimulation(
+                          context.read<LocationChangeNotifier>(),
+                        ),
                   icon: Icon(
                     sim.isSimulating ? Icons.pause : Icons.play_arrow,
                     size: 20,
@@ -163,7 +162,7 @@ class GpsControlPage extends StatelessWidget {
     );
   }
 
-  Widget _buildStationList(GpsControlProvider sim, LocationChangeNotifier loc) {
+  Widget _buildStationList(GpsControlProvider sim) {
     final stations = sim.simDirection == Direction.go
         ? sim.simRoute!.stations.go
         : sim.simRoute!.stations.back;
@@ -178,7 +177,8 @@ class GpsControlPage extends StatelessWidget {
         trailing: IconButton(
           visualDensity: VisualDensity.compact,
           icon: const Icon(Icons.gps_fixed, size: 14),
-          onPressed: () => sim.jumpToStation(i, loc),
+          onPressed: () =>
+              sim.jumpToStation(i, context.read<LocationChangeNotifier>()),
         ),
       ),
     );

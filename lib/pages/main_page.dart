@@ -24,14 +24,14 @@ class MainPage extends StatefulWidget {
   final bool showBottomInfo;
   final VoidCallback onToggleBottomInfo;
 
-  @override
-  State<MainPage> createState() => _MainPageState();
-
   const MainPage({
     super.key,
     this.showBottomInfo = true,
     required this.onToggleBottomInfo,
   });
+
+  @override
+  State<MainPage> createState() => _MainPageState();
 }
 
 class _MainPageState extends State<MainPage> {
@@ -196,24 +196,28 @@ class _MainPageState extends State<MainPage> {
     );
   }
 
+  Widget _getPage(int index) {
+    switch (index) {
+      case 0:
+        return const InfoPage();
+      case 1:
+        return MapPage(
+          key: const PageStorageKey('map_page'),
+          bottomPanelKey: _bottomPanelKey,
+        );
+      case 2:
+        return const LedPage();
+      case 3:
+        return const SettingsPage();
+      case 4:
+        return const ContactPage();
+      default:
+        return const InfoPage();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final status = context.watch<StatusChangeNotifier>().currentStatus;
-    final analysis = context.watch<RouteAnalysisProvider>().currentAnalysis;
-    final direction = status.direction;
-    final route = status.route;
-
-    final List<Widget> pages = [
-      const InfoPage(),
-      MapPage(
-        key: const PageStorageKey('map_page_unique'),
-        bottomPanelKey: _bottomPanelKey,
-      ),
-      const LedPage(),
-      const SettingsPage(),
-      const ContactPage(),
-    ];
-
     return LandscapeProvider(
       builder: (context, landscape) {
         if (!landscape) {
@@ -228,17 +232,9 @@ class _MainPageState extends State<MainPage> {
                   ),
                   const SizedBox(height: 20),
                   ElevatedButton.icon(
-                    onPressed: () {
-                      getWebInterop().lockLandscape();
-                    },
+                    onPressed: () => getWebInterop().lockLandscape(),
                     icon: const Icon(Icons.screen_rotation),
                     label: const Text("旋轉手機"),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 12,
-                      ),
-                    ),
                   ),
                 ],
               ),
@@ -308,41 +304,31 @@ class _MainPageState extends State<MainPage> {
               children: [
                 SizedBox(
                   width: 60,
-                  child: SingleChildScrollView(
-                    child: IntrinsicHeight(
-                      child: NavigationRail(
-                        minWidth: 60,
-                        selectedIndex: selectedIndex.clamp(
-                          0,
-                          _allDestinations.length - 1,
-                        ),
-                        onDestinationSelected: (index) =>
-                            setState(() => selectedIndex = index),
-                        labelType: NavigationRailLabelType.all,
-                        destinations: _allDestinations
-                            .map(
-                              (d) => NavigationRailDestination(
-                                icon: d.icon,
-                                selectedIcon: d.selectedIcon,
-                                label: Text(
-                                  d.label,
-                                  style: const TextStyle(fontSize: 10),
-                                ),
-                              ),
-                            )
-                            .toList(),
-                      ),
-                    ),
+                  child: NavigationRail(
+                    minWidth: 60,
+                    selectedIndex: selectedIndex,
+                    onDestinationSelected: (index) =>
+                        setState(() => selectedIndex = index),
+                    labelType: NavigationRailLabelType.all,
+                    destinations: _allDestinations
+                        .map(
+                          (d) => NavigationRailDestination(
+                            icon: d.icon,
+                            selectedIcon: d.selectedIcon,
+                            label: Text(
+                              d.label,
+                              style: const TextStyle(fontSize: 10),
+                            ),
+                          ),
+                        )
+                        .toList(),
                   ),
                 ),
                 const VerticalDivider(thickness: 1, width: 1),
                 Expanded(
                   child: Stack(
                     children: [
-                      IndexedStack(
-                        index: selectedIndex.clamp(0, pages.length - 1),
-                        children: pages,
-                      ),
+                      _getPage(selectedIndex),
                       if (selectedIndex >= 1 &&
                           selectedIndex <= 2 &&
                           widget.showBottomInfo)
@@ -350,13 +336,31 @@ class _MainPageState extends State<MainPage> {
                           bottom: 0,
                           left: 0,
                           right: 0,
-                          child: MapBottomPanel(
-                            key: _bottomPanelKey,
-                            analysis: analysis,
-                            stations: direction == Direction.go
-                                ? route.stations.go
-                                : route.stations.back,
-                          ),
+                          child:
+                              Consumer2<
+                                StatusChangeNotifier,
+                                RouteAnalysisProvider
+                              >(
+                                builder:
+                                    (
+                                      context,
+                                      statusNotifier,
+                                      analysisProvider,
+                                      child,
+                                    ) {
+                                      final status =
+                                          statusNotifier.currentStatus;
+                                      return MapBottomPanel(
+                                        key: _bottomPanelKey,
+                                        analysis:
+                                            analysisProvider.currentAnalysis,
+                                        stations:
+                                            status.direction == Direction.go
+                                            ? status.route.stations.go
+                                            : status.route.stations.back,
+                                      );
+                                    },
+                              ),
                         ),
                       if (selectedIndex >= 1 && selectedIndex <= 2)
                         Positioned(

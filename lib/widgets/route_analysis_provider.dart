@@ -143,14 +143,13 @@ class RouteAnalysisProvider extends ChangeNotifier {
   }
 
   Future<void> _startOffDutyLoop() async {
-    final int thisLoopId = _activeSequenceId;
-    while (_isOffDutyAlert && thisLoopId == _activeSequenceId) {
+    final int thisId = _activeSequenceId;
+    while (_isOffDutyAlert && thisId == _activeSequenceId) {
       try {
         await Static.audioManager.playAssetAndWait("notice.mp3");
       } catch (e) {
         debugPrint("OffDuty Loop Error: $e");
       }
-
       if (!_isOffDutyAlert) break;
       await Future.delayed(const Duration(milliseconds: 300));
     }
@@ -204,13 +203,13 @@ class RouteAnalysisProvider extends ChangeNotifier {
       isTerminal: isTerminal,
     );
     notifyListeners();
+
+    final template = (station.useGlobalNext || station.nextTemplate == null)
+        ? Static.nextStationTemplate
+        : station.nextTemplate!;
+
     _executeVoice(
-      _buildSeq(
-        Static.nextStationTemplate,
-        station.name,
-        station.nameEn,
-        isTerminal,
-      ),
+      _buildSeq(template, station.name, station.nameEn, isTerminal),
     );
   }
 
@@ -226,7 +225,6 @@ class RouteAnalysisProvider extends ChangeNotifier {
     if (nextStation != null) {
       final double distNext = result.distToNextStation ?? 10000;
       final double distPrev = result.distToPrevStation ?? 0;
-
       bool distCond =
           !result.isOffRoute &&
           (distPrev > Static.nextStationDepartureDistance ||
@@ -251,9 +249,14 @@ class RouteAnalysisProvider extends ChangeNotifier {
           );
           notifyListeners();
           if (Static.enableArrivalBroadcast) {
+            final template =
+                (nextStation.useGlobalArrival ||
+                    nextStation.arrivalTemplate == null)
+                ? Static.arrivalTemplate
+                : nextStation.arrivalTemplate!;
             _executeVoice(
               _buildSeq(
-                Static.arrivalTemplate,
+                template,
                 nextStation.name,
                 nextStation.nameEn,
                 isTerminal,

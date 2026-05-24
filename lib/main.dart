@@ -70,7 +70,19 @@ class _AppState extends State<App> {
           create: (_) => StatusChangeNotifier(Static.currentStatus),
         ),
         ChangeNotifierProvider(create: (_) => LocationChangeNotifier()),
-        ChangeNotifierProvider(create: (_) => RouteAnalysisProvider()),
+        ChangeNotifierProxyProvider2<
+          LocationChangeNotifier,
+          StatusChangeNotifier,
+          RouteAnalysisProvider
+        >(
+          create: (_) => RouteAnalysisProvider(),
+          update: (_, loc, status, analysis) => analysis!
+            ..update(
+              loc.currentLocation,
+              loc.currentSpeed,
+              status.currentStatus,
+            ),
+        ),
         ChangeNotifierProvider(create: (_) => GpsControlProvider()),
       ],
       child: MaterialApp(
@@ -99,19 +111,11 @@ class LandscapeWatcher extends StatelessWidget {
     final isLandscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
     final landscapeNotifier = context.read<LandscapeChangeNotifier>();
-    final locationNotifier = context.watch<LocationChangeNotifier>();
-    final statusNotifier = context.watch<StatusChangeNotifier>();
-    final analysisProvider = context.read<RouteAnalysisProvider>();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (landscapeNotifier.landscape != isLandscape) {
         landscapeNotifier.setLandscape(isLandscape);
       }
-      analysisProvider.update(
-        locationNotifier.currentLocation,
-        locationNotifier.currentSpeed,
-        statusNotifier.currentStatus,
-      );
     });
 
     return child;

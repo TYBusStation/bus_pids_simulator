@@ -14,6 +14,7 @@ class LocationChangeNotifier extends ChangeNotifier {
   StreamSubscription<Position>? _subscription;
   bool _isDisposed = false;
   GpsMode _gpsMode = GpsMode.auto;
+  int _lastNotifyTime = 0;
 
   LatLng? get currentLocation => _currentLocation;
 
@@ -67,11 +68,15 @@ class LocationChangeNotifier extends ChangeNotifier {
     if (!_isDisposed) notifyListeners();
   }
 
-  void updateManualLocation(LatLng loc, double speed) {
+  void updateManualLocation(LatLng loc, double speed, {bool force = false}) {
     if (_gpsMode == GpsMode.auto || _isDisposed) return;
     _currentLocation = loc;
     _currentSpeed = speed;
-    notifyListeners();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (force || (now - _lastNotifyTime) > 120) {
+      _lastNotifyTime = now;
+      notifyListeners();
+    }
   }
 
   void _startListening() {

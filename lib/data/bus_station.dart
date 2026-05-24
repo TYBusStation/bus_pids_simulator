@@ -15,6 +15,14 @@ class BusStation {
   final double lat;
   @JsonKey(name: "lon")
   final double lon;
+  @JsonKey(name: "use_global_next", defaultValue: true)
+  final bool useGlobalNext;
+  @JsonKey(name: "use_global_arrival", defaultValue: true)
+  final bool useGlobalArrival;
+  @JsonKey(name: "next_template")
+  final List<String>? nextTemplate;
+  @JsonKey(name: "arrival_template")
+  final List<String>? arrivalTemplate;
 
   BusStation({
     required this.order,
@@ -22,6 +30,10 @@ class BusStation {
     required this.nameEn,
     required this.lat,
     required this.lon,
+    this.useGlobalNext = true,
+    this.useGlobalArrival = true,
+    this.nextTemplate,
+    this.arrivalTemplate,
   });
 
   LatLng get position => LatLng(lat, lon);

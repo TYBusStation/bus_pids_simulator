@@ -8,7 +8,6 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../data/status.dart';
-import '../utils/route_engine.dart';
 import '../widgets/map_bottom_panel.dart';
 import 'main_page.dart';
 
@@ -26,53 +25,92 @@ class _MapPageState extends State<MapPage> {
   bool _isFollowing = true;
   double _brightness = 0.6;
   bool _isFabMenuExpanded = false;
+  List<Polyline> _cachedPolylines = [];
+  List<Marker> _cachedStationMarkers = [];
+  String _lastRouteKey = "";
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<RouteAnalysisProvider>().addListener(_onAnalysisUpdate);
+    });
+  }
 
   @override
   void dispose() {
+    context.read<RouteAnalysisProvider>().removeListener(_onAnalysisUpdate);
     _mapController.dispose();
     super.dispose();
   }
 
-  void _handleAutoMove(LatLng? location, RouteAnalysisResult? result) {
-    if (location != null &&
-        location.latitude.isFinite &&
-        location.longitude.isFinite &&
-        _isFollowing) {
+  void _onAnalysisUpdate() {
+    if (!mounted || !_isFollowing) return;
+    final analysisProvider = context.read<RouteAnalysisProvider>();
+    final locNotifier = context.read<LocationChangeNotifier>();
+    final analysis = analysisProvider.currentAnalysis;
+    final loc = locNotifier.currentLocation;
+    if (loc != null && loc.latitude.isFinite && loc.longitude.isFinite) {
       double rotation = 0;
-      if (result != null &&
-          !result.isOffRoute &&
-          result.bearing != null &&
-          result.bearing!.isFinite) {
-        rotation = -result.bearing!;
+      if (analysis != null &&
+          !analysis.isOffRoute &&
+          analysis.bearing != null) {
+        rotation = -analysis.bearing!;
       }
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _mapController.moveAndRotate(location, 17.5, rotation);
-        }
-      });
+      _mapController.moveAndRotate(loc, 17.5, rotation);
     }
   }
 
-  void _recenterMap(List<Polyline> polylines, List<Marker> markers) {
+  void _updateCache(Status status) {
+    final key = "${status.route.id}_${status.direction}";
+    if (_lastRouteKey == key) return;
+    _lastRouteKey = key;
+    final pts =
+        (status.direction == Direction.go
+                ? status.route.path.goPoints
+                : status.route.path.backPoints)
+            .where((p) => p.latitude.isFinite && p.longitude.isFinite)
+            .toList();
+    _cachedPolylines = pts.isNotEmpty
+        ? [
+            Polyline(
+              points: pts,
+              color: Colors.red.withOpacity(0.9),
+              strokeWidth: 5.0,
+            ),
+          ]
+        : [];
+    _cachedStationMarkers =
+        (status.direction == Direction.go
+                ? status.route.stations.go
+                : status.route.stations.back)
+            .where(
+              (s) =>
+                  s.position.latitude.isFinite && s.position.longitude.isFinite,
+            )
+            .map((s) => _createStationMarker(s))
+            .toList();
+  }
+
+  void _recenterMap() {
     setState(() => _isFollowing = false);
-    final List<LatLng> allPoints = [
-      ...polylines.expand((p) => p.points),
-      ...markers.map((m) => m.point),
-    ].where((p) => p.latitude.isFinite && p.longitude.isFinite).toList();
-    if (allPoints.isNotEmpty) {
+    final pts = [
+      ..._cachedPolylines.expand((p) => p.points),
+      ..._cachedStationMarkers.map((m) => m.point),
+    ];
+    if (pts.isNotEmpty)
       _mapController.fitCamera(
         CameraFit.bounds(
-          bounds: LatLngBounds.fromPoints(allPoints),
+          bounds: LatLngBounds.fromPoints(pts),
           padding: const EdgeInsets.all(50),
           maxZoom: 17,
         ),
       );
-    }
   }
 
-  Marker _createStationMarker(BusStation station, Color color) {
+  Marker _createStationMarker(BusStation s) {
     return Marker(
-      point: station.position,
+      point: s.position,
       width: 200,
       height: 100,
       rotate: true,
@@ -88,7 +126,7 @@ class _MapPageState extends State<MapPage> {
               border: Border.all(color: Colors.white24, width: 1),
             ),
             child: Text(
-              "${station.order}. ${station.name}",
+              "${s.order}. ${s.name}",
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 13,
@@ -99,7 +137,7 @@ class _MapPageState extends State<MapPage> {
           Icon(
             Icons.location_on,
             size: 32,
-            color: color,
+            color: Colors.red.withOpacity(0.9),
             shadows: const [Shadow(color: Colors.black, blurRadius: 4)],
           ),
         ],
@@ -111,137 +149,98 @@ class _MapPageState extends State<MapPage> {
   Widget build(BuildContext context) {
     final mainPage = context.findAncestorWidgetOfExactType<MainPage>();
     final double bottomPadding = (mainPage?.showBottomInfo ?? true) ? 45 : 15;
-
-    return Consumer3<
-      LocationChangeNotifier,
-      RouteAnalysisProvider,
-      StatusChangeNotifier
-    >(
-      builder: (context, locNotifier, analysisProvider, statusNotifier, child) {
-        final status = statusNotifier.currentStatus;
-        final route = status.route;
-        final direction = status.direction;
-        final currentLocation = locNotifier.currentLocation;
-        final analysis = analysisProvider.currentAnalysis;
-        final bool isValidLocation =
-            currentLocation != null &&
-            currentLocation.latitude.isFinite &&
-            currentLocation.longitude.isFinite;
-
-        _handleAutoMove(currentLocation, analysis);
-
-        List<LatLng> points =
-            (direction == Direction.go
-                    ? route.path.goPoints
-                    : route.path.backPoints)
-                .where((p) => p.latitude.isFinite && p.longitude.isFinite)
-                .toList();
-
-        final List<Polyline> polylines = points.isNotEmpty
-            ? [
-                Polyline(
-                  points: points,
-                  color: Colors.red.withOpacity(0.9),
-                  strokeWidth: 5.0,
+    return RepaintBoundary(
+      child: Stack(
+        children: [
+          Consumer2<StatusChangeNotifier, LocationChangeNotifier>(
+            builder: (context, statusNotifier, locNotifier, child) {
+              _updateCache(statusNotifier.currentStatus);
+              final loc = locNotifier.currentLocation;
+              final hasLoc =
+                  loc != null &&
+                  loc.latitude.isFinite &&
+                  loc.longitude.isFinite;
+              return FlutterMap(
+                mapController: _mapController,
+                options: MapOptions(
+                  initialCenter: hasLoc ? loc : const LatLng(24.9889, 121.3144),
+                  initialZoom: 17.5,
+                  onPositionChanged: (p, g) {
+                    if (g && _isFollowing) setState(() => _isFollowing = false);
+                  },
                 ),
-              ]
-            : [];
-
-        final List<Marker> stationMarkers =
-            (direction == Direction.go
-                    ? route.stations.go
-                    : route.stations.back)
-                .where(
-                  (s) =>
-                      s.position.latitude.isFinite &&
-                      s.position.longitude.isFinite,
-                )
-                .map(
-                  (s) => _createStationMarker(s, Colors.red.withOpacity(0.9)),
-                )
-                .toList();
-
-        return Stack(
-          children: [
-            FlutterMap(
-              mapController: _mapController,
-              options: MapOptions(
-                initialCenter: isValidLocation
-                    ? currentLocation
-                    : const LatLng(24.9889, 121.3144),
-                initialZoom: 17.5,
-                onPositionChanged: (p, g) {
-                  if (g && _isFollowing) setState(() => _isFollowing = false);
-                },
-              ),
-              children: [
-                ColorFiltered(
-                  colorFilter: ColorFilter.matrix([
-                    _brightness,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    _brightness,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    _brightness,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    1,
-                    0,
-                  ]),
-                  child: TileLayer(
+                children: [
+                  ColorFiltered(
+                    colorFilter: ColorFilter.matrix([
+                      _brightness,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      _brightness,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      _brightness,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      1,
+                      0,
+                    ]),
+                    child: TileLayer(
+                      urlTemplate:
+                          'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                      tileProvider: NetworkTileProvider(),
+                    ),
+                  ),
+                  TileLayer(
                     urlTemplate:
-                        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                        'https://wmts.nlsc.gov.tw/wmts/EMAP2/default/GoogleMapsCompatible/{z}/{y}/{x}',
                     tileProvider: NetworkTileProvider(),
                   ),
-                ),
-                TileLayer(
-                  urlTemplate:
-                      'https://wmts.nlsc.gov.tw/wmts/EMAP2/default/GoogleMapsCompatible/{z}/{y}/{x}',
-                  tileProvider: NetworkTileProvider(),
-                ),
-                PolylineLayer(polylines: polylines),
-                MarkerLayer(
-                  markers: [
-                    ...stationMarkers,
-                    if (isValidLocation)
-                      Marker(
-                        point: currentLocation,
-                        width: 22,
-                        height: 22,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.blue,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 2.5),
+                  PolylineLayer(polylines: _cachedPolylines),
+                  MarkerLayer(markers: _cachedStationMarkers),
+                  if (hasLoc)
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: loc,
+                          width: 22,
+                          height: 22,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.blue,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.white,
+                                width: 2.5,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-            Positioned(
-              bottom: bottomPadding,
-              right: 15,
-              child: _buildMapControls(polylines, stationMarkers),
-            ),
-          ],
-        );
-      },
+                      ],
+                    ),
+                ],
+              );
+            },
+          ),
+          Positioned(
+            bottom: bottomPadding,
+            right: 15,
+            child: _buildMapControls(),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildMapControls(List<Polyline> polylines, List<Marker> markers) {
+  Widget _buildMapControls() {
     final theme = Theme.of(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -258,27 +257,20 @@ class _MapPageState extends State<MapPage> {
               height: 90,
               padding: const EdgeInsets.symmetric(vertical: 2),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    Icons.brightness_6,
-                    size: 14,
-                    color: theme.colorScheme.onSurface,
-                  ),
+                  const Icon(Icons.brightness_6, size: 14),
                   Expanded(
                     child: RotatedBox(
                       quarterTurns: 3,
                       child: SliderTheme(
                         data: SliderTheme.of(context).copyWith(
                           trackHeight: 1.5,
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
                           thumbShape: const RoundSliderThumbShape(
                             enabledThumbRadius: 4.0,
                           ),
                         ),
                         child: Slider(
                           value: _brightness,
-                          activeColor: theme.colorScheme.primary,
                           onChanged: (v) => setState(() => _brightness = v),
                         ),
                       ),
@@ -292,14 +284,13 @@ class _MapPageState extends State<MapPage> {
         ],
         Row(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             if (_isFabMenuExpanded) ...[
               SizedBox(
                 width: 34,
                 height: 34,
                 child: FloatingActionButton.small(
-                  onPressed: () => _recenterMap(polylines, markers),
+                  onPressed: _recenterMap,
                   heroTag: 'rec',
                   child: const Icon(Icons.center_focus_strong, size: 16),
                 ),
@@ -311,9 +302,8 @@ class _MapPageState extends State<MapPage> {
                 child: FloatingActionButton.small(
                   onPressed: () {
                     setState(() => _isFollowing = !_isFollowing);
-                    if (_isFollowing) {
+                    if (_isFollowing)
                       widget.bottomPanelKey.currentState?.scrollToCurrent();
-                    }
                   },
                   backgroundColor: _isFollowing
                       ? theme.colorScheme.primaryContainer
