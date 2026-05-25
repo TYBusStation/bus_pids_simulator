@@ -28,9 +28,9 @@ abstract class Static {
   static late Box _box;
   static late Box _customBox;
 
-  // static const String API_BASE = "http://192.168.1.249:25567";
+  static const String API_BASE = "http://192.168.1.249:25567";
 
-  static const String API_BASE = "https://myster.freeddns.org:25566";
+  // static const String API_BASE = "https://myster.freeddns.org:25566";
 
   static final ChangeNotifier settingsNotifier = ChangeNotifier();
   static String licensePlate = "KKA-0000";

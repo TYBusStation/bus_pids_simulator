@@ -41,5 +41,22 @@ class BusStation {
   factory BusStation.fromJson(Map<String, dynamic> json) =>
       _$BusStationFromJson(json);
 
-  Map<String, dynamic> toJson() => _$BusStationToJson(this);
+  Map<String, dynamic> toJson() {
+    final Map<String, dynamic> data = {
+      'order': order,
+      'name': name,
+      'name_en': nameEn,
+      'lat': lat,
+      'lon': lon,
+    };
+    if (useGlobalNext == false) data['use_global_next'] = false;
+    if (useGlobalArrival == false) data['use_global_arrival'] = false;
+    if (nextTemplate != null && nextTemplate!.isNotEmpty) {
+      data['next_template'] = nextTemplate;
+    }
+    if (arrivalTemplate != null && arrivalTemplate!.isNotEmpty) {
+      data['arrival_template'] = arrivalTemplate;
+    }
+    return data;
+  }
 }

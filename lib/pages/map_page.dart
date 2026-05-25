@@ -13,8 +13,13 @@ import 'main_page.dart';
 
 class MapPage extends StatefulWidget {
   final GlobalKey<MapBottomPanelState> bottomPanelKey;
+  final bool isVisible;
 
-  const MapPage({super.key, required this.bottomPanelKey});
+  const MapPage({
+    super.key,
+    required this.bottomPanelKey,
+    required this.isVisible,
+  });
 
   @override
   State<MapPage> createState() => _MapPageState();
@@ -45,7 +50,7 @@ class _MapPageState extends State<MapPage> {
   }
 
   void _onAnalysisUpdate() {
-    if (!mounted || !_isFollowing) return;
+    if (!mounted || !_isFollowing || !widget.isVisible) return;
     final analysisProvider = context.read<RouteAnalysisProvider>();
     final locNotifier = context.read<LocationChangeNotifier>();
     final analysis = analysisProvider.currentAnalysis;
@@ -147,6 +152,8 @@ class _MapPageState extends State<MapPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (!widget.isVisible) return const SizedBox.shrink();
+
     final mainPage = context.findAncestorWidgetOfExactType<MainPage>();
     final double bottomPadding = (mainPage?.showBottomInfo ?? true) ? 45 : 15;
     return RepaintBoundary(

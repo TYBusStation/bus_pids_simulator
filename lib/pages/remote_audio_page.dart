@@ -284,14 +284,15 @@ class _RemoteAudioPageState extends State<RemoteAudioPage> {
           label: const Text("下載"),
           style: style,
         ),
-        FilledButton.icon(
-          onPressed: () => _importAction(relPath, name, false),
-          icon: const Icon(Icons.add, size: 12),
-          label: const Text("匯入單獨語音"),
-          style: style.copyWith(
-            backgroundColor: WidgetStateProperty.all(Colors.orange.shade700),
+        if (ext != 'zip')
+          FilledButton.icon(
+            onPressed: () => _importAction(relPath, name, false),
+            icon: const Icon(Icons.add, size: 12),
+            label: const Text("匯入單獨語音"),
+            style: style.copyWith(
+              backgroundColor: WidgetStateProperty.all(Colors.orange.shade700),
+            ),
           ),
-        ),
         if (ext == 'zip')
           FilledButton.icon(
             onPressed: () => _importAction(relPath, name, true),

@@ -196,26 +196,6 @@ class _MainPageState extends State<MainPage> {
     );
   }
 
-  Widget _getPage(int index) {
-    switch (index) {
-      case 0:
-        return const InfoPage();
-      case 1:
-        return MapPage(
-          key: const PageStorageKey('map_page'),
-          bottomPanelKey: _bottomPanelKey,
-        );
-      case 2:
-        return const LedPage();
-      case 3:
-        return const SettingsPage();
-      case 4:
-        return const ContactPage();
-      default:
-        return const InfoPage();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return LandscapeProvider(
@@ -328,7 +308,20 @@ class _MainPageState extends State<MainPage> {
                 Expanded(
                   child: Stack(
                     children: [
-                      _getPage(selectedIndex),
+                      IndexedStack(
+                        index: selectedIndex,
+                        children: [
+                          const InfoPage(),
+                          MapPage(
+                            key: const PageStorageKey('map_page'),
+                            bottomPanelKey: _bottomPanelKey,
+                            isVisible: selectedIndex == 1,
+                          ),
+                          const LedPage(),
+                          const SettingsPage(),
+                          const ContactPage(),
+                        ],
+                      ),
                       if (selectedIndex >= 1 &&
                           selectedIndex <= 2 &&
                           widget.showBottomInfo)

@@ -324,7 +324,9 @@ class StatusPanel extends StatelessWidget {
           flex: 2,
           child: GestureDetector(
             onTap: () {
-              Static.TTS.speak(" ");
+              if (!isOnDuty) {
+                Static.TTS.speak(" ");
+              }
               _showConfirmDialog(
                 context: context,
                 title: isOnDuty ? '結束營運' : '開始營運',

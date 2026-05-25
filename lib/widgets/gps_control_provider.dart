@@ -12,7 +12,7 @@ class GpsControlProvider extends ChangeNotifier {
   Timer? _simTimer;
   bool _isSimulating = false;
   double _simSpeedKmh = 40.0;
-  int _updateIntervalMs = 500;
+  int _updateIntervalMs = 1000;
   BusRoute? _simRoute;
   Direction _simDirection = Direction.go;
   int _currentPathIndex = 0;
