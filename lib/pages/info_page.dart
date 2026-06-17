@@ -31,7 +31,7 @@ class _InfoPageState extends State<InfoPage>
   void initState() {
     super.initState();
     _volController = TextEditingController(
-      text: Static.globalVolume.toStringAsFixed(2),
+      text: (Static.globalVolume * 50).toStringAsFixed(0),
     );
     _speedController = TextEditingController(
       text: Static.globalSpeed.toStringAsFixed(2),
@@ -53,7 +53,7 @@ class _InfoPageState extends State<InfoPage>
   void _updateVolume(double v) {
     setState(() {
       Static.globalVolume = v.clamp(0.0, 1.0);
-      _volController.text = Static.globalVolume.toStringAsFixed(2);
+      _volController.text = (Static.globalVolume * 50).toStringAsFixed(0);
     });
     Static.audioManager.playAssetAndWait("notice.mp3");
   }
