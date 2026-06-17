@@ -34814,7 +34814,7 @@ $S:2}
 A.aVp.prototype={
 $1(a){var s=A.ef().b
 s=s==null?null:s.canvasKitBaseUrl
-return(s==null?"https://www.gstatic.com/flutter-canvaskit/4c525dac5ebe5971c5708ef73558ed8edcf4a362/":s)+a},
+return(s==null?"https://www.gstatic.com/flutter-canvaskit/77e2e94772b6eb43759e34ed1ad7da4674e19cab/":s)+a},
 $S:64}
 A.W7.prototype={
 gB(a){var s=this.a
@@ -57969,7 +57969,7 @@ ab(){return new A.MB(null,null)}}
 A.MB.prototype={
 am(){var s,r,q=this
 q.aB()
-s=B.d.af($.rh,2)
+s=B.d.af($.rh*50,0)
 r=$.af()
 q.d=new A.cr(new A.bU(s,B.ao,B.X),r)
 s=B.d.af($.rg,2)
@@ -58036,7 +58036,7 @@ $0(){var s,r=B.d.cb(this.b,0,1)
 $.rh=r
 s=this.a.d
 s===$&&A.a()
-s.sbZ(0,B.d.af(r,2))},
+s.sbZ(0,B.d.af(r*50,0))},
 $S:0}
 A.aJV.prototype={
 $0(){var s,r=B.d.cb(this.b,0.5,2)
