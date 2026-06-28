@@ -200,10 +200,7 @@ class AudioManager {
         sub?.cancel();
       });
       await _player.resume();
-      await completer.future.timeout(
-        const Duration(seconds: 15),
-        onTimeout: () => sub?.cancel(),
-      );
+      await completer.future;
     }
   }
 
@@ -229,13 +226,7 @@ class AudioManager {
         (Static.globalSpeed * localSpeed).clamp(0.5, 2.0),
       );
 
-      await completer.future.timeout(
-        const Duration(seconds: 15),
-        onTimeout: () {
-          sub?.cancel();
-          _player.stop();
-        },
-      );
+      await completer.future;
     } catch (e) {
       debugPrint("播放資產檔案錯誤 ($path): $e");
     }

@@ -98,12 +98,7 @@ class TTSWeb implements TTSInterface {
       if (!completer.isCompleted) completer.complete();
     }.toJS;
     web.window.speechSynthesis.speak(utterance);
-    return completer.future.timeout(
-      const Duration(seconds: 15),
-      onTimeout: () {
-        if (!completer.isCompleted) completer.complete();
-      },
-    );
+    return completer.future;
   }
 }
 
