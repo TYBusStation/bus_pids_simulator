@@ -39,6 +39,31 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
           ),
         ),
         ListTile(
+          title: const Text("全域字幕顏色", style: TextStyle(fontSize: 14)),
+          subtitle: const Text(
+            "紅色：FFFF0000，螢光綠：FFEDFA00",
+            style: TextStyle(fontSize: 12),
+          ),
+          trailing: SizedBox(
+            width: 100,
+            child: TextField(
+              textAlign: TextAlign.end,
+              controller: TextEditingController(
+                text: Static.ledColor.toRadixString(16),
+              ),
+              keyboardType: TextInputType.number,
+              onSubmitted: (s) {
+                final n = int.tryParse(s, radix: 16);
+                if (n != null) {
+                  Static.ledColor = n;
+                  Static.saveSettings();
+                  setState(() {});
+                }
+              },
+            ),
+          ),
+        ),
+        ListTile(
           title: const Text("字幕顯示區域高度", style: TextStyle(fontSize: 14)),
           trailing: SizedBox(
             width: 80,
@@ -76,10 +101,10 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
             ),
             SequenceManagerWidget<String>(
               title: "即將接近字幕序列",
+              subtitle: "站名串接列表：{next_stations}",
               items: Static.nextStationListSequence,
               onAdd: () => "{next_stations}",
-              onEdit: (val) async =>
-                  await _showTextDialog(val, "可用參數：\n{next_stations} - 站名串接列表"),
+              onEdit: (val) async => await _showTextDialog(val),
             ),
             ExpansionTile(
               title: const Text(
@@ -89,12 +114,10 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
               children: [
                 SequenceManagerWidget<String>(
                   title: "單站顯示",
+                  subtitle: "中文：{name}，英文：{nameEn}",
                   items: Static.nextStationSubSequence,
                   onAdd: () => "{name}",
-                  onEdit: (val) async => await _showTextDialog(
-                    val,
-                    "可用參數：\n{name} - 中文\n{nameEn} - 英文",
-                  ),
+                  onEdit: (val) async => await _showTextDialog(val),
                 ),
                 ListTile(
                   title: const Text(
@@ -142,18 +165,21 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
         ),
         SequenceManagerWidget<LedSequence>(
           title: "字幕輪播標語設定",
+          subtitle: "",
           items: Static.sloganList,
           onAdd: () => LedSequence(template: "歡迎搭乘"),
           onEdit: (val) async => await _showLedDialog(val, "編輯輪播標語"),
         ),
         SequenceManagerWidget<LedSequence>(
           title: "下站字幕顯示序列",
+          subtitle: "中文：{name}，英文：{nameEn}，終點站：{terminal}",
           items: Static.ledNextStationSeq,
           onAdd: () => LedSequence(template: "下一站"),
           onEdit: (val) async => await _showLedDialog(val, "編輯下站序列"),
         ),
         SequenceManagerWidget<LedSequence>(
           title: "到站字幕顯示序列",
+          subtitle: "中文：{name}，英文：{nameEn}，終點站：{terminal}",
           items: Static.ledArrivalSeq,
           onAdd: () => LedSequence(template: "到了"),
           onEdit: (val) async => await _showLedDialog(val, "編輯到站序列"),
@@ -162,28 +188,13 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
     );
   }
 
-  Future<String?> _showTextDialog(String initial, String hint) async {
+  Future<String?> _showTextDialog(String initial) async {
     final c = TextEditingController(text: initial);
     return await showDialog<String>(
       context: context,
       builder: (v) => AlertDialog(
         title: const Text("編輯片段", style: TextStyle(fontSize: 16)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextField(controller: c, autofocus: true),
-            const SizedBox(height: 10),
-            Text(
-              hint,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Colors.grey,
-                height: 1.5,
-              ),
-            ),
-          ],
-        ),
+        content: TextField(controller: c, autofocus: true),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(v),
@@ -203,6 +214,8 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
     final eC = TextEditingController(text: item.entrySpeed.toStringAsFixed(0));
     final sC = TextEditingController(text: item.scrollSpeed.toStringAsFixed(0));
     final dC = TextEditingController(text: item.stayMs.toString());
+    final cC = TextEditingController(text: item.color.toRadixString(16));
+
     LedEntryShort shortE = item.entryShort;
     LedEntryLong longE = item.entryLong;
 
@@ -214,18 +227,35 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
         actionsPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         title: Text(title, style: const TextStyle(fontSize: 18)),
         content: SizedBox(
-          width: 500,
+          width: 700,
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(
-                  controller: tC,
-                  decoration: const InputDecoration(
-                    labelText: "內容內容",
-                    isDense: true,
-                    contentPadding: EdgeInsets.symmetric(vertical: 8),
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: tC,
+                        decoration: const InputDecoration(
+                          labelText: "內容",
+                          isDense: true,
+                          contentPadding: EdgeInsets.symmetric(vertical: 8),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 15),
+                    Expanded(
+                      child: TextField(
+                        controller: cC,
+                        decoration: const InputDecoration(
+                          labelText: "顏色",
+                          isDense: true,
+                          contentPadding: EdgeInsets.symmetric(vertical: 8),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 12),
                 Row(
@@ -251,7 +281,7 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
                         onChanged: (v) => shortE = v!,
                       ),
                     ),
-                    const SizedBox(width: 15),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: DropdownButtonFormField<LedEntryLong>(
                         value: longE,
@@ -273,11 +303,7 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
                         onChanged: (v) => longE = v!,
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
+                    const SizedBox(width: 10),
                     Expanded(
                       child: TextField(
                         controller: eC,
@@ -312,6 +338,8 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 12),
+                Row(children: []),
                 const SizedBox(height: 10),
               ],
             ),
@@ -330,6 +358,7 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
               item.entrySpeed = double.tryParse(eC.text) ?? 500;
               item.scrollSpeed = double.tryParse(sC.text) ?? 400;
               item.stayMs = int.tryParse(dC.text) ?? 800;
+              item.color = int.tryParse(cC.text) ?? 0xFFFF0000;
               Static.saveSettings();
               Navigator.pop(v, item);
             },

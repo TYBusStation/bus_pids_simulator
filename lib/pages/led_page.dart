@@ -148,7 +148,7 @@ class _LedPageState extends State<LedPage> {
           slogans.add(
             LedSequence(
               template: finalSlogan,
-              scrollSpeed: Static.ledScrollSpeed,
+              scrollSpeed: (Static.ledScrollSpeed),
             ),
           );
         }
@@ -350,7 +350,13 @@ class _LedContentState extends State<LedContent> with TickerProviderStateMixin {
   void _startScroll(double tw, double vw) {
     double dist = tw + vw;
     _scrollAnim.duration = Duration(
-      milliseconds: (dist / widget.config.scrollSpeed * 1000).toInt(),
+      milliseconds:
+          (dist /
+                  (widget.config.scrollSpeed >= 0
+                      ? widget.config.scrollSpeed
+                      : Static.ledScrollSpeed) *
+                  1000)
+              .toInt(),
     );
     _scrollAnim.addListener(() {
       if (_scroll.hasClients) _scroll.jumpTo(_scrollAnim.value * dist);
@@ -400,7 +406,11 @@ class _LedContentState extends State<LedContent> with TickerProviderStateMixin {
                   style: TextStyle(
                     fontFamily: 'unifont',
                     fontSize: fontSize,
-                    color: const Color(0xFFFF0000),
+                    color: Color(
+                      widget.config.color >= 0
+                          ? widget.config.color
+                          : Static.ledColor,
+                    ),
                     height: 1.0,
                   ),
                 ),

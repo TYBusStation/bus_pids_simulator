@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:marquee/marquee.dart';
 
@@ -169,7 +171,7 @@ class _AudioPageState extends State<AudioPage> {
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                   icon: const Icon(Icons.delete, size: 18, color: Colors.red),
-                  onPressed: () => _handleDelete(name), // 修改此處
+                  onPressed: () => _handleDelete(name),
                 ),
               ],
             ),
@@ -180,7 +182,6 @@ class _AudioPageState extends State<AudioPage> {
     );
   }
 
-  // 新增刪除處理邏輯
   Future<void> _handleDelete(String name) async {
     final bool? confirm = await showDialog<bool>(
       context: context,
@@ -251,7 +252,7 @@ class _AudioPageState extends State<AudioPage> {
         FloatingActionButton.small(
           heroTag: "export_zip",
           child: const Icon(Icons.archive),
-          onPressed: () => Static.audioManager.exportAllZip(),
+          onPressed: _handleExportZipConfirm,
         ),
         const SizedBox(height: 8),
         FloatingActionButton.small(
@@ -263,6 +264,30 @@ class _AudioPageState extends State<AudioPage> {
     );
   }
 
+  Future<void> _handleExportZipConfirm() async {
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (v) => AlertDialog(
+        title: const Text("確認匯出"),
+        content: const Text("您確定要將所有音檔打包匯出為 ZIP 嗎？"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(v, false),
+            child: const Text("取消"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(v, true),
+            child: const Text("匯出"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await Static.audioManager.exportAllZip();
+    }
+  }
+
   Future<void> _handleImportZip() async {
     final files = await Static.audioManager.pickZipFiles();
     if (files == null || files.isEmpty) return;
@@ -270,7 +295,7 @@ class _AudioPageState extends State<AudioPage> {
         await showDialog<bool>(
           context: context,
           builder: (v) => AlertDialog(
-            title: Text("匯入 (${files.length})"),
+            title: Text("匯入確認 (${files.length})"),
             content: SizedBox(
               width: double.maxFinite,
               child: ListView.builder(
@@ -289,7 +314,7 @@ class _AudioPageState extends State<AudioPage> {
               ),
               TextButton(
                 onPressed: () => Navigator.pop(v, true),
-                child: const Text("確認"),
+                child: const Text("確認匯入"),
               ),
             ],
           ),
@@ -304,13 +329,22 @@ class _AudioPageState extends State<AudioPage> {
   }
 
   Future<void> _handleAddNew() async {
-    final c = TextEditingController();
+    final result = await Static.audioManager.pickSingleFile();
+    if (result == null || result.bytes == null) return;
+
+    final String originalName = result.name.split('.').first;
+    final Uint8List bytes = result.bytes!;
+    final c = TextEditingController(text: originalName);
+
+    if (!mounted) return;
+
     showDialog(
       context: context,
       builder: (v) => AlertDialog(
         title: const Text("新增音檔"),
         content: TextField(
           controller: c,
+          autofocus: true,
           decoration: const InputDecoration(hintText: "音檔名稱"),
         ),
         actions: [
@@ -320,13 +354,14 @@ class _AudioPageState extends State<AudioPage> {
           ),
           ElevatedButton(
             onPressed: () async {
-              if (c.text.isNotEmpty) {
-                await Static.audioManager.pickAndSave(c.text);
-                if (mounted) Navigator.pop(v);
-                _refresh();
-              }
+              final finalName = c.text.trim().isEmpty
+                  ? originalName
+                  : c.text.trim();
+              await Static.audioManager.saveAudio(finalName, bytes);
+              if (mounted) Navigator.pop(v);
+              _refresh();
             },
-            child: const Text("選擇"),
+            child: const Text("儲存"),
           ),
         ],
       ),
@@ -339,7 +374,7 @@ class _AudioPageState extends State<AudioPage> {
       context: context,
       builder: (v) => AlertDialog(
         title: const Text("更名"),
-        content: TextField(controller: c),
+        content: TextField(controller: c, autofocus: true),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(v),

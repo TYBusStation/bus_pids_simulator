@@ -55,6 +55,7 @@ abstract class Static {
   ];
   static bool showStationListSlogan = true;
   static double ledScrollSpeed = 400.0;
+  static int ledColor = 0xFFFF0000;
   static double ledHeight = 150.0;
   static List<String> nextStationListSequence = [
     "即將接近：",

@@ -44,30 +44,26 @@ class _RulesTabState extends State<RulesTab> {
         const Divider(height: 32),
         SequenceManagerWidget<String>(
           title: "{name}",
+          subtitle: "中文：{name_zh}，閩語：{name_ho}，客語：{name_hk}，英語：{name_en}",
           items: Static.stationVoiceSequence,
           onAdd: () => "{name_zh}",
-          onEdit: (val) async => await _showTextDialog(
-            val,
-            "可用參數：\n{name_zh} - 中文\n{name_ho} - 台語\n{name_hk} - 客語\n{name_en} - 英文",
-          ),
+          onEdit: (val) async => await _showTextDialog(val),
         ),
         SequenceManagerWidget<String>(
           title: "下站報站語音序列",
+          subtitle:
+              "{name}，中文：{name_zh}，閩語：{name_ho}，客語：{name_hk}，英語：{name_en}，終點站：{terminal}",
           items: Static.nextStationTemplate,
           onAdd: () => "下一站",
-          onEdit: (val) async => await _showTextDialog(
-            val,
-            "可用參數：\n{name} - 引用上方定義的完整序列\n{name_zh} - 中文\n{name_ho} - 台語\n{name_hk} - 客語\n{name_en} - 英文\n{terminal} - 「終點站」字樣",
-          ),
+          onEdit: (val) async => await _showTextDialog(val),
         ),
         SequenceManagerWidget<String>(
           title: "到站報站語音序列",
+          subtitle:
+              "{name}，中文：{name_zh}，閩語：{name_ho}，客語：{name_hk}，英語：{name_en}，終點站：{terminal}",
           items: Static.arrivalTemplate,
           onAdd: () => "到了",
-          onEdit: (val) async => await _showTextDialog(
-            val,
-            "可用參數：\n{name} - 引用上方定義的完整序列\n{name_zh} - 中文\n{name_ho} - 台語\n{name_hk} - 客語\n{name_en} - 英文\n{terminal} - 「終點站」字樣",
-          ),
+          onEdit: (val) async => await _showTextDialog(val),
         ),
       ],
     );
@@ -98,31 +94,16 @@ class _RulesTabState extends State<RulesTab> {
     );
   }
 
-  Future<String?> _showTextDialog(String initial, String hint) async {
+  Future<String?> _showTextDialog(String initial) async {
     final c = TextEditingController(text: initial);
     return await showDialog<String>(
       context: context,
       builder: (v) => AlertDialog(
         title: const Text("編輯片段"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextField(
-              controller: c,
-              autofocus: true,
-              decoration: const InputDecoration(labelText: "內容"),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              hint,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-                height: 1.5,
-              ),
-            ),
-          ],
+        content: TextField(
+          controller: c,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: "內容"),
         ),
         actions: [
           TextButton(
@@ -141,6 +122,7 @@ class _RulesTabState extends State<RulesTab> {
 
 class SequenceManagerWidget<T> extends StatefulWidget {
   final String title;
+  final String subtitle;
   final List<T> items;
   final T Function() onAdd;
   final Future<T?> Function(T) onEdit;
@@ -148,6 +130,7 @@ class SequenceManagerWidget<T> extends StatefulWidget {
   const SequenceManagerWidget({
     super.key,
     required this.title,
+    required this.subtitle,
     required this.items,
     required this.onAdd,
     required this.onEdit,
@@ -166,6 +149,7 @@ class _SequenceManagerWidgetState<T> extends State<SequenceManagerWidget<T>> {
         widget.title,
         style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
       ),
+      subtitle: Text(widget.subtitle, style: TextStyle(fontSize: 12)),
       children: [
         ...widget.items.asMap().entries.map(
           (e) => ListTile(

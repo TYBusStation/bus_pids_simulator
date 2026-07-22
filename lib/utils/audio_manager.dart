@@ -210,7 +210,6 @@ class AudioManager {
       if (kIsWeb) await _player.release();
 
       await _player.setSource(AssetSource(path));
-
       await _player.setVolume(Static.globalVolume.clamp(0.0, 1.0));
 
       final completer = Completer<void>();
@@ -221,14 +220,13 @@ class AudioManager {
       });
 
       await _player.resume();
-
       await _player.setPlaybackRate(
         (Static.globalSpeed * localSpeed).clamp(0.5, 2.0),
       );
 
       await completer.future;
     } catch (e) {
-      debugPrint("播放資產檔案錯誤 ($path): $e");
+      debugPrint("Error playing asset ($path): $e");
     }
   }
 
@@ -269,21 +267,23 @@ class AudioManager {
 
   Future<void> deleteAudio(String n) async => await _audioBox.delete(n);
 
-  void exportSingle(String n) {
+  Future<void> exportSingle(String n) async {
     final b = _audioBox.get(n);
     if (b != null) downloadFile(b, "$n.mp3");
   }
 
-  void exportAllZip() {
+  Future<void> exportAllZip() async {
     final archive = Archive();
     for (var name in allAudioNames) {
       final bytes = _audioBox.get(name);
-      if (bytes != null)
+      if (bytes != null) {
         archive.addFile(ArchiveFile("$name.mp3", bytes.length, bytes));
+      }
     }
     final zipData = ZipEncoder().encode(archive);
-    if (zipData != null)
+    if (zipData != null) {
       downloadFile(Uint8List.fromList(zipData), "bus_audio_backup.zip");
+    }
   }
 
   Future<void> pickAndSave(String name) async {
@@ -291,8 +291,18 @@ class AudioManager {
       type: FileType.audio,
       withData: true,
     );
-    if (result != null && result.files.first.bytes != null)
+    if (result != null && result.files.first.bytes != null) {
       await saveAudio(name, result.files.first.bytes!);
+    }
+  }
+
+  Future<PlatformFile?> pickSingleFile() async {
+    FilePickerResult? result = await FilePicker.pickFiles(
+      type: FileType.audio,
+      withData: true,
+    );
+    if (result != null) return result.files.first;
+    return null;
   }
 
   Future<Map<String, Uint8List>?> pickZipFiles() async {

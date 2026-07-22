@@ -1,3 +1,5 @@
+
+
 enum LedEntryShort {
   bottomLeft,
   bottomCenter,
@@ -21,14 +23,16 @@ class LedSequence {
   double scrollSpeed;
   int stayMs;
   double entrySpeed;
+  int color;
 
   LedSequence({
     required this.template,
     this.entryShort = LedEntryShort.bottomLeft,
     this.entryLong = LedEntryLong.rightScrollIn,
-    this.scrollSpeed = 400.0,
+    this.scrollSpeed = -1,
     this.stayMs = 800,
     this.entrySpeed = 500,
+    this.color = -1,
   });
 
   Map<String, dynamic> toJson() => {

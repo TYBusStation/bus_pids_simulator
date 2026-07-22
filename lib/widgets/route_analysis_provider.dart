@@ -207,10 +207,11 @@ class RouteAnalysisProvider extends ChangeNotifier {
     final template = (station.useGlobalNext || station.nextTemplate == null)
         ? Static.nextStationTemplate
         : station.nextTemplate!;
-
-    _executeVoice(
-      _buildSeq(template, station.name, station.nameEn, isTerminal),
-    );
+    if (template.isNotEmpty) {
+      _executeVoice(
+        _buildSeq(template, station.name, station.nameEn, isTerminal),
+      );
+    }
   }
 
   void _handleLogic(
@@ -223,7 +224,7 @@ class RouteAnalysisProvider extends ChangeNotifier {
     final int terminalOrder = stations.isNotEmpty ? stations.last.order : -1;
 
     if (nextStation != null) {
-      final double distNext = result.distToNextStation ?? 10000;
+      final double distNext = result.distToNextStation ?? 1000000000;
       final double distPrev = result.distToPrevStation ?? 0;
       bool distCond =
           !result.isOffRoute &&
@@ -254,14 +255,16 @@ class RouteAnalysisProvider extends ChangeNotifier {
                     nextStation.arrivalTemplate == null)
                 ? Static.arrivalTemplate
                 : nextStation.arrivalTemplate!;
-            _executeVoice(
-              _buildSeq(
-                template,
-                nextStation.name,
-                nextStation.nameEn,
-                isTerminal,
-              ),
-            );
+            if (template.isNotEmpty) {
+              _executeVoice(
+                _buildSeq(
+                  template,
+                  nextStation.name,
+                  nextStation.nameEn,
+                  isTerminal,
+                ),
+              );
+            }
           }
         }
       }
