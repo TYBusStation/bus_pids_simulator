@@ -22,62 +22,47 @@ class ContactPage extends StatelessWidget {
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 600),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8.0),
-                  child: Column(
-                    children: List.generate(ContactItem.contactItems.length, (
-                      index,
-                    ) {
-                      final item = ContactItem.contactItems[index];
-                      return Column(
-                        children: [
-                          ListTile(
-                            dense: true,
-                            leading: FaIcon(
-                              item.icon,
-                              size: 24,
-                              color: theme.colorScheme.primary,
-                            ),
-                            title: Text(
-                              item.title,
-                              style: theme.textTheme.titleMedium,
-                            ),
-                            trailing: OutlinedButton(
-                              onPressed: () => _launchUrl(item.url),
-                              style: OutlinedButton.styleFrom(
-                                side: BorderSide(
-                                  color: theme.colorScheme.primary,
-                                ),
-                              ),
-                              child: const Text("前往"),
-                            ),
-                            onTap: () => _launchUrl(item.url),
+          child: Card(
+            elevation: 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: Column(
+                children: List.generate(ContactItem.contactItems.length, (
+                  index,
+                ) {
+                  final item = ContactItem.contactItems[index];
+                  return Column(
+                    children: [
+                      ListTile(
+                        dense: true,
+                        leading: FaIcon(
+                          item.icon,
+                          size: 24,
+                          color: theme.colorScheme.primary,
+                        ),
+                        title: Text(
+                          item.title,
+                          style: theme.textTheme.titleMedium,
+                        ),
+                        trailing: OutlinedButton(
+                          onPressed: () => _launchUrl(item.url),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: theme.colorScheme.primary),
                           ),
-                          if (index < ContactItem.contactItems.length - 1)
-                            const Divider(indent: 20, endIndent: 20, height: 1),
-                        ],
-                      );
-                    }),
-                  ),
-                ),
+                          child: const Text("前往"),
+                        ),
+                        onTap: () => _launchUrl(item.url),
+                      ),
+                      if (index < ContactItem.contactItems.length - 1)
+                        const Divider(indent: 20, endIndent: 20, height: 1),
+                    ],
+                  );
+                }),
               ),
-              const SizedBox(height: 16),
-              const Center(
-                child: Text(
-                  "Version 1.0.0 | © TYBusStation",
-                  style: TextStyle(color: Colors.white24, fontSize: 10),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
+            ),
           ),
         ),
       ),

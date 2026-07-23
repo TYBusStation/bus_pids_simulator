@@ -8,10 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 import 'static.dart';
-import 'utils.dart'
-    if (dart.library.js_interop) 'utils_web.dart'
-    if (dart.library.html) 'utils_web.dart'
-    if (dart.library.io) 'utils_stub.dart';
+import 'utils_helper.dart';
 
 class VoicePack {
   final String name;
@@ -274,15 +271,25 @@ class AudioManager {
 
   Future<void> exportAllZip() async {
     final archive = Archive();
-    for (var name in allAudioNames) {
+
+    final names = allAudioNames;
+    if (names.isEmpty) return;
+
+    for (var name in names) {
       final bytes = _audioBox.get(name);
       if (bytes != null) {
         archive.addFile(ArchiveFile("$name.mp3", bytes.length, bytes));
       }
     }
+
     final zipData = ZipEncoder().encode(archive);
     if (zipData != null) {
-      downloadFile(Uint8List.fromList(zipData), "bus_audio_backup.zip");
+      final Uint8List finalZip = Uint8List.fromList(zipData);
+
+      downloadFile(
+        finalZip,
+        "backup_${DateTime.now().millisecondsSinceEpoch}.zip",
+      );
     }
   }
 

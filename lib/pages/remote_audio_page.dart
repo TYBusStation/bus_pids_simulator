@@ -1,7 +1,7 @@
 import 'dart:convert';
-import 'dart:html' as html;
 
 import 'package:bus_pids_simulator/utils/formatter_utils.dart';
+import 'package:bus_pids_simulator/utils/utils_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
@@ -53,9 +53,8 @@ class _RemoteAudioPageState extends State<RemoteAudioPage> {
   void _downloadFile(String relPath, String fileName) {
     final url =
         "${Static.API_BASE}/internal/storage/download?path=${Uri.encodeComponent(relPath)}";
-    html.AnchorElement(href: url)
-      ..setAttribute("download", fileName)
-      ..click();
+
+    downloadFileFromUrl(url, fileName);
   }
 
   Future<void> _importAction(

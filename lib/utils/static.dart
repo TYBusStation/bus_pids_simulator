@@ -1,21 +1,18 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
 import '../data/bus_route.dart';
 import '../data/led_sequence.dart';
 import '../data/status.dart';
 import 'audio_manager.dart';
-import 'tts.dart'
-    if (dart.library.js_interop) 'tts_web.dart'
-    if (dart.library.html) 'tts_web.dart'
-    if (dart.library.io) 'tts_stub.dart';
+import 'tts_helper.dart';
 
 abstract class Static {
   static Map<String, List<BusRoute>> routeData = {};
@@ -25,12 +22,19 @@ abstract class Static {
   static final audioManager = AudioManager();
   static const String _settingsBoxName = "settings_box";
   static const String _customRoutesBoxName = "custom_routes_box";
+  static const String _cityDataBoxName = "city_data_box";
   static late Box _box;
   static late Box _customBox;
+  static late Box _cityBox;
 
-  // static const String API_BASE = "http://192.168.1.249:25567";
+  static const String API_BASE = "http://192.168.1.249:25567";
 
-  static const String API_BASE = "https://myster.freeddns.org:25566";
+  static final dio = Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 10),
+      receiveTimeout: const Duration(seconds: 60),
+    ),
+  );
 
   static final ChangeNotifier settingsNotifier = ChangeNotifier();
   static String licensePlate = "KKA-0000";
@@ -84,26 +88,44 @@ abstract class Static {
     await Hive.initFlutter();
     _box = await Hive.openBox(_settingsBoxName);
     _customBox = await Hive.openBox(_customRoutesBoxName);
+    _cityBox = await Hive.openBox(_cityDataBoxName);
     await _loadSettings();
     await audioManager.init();
-    await fetchAvailableCities();
     await _loadCustomRoutes();
+    _updateAvailableCitiesList([]);
     await TTS.init();
     await requestLocationPermission();
   }
 
+  static void _updateAvailableCitiesList(List<String> serverCities) {
+    final cachedCities = _cityBox.keys.map((e) => e.toString()).toList();
+    availableCities = {'Custom', ...serverCities, ...cachedCities}.toList();
+  }
+
+  static Future<void> saveCityData(String city, String jsonRaw) async {
+    await _cityBox.put(city, {
+      'timestamp': DateTime.now().millisecondsSinceEpoch,
+      'data': jsonRaw,
+    });
+    _updateAvailableCitiesList([]);
+  }
+
+  static Map<String, dynamic>? getCityCache(String city) {
+    final entry = _cityBox.get(city);
+    if (entry == null) return null;
+    return Map<String, dynamic>.from(entry);
+  }
+
   static Future<void> fetchAvailableCities() async {
     try {
-      final res = await http
-          .get(Uri.parse("$API_BASE/simulator_cities"))
-          .timeout(const Duration(seconds: 5));
+      final res = await dio.get("$API_BASE/simulator_cities");
       if (res.statusCode == 200) {
-        List<dynamic> cities = jsonDecode(res.body);
-        availableCities = ['Custom', ...cities.map((e) => e.toString())];
+        List<dynamic> cities = res.data;
+        _updateAvailableCitiesList(cities.map((e) => e.toString()).toList());
       }
     } catch (e) {
       log("Fetch cities failed: $e");
-      availableCities = ['Custom'];
+      _updateAvailableCitiesList([]);
     }
   }
 

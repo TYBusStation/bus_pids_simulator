@@ -51,7 +51,6 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
               controller: TextEditingController(
                 text: Static.ledColor.toRadixString(16),
               ),
-              keyboardType: TextInputType.number,
               onSubmitted: (s) {
                 final n = int.tryParse(s, radix: 16);
                 if (n != null) {

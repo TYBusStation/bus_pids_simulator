@@ -1,7 +1,3 @@
-import 'package:bus_pids_simulator/utils/web_interop.dart'
-    if (dart.library.js_interop) 'package:bus_pids_simulator/utils/web_interop_web.dart'
-    if (dart.library.html) 'package:bus_pids_simulator/utils/web_interop_web.dart'
-    if (dart.library.io) 'package:bus_pids_simulator/utils/web_interop_stub.dart';
 import 'package:bus_pids_simulator/widgets/status_panal.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -9,6 +5,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../data/status.dart';
 import '../utils/static.dart';
+import '../widgets/landscape_provider.dart';
 import '../widgets/location_provider.dart';
 import '../widgets/route_analysis_provider.dart';
 import '../widgets/status_provider.dart';
@@ -67,7 +64,7 @@ class _InfoPageState extends State<InfoPage>
 
   void _toggleFullscreen() {
     FocusScope.of(context).unfocus();
-    getWebInterop().toggleFullscreen();
+    context.read<LandscapeChangeNotifier>().toggleOnlyFullscreen();
   }
 
   void _toggleWakeLock() {
@@ -251,8 +248,20 @@ class _InfoPageState extends State<InfoPage>
               Expanded(
                 child: FilledButton.icon(
                   onPressed: _toggleFullscreen,
-                  icon: const Icon(Icons.fullscreen, size: 12),
-                  label: const Text("全螢幕", style: TextStyle(fontSize: 9)),
+                  icon: Consumer<LandscapeChangeNotifier>(
+                    builder: (context, geo, _) => Icon(
+                      geo.isFullscreen
+                          ? Icons.fullscreen_exit
+                          : Icons.fullscreen,
+                      size: 12,
+                    ),
+                  ),
+                  label: Consumer<LandscapeChangeNotifier>(
+                    builder: (context, geo, _) => Text(
+                      geo.isFullscreen ? "退出全螢幕" : "全螢幕",
+                      style: const TextStyle(fontSize: 9),
+                    ),
+                  ),
                   style: FilledButton.styleFrom(
                     backgroundColor: theme.colorScheme.secondary,
                     padding: EdgeInsets.zero,

@@ -3,13 +3,17 @@ import 'dart:js_interop';
 import 'package:bus_pids_simulator/utils/web_interop.dart';
 import 'package:web/web.dart' as web;
 
-@JS('hideFlutterLoader')
+@JS('window.hideFlutterLoader')
 external void hideFlutterLoaderJS();
 
 class WebInteropWeb implements WebInterop {
   @override
   void hideFlutterLoader() {
-    hideFlutterLoaderJS();
+    try {
+      hideFlutterLoaderJS();
+    } catch (e) {
+      print(e);
+    }
   }
 
   @override
@@ -33,11 +37,7 @@ class WebInteropWeb implements WebInterop {
       }
 
       await screen.orientation.lock('landscape').toDart;
-
-      print("螢幕鎖定成功");
     } catch (e) {
-      print("螢幕鎖定失敗或瀏覽器不支援: $e");
-
       toggleFullscreen();
     }
   }

@@ -3,10 +3,6 @@ import 'dart:async';
 import 'package:bus_pids_simulator/data/status.dart';
 import 'package:bus_pids_simulator/pages/settings_page.dart';
 import 'package:bus_pids_simulator/utils/static.dart';
-import 'package:bus_pids_simulator/utils/web_interop.dart'
-    if (dart.library.js_interop) 'package:bus_pids_simulator/utils/web_interop_web.dart'
-    if (dart.library.html) 'package:bus_pids_simulator/utils/web_interop_web.dart'
-    if (dart.library.io) 'package:bus_pids_simulator/utils/web_interop_stub.dart';
 import 'package:bus_pids_simulator/widgets/landscape_provider.dart';
 import 'package:bus_pids_simulator/widgets/route_analysis_provider.dart';
 import 'package:bus_pids_simulator/widgets/status_provider.dart';
@@ -200,195 +196,209 @@ class _MainPageState extends State<MainPage> {
   Widget build(BuildContext context) {
     return LandscapeProvider(
       builder: (context, landscape) {
-        if (!landscape) {
-          return Scaffold(
-            body: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text(
-                    "請將螢幕打橫",
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 20),
-                  ElevatedButton.icon(
-                    onPressed: () => getWebInterop().lockLandscape(),
-                    icon: const Icon(Icons.screen_rotation),
-                    label: const Text("旋轉手機"),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-
-        return Scaffold(
-          resizeToAvoidBottomInset: false,
-          appBar: AppBar(
-            toolbarHeight: 40,
-            titleSpacing: 0,
-            title: Row(
-              children: [
-                const SizedBox(width: 15),
-                const Text(
-                  "公車 PIDS 模擬器",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                const Spacer(),
-                InkWell(
-                  onTap: _editLicensePlate,
-                  child: Row(
-                    children: [
-                      const Icon(Icons.directions_bus, size: 16),
-                      const SizedBox(width: 4),
-                      Text(
-                        Static.licensePlate,
-                        style: const TextStyle(fontSize: 14),
+        return Stack(
+          children: [
+            Scaffold(
+              resizeToAvoidBottomInset: false,
+              appBar: AppBar(
+                toolbarHeight: 40,
+                titleSpacing: 0,
+                title: Row(
+                  children: [
+                    const SizedBox(width: 15),
+                    const Text(
+                      "公車 PIDS 模擬器",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 30),
-                InkWell(
-                  onTap: _editDriverId,
-                  child: Row(
-                    children: [
-                      const Icon(Icons.person, size: 16),
-                      const SizedBox(width: 4),
-                      Text(
-                        Static.driverId,
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                    ],
-                  ),
-                ),
-                const Spacer(),
-              ],
-            ),
-            actions: [
-              StreamBuilder(
-                stream: Stream.periodic(const Duration(seconds: 1)),
-                builder: (context, snapshot) => Text(
-                  DateFormat('HH:mm:ss').format(DateTime.now()),
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 15),
-            ],
-          ),
-          body: SafeArea(
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 60,
-                  child: NavigationRail(
-                    minWidth: 60,
-                    selectedIndex: selectedIndex,
-                    onDestinationSelected: (index) =>
-                        setState(() => selectedIndex = index),
-                    labelType: NavigationRailLabelType.all,
-                    destinations: _allDestinations
-                        .map(
-                          (d) => NavigationRailDestination(
-                            icon: d.icon,
-                            selectedIcon: d.selectedIcon,
-                            label: Text(
-                              d.label,
-                              style: const TextStyle(fontSize: 10),
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ),
-                const VerticalDivider(thickness: 1, width: 1),
-                Expanded(
-                  child: Stack(
-                    children: [
-                      IndexedStack(
-                        index: selectedIndex,
+                    ),
+                    const Spacer(),
+                    InkWell(
+                      onTap: _editLicensePlate,
+                      child: Row(
                         children: [
-                          const InfoPage(),
-                          MapPage(
-                            key: const PageStorageKey('map_page'),
-                            bottomPanelKey: _bottomPanelKey,
-                            isVisible: selectedIndex == 1,
+                          const Icon(Icons.directions_bus, size: 16),
+                          const SizedBox(width: 4),
+                          Text(
+                            Static.licensePlate,
+                            style: const TextStyle(fontSize: 14),
                           ),
-                          const LedPage(),
-                          const SettingsPage(),
-                          const ContactPage(),
                         ],
                       ),
-                      if (selectedIndex >= 1 &&
-                          selectedIndex <= 2 &&
-                          widget.showBottomInfo)
-                        Positioned(
-                          bottom: 0,
-                          left: 0,
-                          right: 0,
-                          child:
-                              Consumer2<
-                                StatusChangeNotifier,
-                                RouteAnalysisProvider
-                              >(
-                                builder:
-                                    (
-                                      context,
-                                      statusNotifier,
-                                      analysisProvider,
-                                      child,
-                                    ) {
-                                      final status =
-                                          statusNotifier.currentStatus;
-                                      return MapBottomPanel(
-                                        key: _bottomPanelKey,
-                                        analysis:
-                                            analysisProvider.currentAnalysis,
-                                        stations:
-                                            status.direction == Direction.go
-                                            ? status.route.stations.go
-                                            : status.route.stations.back,
-                                      );
-                                    },
-                              ),
-                        ),
-                      if (selectedIndex >= 1 && selectedIndex <= 2)
-                        Positioned(
-                          bottom: widget.showBottomInfo ? 35 : 0,
-                          left: 0,
-                          right: 0,
-                          child: Center(
-                            child: GestureDetector(
-                              onTap: widget.onToggleBottomInfo,
-                              child: Container(
-                                width: 40,
-                                height: 18,
-                                decoration: const BoxDecoration(
-                                  color: Colors.black54,
-                                  borderRadius: BorderRadius.vertical(
-                                    top: Radius.circular(8),
-                                  ),
+                    ),
+                    const SizedBox(width: 30),
+                    InkWell(
+                      onTap: _editDriverId,
+                      child: Row(
+                        children: [
+                          const Icon(Icons.person, size: 16),
+                          const SizedBox(width: 4),
+                          Text(
+                            Static.driverId,
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Spacer(),
+                  ],
+                ),
+                actions: [
+                  StreamBuilder(
+                    stream: Stream.periodic(const Duration(seconds: 1)),
+                    builder: (context, snapshot) => Text(
+                      DateFormat('HH:mm:ss').format(DateTime.now()),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 15),
+                ],
+              ),
+              body: SafeArea(
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 60,
+                      child: NavigationRail(
+                        minWidth: 60,
+                        selectedIndex: selectedIndex,
+                        onDestinationSelected: (index) =>
+                            setState(() => selectedIndex = index),
+                        labelType: NavigationRailLabelType.all,
+                        destinations: _allDestinations
+                            .map(
+                              (d) => NavigationRailDestination(
+                                icon: d.icon,
+                                selectedIcon: d.selectedIcon,
+                                label: Text(
+                                  d.label,
+                                  style: const TextStyle(fontSize: 10),
                                 ),
-                                child: Icon(
-                                  widget.showBottomInfo
-                                      ? Icons.keyboard_arrow_down
-                                      : Icons.keyboard_arrow_up,
-                                  color: Colors.white,
-                                  size: 18,
+                              ),
+                            )
+                            .toList(),
+                      ),
+                    ),
+                    const VerticalDivider(thickness: 1, width: 1),
+                    Expanded(
+                      child: Stack(
+                        children: [
+                          IndexedStack(
+                            index: selectedIndex,
+                            children: [
+                              const InfoPage(),
+                              MapPage(
+                                key: const PageStorageKey('map_page'),
+                                bottomPanelKey: _bottomPanelKey,
+                                isVisible: selectedIndex == 1,
+                              ),
+                              const LedPage(),
+                              const SettingsPage(),
+                              const ContactPage(),
+                            ],
+                          ),
+                          if (selectedIndex >= 1 &&
+                              selectedIndex <= 2 &&
+                              widget.showBottomInfo)
+                            Positioned(
+                              bottom: 0,
+                              left: 0,
+                              right: 0,
+                              child:
+                                  Consumer2<
+                                    StatusChangeNotifier,
+                                    RouteAnalysisProvider
+                                  >(
+                                    builder:
+                                        (
+                                          context,
+                                          statusNotifier,
+                                          analysisProvider,
+                                          child,
+                                        ) {
+                                          final status =
+                                              statusNotifier.currentStatus;
+                                          return MapBottomPanel(
+                                            key: _bottomPanelKey,
+                                            analysis: analysisProvider
+                                                .currentAnalysis,
+                                            stations:
+                                                status.direction == Direction.go
+                                                ? status.route.stations.go
+                                                : status.route.stations.back,
+                                          );
+                                        },
+                                  ),
+                            ),
+                          if (selectedIndex >= 1 && selectedIndex <= 2)
+                            Positioned(
+                              bottom: widget.showBottomInfo ? 35 : 0,
+                              left: 0,
+                              right: 0,
+                              child: Center(
+                                child: GestureDetector(
+                                  onTap: widget.onToggleBottomInfo,
+                                  child: Container(
+                                    width: 40,
+                                    height: 18,
+                                    decoration: const BoxDecoration(
+                                      color: Colors.black54,
+                                      borderRadius: BorderRadius.vertical(
+                                        top: Radius.circular(8),
+                                      ),
+                                    ),
+                                    child: Icon(
+                                      widget.showBottomInfo
+                                          ? Icons.keyboard_arrow_down
+                                          : Icons.keyboard_arrow_up,
+                                      color: Colors.white,
+                                      size: 18,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (!landscape)
+              Positioned.fill(
+                child: Scaffold(
+                  body: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text(
+                          "請將螢幕打橫",
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                    ],
+                        const SizedBox(height: 20),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            context
+                                .read<LandscapeChangeNotifier>()
+                                .toggleRotateAndFullscreen();
+                          },
+                          icon: const Icon(Icons.screen_rotation),
+                          label: const Text("旋轉手機"),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ],
-            ),
-          ),
+              ),
+          ],
         );
       },
     );
