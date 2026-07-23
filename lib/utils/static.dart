@@ -27,7 +27,8 @@ abstract class Static {
   static late Box _customBox;
   static late Box _cityBox;
 
-  static const String API_BASE = "http://192.168.1.249:25567";
+  // static const String API_BASE = "http://192.168.1.249:25567";
+  static const String API_BASE = "https://myster.freeddns.org:25566";
 
   static final dio = Dio(
     BaseOptions(
