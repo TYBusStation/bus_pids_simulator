@@ -32,8 +32,8 @@ abstract class Static {
 
   static final dio = Dio(
     BaseOptions(
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 60),
+      connectTimeout: const Duration(seconds: 120),
+      receiveTimeout: const Duration(seconds: 120),
     ),
   );
 
@@ -105,7 +105,9 @@ abstract class Static {
 
   static Future<void> saveCityData(String city, String jsonRaw) async {
     await _cityBox.put(city, {
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
+      'timestamp': DateTime
+          .now()
+          .millisecondsSinceEpoch,
       'data': jsonRaw,
     });
     _updateAvailableCitiesList([]);
@@ -269,11 +271,11 @@ abstract class Static {
     return stationVoiceSequence
         .where(
           (s) =>
-              s != "{name_zh}" &&
-              s != "{name_ho}" &&
-              s != "{name_hk}" &&
-              s != "{name_en}",
-        )
+      s != "{name_zh}" &&
+          s != "{name_ho}" &&
+          s != "{name_hk}" &&
+          s != "{name_en}",
+    )
         .toList();
   }
 
@@ -307,6 +309,6 @@ abstract class Static {
           .allMatches(wkt)
           .map(
             (m) => LatLng(double.parse(m.group(2)!), double.parse(m.group(1)!)),
-          )
+      )
           .toList();
 }
