@@ -49,7 +49,7 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
             child: TextField(
               textAlign: TextAlign.end,
               controller: TextEditingController(
-                text: Static.ledColor.toRadixString(16),
+                text: Static.ledColor.toRadixString(16).toUpperCase(),
               ),
               onSubmitted: (s) {
                 final n = int.tryParse(s, radix: 16);
@@ -213,7 +213,9 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
     final eC = TextEditingController(text: item.entrySpeed.toStringAsFixed(0));
     final sC = TextEditingController(text: item.scrollSpeed.toStringAsFixed(0));
     final dC = TextEditingController(text: item.stayMs.toString());
-    final cC = TextEditingController(text: item.color.toRadixString(16));
+    final cC = TextEditingController(
+      text: item.color.toRadixString(16).toUpperCase(),
+    );
 
     LedEntryShort shortE = item.entryShort;
     LedEntryLong longE = item.entryLong;

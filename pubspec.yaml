@@ -58,6 +58,7 @@ dependencies:
   font_awesome_flutter: ^11.0.0
   url_launcher: ^6.3.2
   json_annotation: ^4.11.0
+  flutter_launcher_icons: ^0.14.4
 
   path: any
   intl: any
@@ -106,8 +107,13 @@ flutter:
     - family: unifont
       fonts:
         - asset: assets/unifont.otf
-  #       - asset: fonts/TrajanPro_Bold.ttf
-  #         weight: 700
-  #
-  # For details regarding fonts from package dependencies,
-  # see https://flutter.dev/to/font-from-package
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/icon.png"
+  min_sdk_android: 17
+
+  web:
+    generate: true
+    image_path: "assets/icon.png"

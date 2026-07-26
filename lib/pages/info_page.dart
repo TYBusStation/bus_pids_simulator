@@ -98,15 +98,12 @@ class _InfoPageState extends State<InfoPage>
           final double distPrev = analysis.distToPrevStation ?? double.infinity;
           final double distNext = analysis.distToNextStation ?? double.infinity;
 
-          // 條件一：距離上一站 < 50m (顯示上一站，代表還在站內或剛離站)
           if (analysis.prevStation != null &&
               distPrev < Static.nextStationDepartureDistance) {
             nextStationName = analysis.prevStation!.name;
             nextStationNameEn = analysis.prevStation!.nameEn;
             distanceText = "0 m(離站 ${distPrev.toStringAsFixed(0)} m)";
-          }
-          // 條件二：滿足報下一站規則 (離上一站 > 50m 或 離下一站 < 250m)
-          else if (analysis.nextStation != null &&
+          } else if (analysis.nextStation != null &&
               (distPrev >= Static.nextStationDepartureDistance ||
                   (Static.nextStationDistance >= 0 &&
                       distNext < Static.nextStationDistance))) {

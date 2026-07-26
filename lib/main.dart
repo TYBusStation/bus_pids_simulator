@@ -13,7 +13,32 @@ import 'package:provider/provider.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const AppLoader());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => LandscapeChangeNotifier(false)),
+        ChangeNotifierProvider(
+          create: (_) => StatusChangeNotifier(Static.currentStatus),
+        ),
+        ChangeNotifierProvider(create: (_) => LocationChangeNotifier()),
+        ChangeNotifierProxyProvider2<
+          LocationChangeNotifier,
+          StatusChangeNotifier,
+          RouteAnalysisProvider
+        >(
+          create: (_) => RouteAnalysisProvider(),
+          update: (_, loc, status, analysis) => analysis!
+            ..update(
+              loc.currentLocation,
+              loc.currentSpeed,
+              status.currentStatus,
+            ),
+        ),
+        ChangeNotifierProvider(create: (_) => GpsControlProvider()),
+      ],
+      child: const AppLoader(),
+    ),
+  );
 }
 
 class AppLoader extends StatefulWidget {
@@ -37,18 +62,15 @@ class _AppLoaderState extends State<AppLoader> {
   Future<void> _startInitialization() async {
     try {
       await Static.init();
-
       if (kIsWeb) {
         getWebInterop().hideFlutterLoader();
       }
-
       if (!kIsWeb) {
         final versionService = VersionCheckService();
         if (await versionService.isUpdateRequired()) {
           _updateInfo = await versionService.getLatestVersionInfo();
         }
       }
-
       setState(() {
         _isInitialized = true;
         _error = null;
@@ -63,112 +85,102 @@ class _AppLoaderState extends State<AppLoader> {
 
   @override
   Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: '公車 PIDS 模擬器',
+      theme: ThemeData(
+        useMaterial3: true,
+        brightness: Brightness.dark,
+        dialogTheme: DialogThemeData(
+          titleTextStyle: ThemeData.dark().textTheme.titleSmall,
+          contentTextStyle: ThemeData.dark().textTheme.bodySmall,
+          insetPadding: const EdgeInsets.all(4),
+          actionsPadding: const EdgeInsets.all(4),
+        ),
+      ),
+      home: _buildHome(),
+    );
+  }
+
+  Widget _buildHome() {
     if (_error != null) {
-      return MaterialApp(
-        theme: ThemeData.dark(useMaterial3: true),
-        home: Scaffold(
-          body: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error_outline, size: 48, color: Colors.red),
-                const SizedBox(height: 16),
-                Text("載入失敗: $_error"),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: _startInitialization,
-                  child: const Text("重試"),
-                ),
-              ],
-            ),
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 48, color: Colors.red),
+              const SizedBox(height: 16),
+              Text("載入失敗: $_error"),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _startInitialization,
+                child: const Text("重試"),
+              ),
+            ],
           ),
         ),
       );
     }
 
     if (!_isInitialized) {
-      return MaterialApp(
-        theme: ThemeData.dark(useMaterial3: true),
-        home: const Scaffold(
-          body: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 20),
-                Text('系統初始化中...'),
-              ],
-            ),
+      return const Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              const SizedBox(height: 20),
+              Text('系統初始化中...'),
+            ],
           ),
         ),
       );
     }
 
-    return App(
+    return AppContent(
       updateInfo: _updateInfo,
       onSkipUpdate: () => setState(() => _updateInfo = null),
     );
   }
 }
 
-class App extends StatefulWidget {
+class AppContent extends StatefulWidget {
   final Map<String, dynamic>? updateInfo;
   final VoidCallback onSkipUpdate;
 
-  const App({super.key, this.updateInfo, required this.onSkipUpdate});
+  const AppContent({super.key, this.updateInfo, required this.onSkipUpdate});
 
   @override
-  State<App> createState() => _AppState();
+  State<AppContent> createState() => _AppContentState();
 }
 
-class _AppState extends State<App> {
+class _AppContentState extends State<AppContent> {
   bool _showBottomInfo = true;
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => LandscapeChangeNotifier(false)),
-        ChangeNotifierProvider(
-          create: (_) => StatusChangeNotifier(Static.currentStatus),
+    final isLandscape =
+        MediaQuery.orientationOf(context) == Orientation.landscape;
+    final landscapeNotifier = context.read<LandscapeChangeNotifier>();
+
+    if (landscapeNotifier.landscape != isLandscape) {
+      Future.microtask(() => landscapeNotifier.setLandscape(isLandscape));
+    }
+
+    return Stack(
+      children: [
+        MainPage(
+          showBottomInfo: _showBottomInfo,
+          onToggleBottomInfo: () =>
+              setState(() => _showBottomInfo = !_showBottomInfo),
         ),
-        ChangeNotifierProvider(create: (_) => LocationChangeNotifier()),
-        ChangeNotifierProxyProvider2<
-          LocationChangeNotifier,
-          StatusChangeNotifier,
-          RouteAnalysisProvider
-        >(
-          create: (_) => RouteAnalysisProvider(),
-          update: (_, loc, status, analysis) => analysis!
-            ..update(
-              loc.currentLocation,
-              loc.currentSpeed,
-              status.currentStatus,
-            ),
-        ),
-        ChangeNotifierProvider(create: (_) => GpsControlProvider()),
+        if (widget.updateInfo != null)
+          UpdatePage(
+            updateInfo: widget.updateInfo!,
+            onSkip: widget.onSkipUpdate,
+          ),
       ],
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        title: '公車 PIDS 模擬器',
-        theme: ThemeData.dark(useMaterial3: true),
-        home: Stack(
-          children: [
-            LandscapeWatcher(
-              child: MainPage(
-                showBottomInfo: _showBottomInfo,
-                onToggleBottomInfo: () =>
-                    setState(() => _showBottomInfo = !_showBottomInfo),
-              ),
-            ),
-            if (widget.updateInfo != null)
-              UpdatePage(
-                updateInfo: widget.updateInfo!,
-                onSkip: widget.onSkipUpdate,
-              ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -196,10 +208,11 @@ class _UpdatePageState extends State<UpdatePage> {
       );
     } catch (e) {
       setState(() => _isDownloading = false);
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('更新失敗: $e')));
+      }
     }
   }
 
@@ -253,23 +266,5 @@ class _UpdatePageState extends State<UpdatePage> {
         ),
       ),
     );
-  }
-}
-
-class LandscapeWatcher extends StatelessWidget {
-  final Widget child;
-
-  const LandscapeWatcher({super.key, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    final isLandscape =
-        MediaQuery.orientationOf(context) == Orientation.landscape;
-    final landscapeNotifier = context.read<LandscapeChangeNotifier>();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (landscapeNotifier.landscape != isLandscape)
-        landscapeNotifier.setLandscape(isLandscape);
-    });
-    return child;
   }
 }

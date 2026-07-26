@@ -44,14 +44,17 @@ class RouteEngine {
     );
 
     final snappedFeature = turf.nearestPointOnLine(lineGeom, pt);
+
     final double distToRouteMeters =
-        (snappedFeature.properties?['dist'] ?? 0) * 1000;
+        ((snappedFeature.properties?['dist'] ?? 0.0) as num).toDouble() * 1000;
     final bool isOffRoute = distToRouteMeters > offRouteThreshold;
-    final double userLocOnLine = snappedFeature.properties?['location'] ?? 0.0;
+    final double userLocOnLine =
+        ((snappedFeature.properties?['location'] ?? 0.0) as num).toDouble();
     final double totalLineDist = turf.length(lineFeature).toDouble();
 
     double? currentBearing;
-    int index = snappedFeature.properties?['index'] ?? 0;
+    int index = ((snappedFeature.properties?['index'] ?? 0) as num).toInt();
+
     if (index < routePoints.length - 1) {
       currentBearing = turf
           .bearing(
@@ -84,18 +87,22 @@ class RouteEngine {
       final sSnapped = turf.nearestPointOnLine(lineGeom, sPt);
       mapped.add({
         'station': s,
-        'location': sSnapped.properties?['location'] ?? 0.0,
+        'location': ((sSnapped.properties?['location'] ?? 0.0) as num)
+            .toDouble(),
       });
     }
-    mapped.sort((a, b) => a['location'].compareTo(b['location']));
+    mapped.sort(
+      (a, b) => (a['location'] as double).compareTo(b['location'] as double),
+    );
 
     for (int i = 0; i < mapped.length; i++) {
-      if (userLocOnLine >= mapped[i]['location']) {
+      double sLoc = mapped[i]['location'] as double;
+      if (userLocOnLine >= sLoc) {
         prev = mapped[i]['station'];
-        dPrev = (userLocOnLine - mapped[i]['location']).abs() * 1000;
+        dPrev = (userLocOnLine - sLoc).abs() * 1000;
       } else {
         next = mapped[i]['station'];
-        dNext = (mapped[i]['location'] - userLocOnLine).abs() * 1000;
+        dNext = (sLoc - userLocOnLine).abs() * 1000;
         break;
       }
     }
@@ -107,7 +114,9 @@ class RouteEngine {
       nextStation: next,
       distToPrevStation: dPrev,
       distToNextStation: dNext,
-      progress: totalLineDist > 0 ? userLocOnLine / totalLineDist : 0,
+      progress: totalLineDist > 0
+          ? (userLocOnLine / totalLineDist).toDouble()
+          : 0.0,
       bearing: currentBearing,
     );
   }

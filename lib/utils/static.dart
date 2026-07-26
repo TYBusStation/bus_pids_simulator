@@ -28,6 +28,7 @@ abstract class Static {
   static late Box _cityBox;
 
   // static const String API_BASE = "http://192.168.1.249:25567";
+
   static const String API_BASE = "https://myster.freeddns.org:25566";
 
   static final dio = Dio(
@@ -105,9 +106,7 @@ abstract class Static {
 
   static Future<void> saveCityData(String city, String jsonRaw) async {
     await _cityBox.put(city, {
-      'timestamp': DateTime
-          .now()
-          .millisecondsSinceEpoch,
+      'timestamp': DateTime.now().millisecondsSinceEpoch,
       'data': jsonRaw,
     });
     _updateAvailableCitiesList([]);
@@ -271,11 +270,11 @@ abstract class Static {
     return stationVoiceSequence
         .where(
           (s) =>
-      s != "{name_zh}" &&
-          s != "{name_ho}" &&
-          s != "{name_hk}" &&
-          s != "{name_en}",
-    )
+              s != "{name_zh}" &&
+              s != "{name_ho}" &&
+              s != "{name_hk}" &&
+              s != "{name_en}",
+        )
         .toList();
   }
 
@@ -309,6 +308,6 @@ abstract class Static {
           .allMatches(wkt)
           .map(
             (m) => LatLng(double.parse(m.group(2)!), double.parse(m.group(1)!)),
-      )
+          )
           .toList();
 }

@@ -7,13 +7,17 @@ part 'bus_station.g.dart';
 class BusStation {
   @JsonKey(name: "order")
   final int order;
-  @JsonKey(name: "name")
+
+  @JsonKey(name: "name", defaultValue: "")
   final String name;
-  @JsonKey(name: "name_en")
+
+  @JsonKey(name: "name_en", defaultValue: "")
   final String nameEn;
-  @JsonKey(name: "lat")
+
+  @JsonKey(name: "lat", defaultValue: 0.0)
   final double lat;
-  @JsonKey(name: "lon")
+
+  @JsonKey(name: "lon", defaultValue: 0.0)
   final double lon;
   @JsonKey(name: "use_global_next", defaultValue: true)
   final bool useGlobalNext;
@@ -26,10 +30,10 @@ class BusStation {
 
   BusStation({
     required this.order,
-    required this.name,
-    required this.nameEn,
-    required this.lat,
-    required this.lon,
+    this.name = "",
+    this.nameEn = "",
+    this.lat = 0.0,
+    this.lon = 0.0,
     this.useGlobalNext = true,
     this.useGlobalArrival = true,
     this.nextTemplate,

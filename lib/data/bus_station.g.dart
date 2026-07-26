@@ -8,10 +8,10 @@ part of 'bus_station.dart';
 
 BusStation _$BusStationFromJson(Map<String, dynamic> json) => BusStation(
   order: (json['order'] as num).toInt(),
-  name: json['name'] as String,
-  nameEn: json['name_en'] as String,
-  lat: (json['lat'] as num).toDouble(),
-  lon: (json['lon'] as num).toDouble(),
+  name: json['name'] as String? ?? '',
+  nameEn: json['name_en'] as String? ?? '',
+  lat: (json['lat'] as num?)?.toDouble() ?? 0.0,
+  lon: (json['lon'] as num?)?.toDouble() ?? 0.0,
   useGlobalNext: json['use_global_next'] as bool? ?? true,
   useGlobalArrival: json['use_global_arrival'] as bool? ?? true,
   nextTemplate: (json['next_template'] as List<dynamic>?)

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:bus_pids_simulator/pages/route_editor_page.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 import '../data/bus_route.dart';
@@ -41,23 +42,32 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
   }
 
   void _loadCityFromCache(String key) {
-    if (key == 'Custom') {
-      _lastUpdatedInfo = null;
-      _isDataExpired = false;
-      _performSearch();
-      return;
-    }
-    final cache = Static.getCityCache(key);
-    if (cache != null) {
-      final int ts = cache['timestamp'];
-      final DateTime updateTime = DateTime.fromMillisecondsSinceEpoch(ts);
-      _isDataExpired = DateTime.now().difference(updateTime).inDays >= 7;
-      _lastUpdatedInfo = "${updateTime.month}/${updateTime.day}";
-      final List<dynamic> data = jsonDecode(cache['data']);
-      Static.routeData[key] = data.map((r) => BusRoute.fromJson(r)).toList();
-    } else {
-      _lastUpdatedInfo = null;
-      _isDataExpired = false;
+    try {
+      if (key == 'Custom') {
+        _lastUpdatedInfo = null;
+        _isDataExpired = false;
+        _performSearch();
+        return;
+      }
+      final cache = Static.getCityCache(key);
+      if (cache != null) {
+        final int ts = cache['timestamp'];
+        final DateTime updateTime = DateTime.fromMillisecondsSinceEpoch(ts);
+        _isDataExpired = DateTime.now().difference(updateTime).inDays >= 7;
+        _lastUpdatedInfo = "${updateTime.month}/${updateTime.day}";
+
+        final List<dynamic> data = jsonDecode(cache['data']);
+
+        Static.routeData[key] = data.map((r) => BusRoute.fromJson(r)).toList();
+      } else {
+        Static.routeData[key] = [];
+        _lastUpdatedInfo = null;
+        _isDataExpired = false;
+      }
+    } catch (e) {
+      print("解析城市 $key 出錯: $e");
+      Static.routeData[key] = [];
+      _lastUpdatedInfo = "資料損毀";
     }
     _performSearch();
   }
@@ -95,17 +105,26 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
     if (_activeCityKey == 'Custom' || _isLoading) return;
     setState(() => _isLoading = true);
     try {
+      print("正在請求: ${Static.API_BASE}/simulator_data?city=$_activeCityKey");
+
       final res = await Static.dio.get(
         "${Static.API_BASE}/simulator_data",
         queryParameters: {'city': _activeCityKey},
       );
+
       if (res.statusCode == 200) {
         final String rawJson = jsonEncode(res.data);
         await Static.saveCityData(_activeCityKey, rawJson);
         if (mounted) _loadCityFromCache(_activeCityKey);
+        print("下載成功！");
       }
+    } on DioException catch (e) {
+      print("網路請求錯誤類型: ${e.type}");
+      print("錯誤詳情: ${e.message}");
+      if (mounted) FormatterUtils.showSnackbar(context, "更新失敗: ${e.type}");
     } catch (e) {
-      if (mounted) FormatterUtils.showSnackbar(context, "更新失敗");
+      print("其他錯誤: $e");
+      if (mounted) FormatterUtils.showSnackbar(context, "系統錯誤");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
