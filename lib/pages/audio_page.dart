@@ -51,7 +51,6 @@ class _AudioPageState extends State<AudioPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     return Scaffold(
       floatingActionButton: _buildFABs(),
       body: Column(
@@ -106,9 +105,8 @@ class _AudioPageState extends State<AudioPage> {
                           mainAxisSpacing: 8,
                         ),
                     itemCount: _filteredAudios.length,
-                    itemBuilder: (context, index) {
-                      return _buildAudioCard(_filteredAudios[index], theme);
-                    },
+                    itemBuilder: (context, index) =>
+                        _buildAudioCard(_filteredAudios[index], theme),
                   ),
           ),
         ],
@@ -119,7 +117,6 @@ class _AudioPageState extends State<AudioPage> {
   Widget _buildAudioCard(String name, ThemeData theme) {
     return Card(
       elevation: 1,
-      margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
         side: BorderSide(color: theme.dividerColor.withOpacity(0.1)),
@@ -129,8 +126,6 @@ class _AudioPageState extends State<AudioPage> {
         children: [
           const SizedBox(height: 8),
           IconButton(
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
             icon: const Icon(Icons.play_circle, color: Colors.blue, size: 36),
             onPressed: () => Static.audioManager.playAudio(name),
           ),
@@ -149,16 +144,10 @@ class _AudioPageState extends State<AudioPage> {
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 IconButton(
-                  visualDensity: VisualDensity.compact,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
                   icon: const Icon(Icons.edit, size: 18),
                   onPressed: () => _showRenameDialog(name),
                 ),
                 IconButton(
-                  visualDensity: VisualDensity.compact,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
                   icon: const Icon(
                     Icons.download,
                     size: 18,
@@ -167,9 +156,6 @@ class _AudioPageState extends State<AudioPage> {
                   onPressed: () => Static.audioManager.exportSingle(name),
                 ),
                 IconButton(
-                  visualDensity: VisualDensity.compact,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
                   icon: const Icon(Icons.delete, size: 18, color: Colors.red),
                   onPressed: () => _handleDelete(name),
                 ),
@@ -200,7 +186,6 @@ class _AudioPageState extends State<AudioPage> {
         ],
       ),
     );
-
     if (confirm == true) {
       await Static.audioManager.deleteAudio(name);
       _refresh();
@@ -212,16 +197,14 @@ class _AudioPageState extends State<AudioPage> {
       fontWeight: FontWeight.bold,
       fontSize: 12,
     );
-
     return LayoutBuilder(
       builder: (context, constraints) {
-        final textPainter = TextPainter(
+        final tp = TextPainter(
           text: TextSpan(text: text, style: style),
           maxLines: 1,
           textDirection: TextDirection.ltr,
         )..layout(maxWidth: double.infinity);
-
-        if (textPainter.size.width > constraints.maxWidth) {
+        if (tp.size.width > constraints.maxWidth) {
           return Marquee(
             text: text,
             style: style,
@@ -231,7 +214,6 @@ class _AudioPageState extends State<AudioPage> {
             pauseAfterRound: const Duration(seconds: 1),
           );
         }
-
         return Center(
           child: Text(text, style: style, overflow: TextOverflow.ellipsis),
         );
@@ -282,10 +264,7 @@ class _AudioPageState extends State<AudioPage> {
         ],
       ),
     );
-
-    if (confirm == true) {
-      await Static.audioManager.exportAllZip();
-    }
+    if (confirm == true) await Static.audioManager.exportAllZip();
   }
 
   Future<void> _handleImportZip() async {
@@ -331,13 +310,9 @@ class _AudioPageState extends State<AudioPage> {
   Future<void> _handleAddNew() async {
     final result = await Static.audioManager.pickSingleFile();
     if (result == null || result.bytes == null) return;
-
     final String originalName = result.name.split('.').first;
     final Uint8List bytes = result.bytes!;
     final c = TextEditingController(text: originalName);
-
-    if (!mounted) return;
-
     showDialog(
       context: context,
       builder: (v) => AlertDialog(
@@ -354,11 +329,11 @@ class _AudioPageState extends State<AudioPage> {
           ),
           ElevatedButton(
             onPressed: () async {
-              final finalName = c.text.trim().isEmpty
-                  ? originalName
-                  : c.text.trim();
-              await Static.audioManager.saveAudio(finalName, bytes);
-              if (mounted) Navigator.pop(v);
+              await Static.audioManager.saveAudio(
+                c.text.trim().isEmpty ? originalName : c.text.trim(),
+                bytes,
+              );
+              Navigator.pop(v);
               _refresh();
             },
             child: const Text("儲存"),
@@ -384,7 +359,7 @@ class _AudioPageState extends State<AudioPage> {
             onPressed: () async {
               if (c.text.isNotEmpty && c.text != oldName) {
                 await Static.audioManager.renameAudio(oldName, c.text);
-                if (mounted) Navigator.pop(v);
+                Navigator.pop(v);
                 _refresh();
               }
             },

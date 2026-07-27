@@ -13,23 +13,25 @@ import 'utils_helper.dart';
 class VoicePack {
   final String name;
   final int timestamp;
-  final Map<String, Uint8List> files;
+  final List<String> fileNames;
   bool isEnabled;
 
   VoicePack({
     required this.name,
     required this.timestamp,
-    required this.files,
+    required this.fileNames,
     this.isEnabled = true,
   });
 }
 
 class AudioManager {
   static const String _boxName = "custom_audio_box";
-  static const String _packBoxName = "voice_packs_data";
+  static const String _packMetaBoxName = "voice_packs_metadata";
+  static const String _packDataBoxName = "voice_packs_data";
 
-  late Box<Uint8List> _audioBox;
-  late Box<Map> _packBox;
+  late LazyBox<Uint8List> _audioBox;
+  late Box<Map> _packMetaBox;
+  late LazyBox<Uint8List> _packDataBox;
 
   final AudioPlayer _player = AudioPlayer();
   final Random _random = Random();
@@ -37,27 +39,22 @@ class AudioManager {
 
   Future<void> init() async {
     await Hive.initFlutter();
-    _audioBox = await Hive.openBox<Uint8List>(_boxName);
-    _packBox = await Hive.openBox<Map>(_packBoxName);
+    _audioBox = await Hive.openLazyBox<Uint8List>(_boxName);
+    _packMetaBox = await Hive.openBox<Map>(_packMetaBoxName);
+    _packDataBox = await Hive.openLazyBox<Uint8List>(_packDataBoxName);
     await _loadStoredPacks();
   }
 
   Future<void> _loadStoredPacks() async {
     voicePacks.clear();
-    for (var key in _packBox.keys) {
-      final data = _packBox.get(key);
+    for (var key in _packMetaBox.keys) {
+      final data = _packMetaBox.get(key);
       if (data != null) {
-        Map<String, Uint8List> extractedFiles = {};
-        if (data['files'] is Map) {
-          (data['files'] as Map).forEach((k, v) {
-            extractedFiles[k.toString()] = v as Uint8List;
-          });
-        }
         voicePacks.add(
           VoicePack(
             name: data['name'] ?? key.toString(),
             timestamp: data['timestamp'] ?? 0,
-            files: extractedFiles,
+            fileNames: List<String>.from(data['fileNames'] ?? []),
             isEnabled: data['isEnabled'] ?? true,
           ),
         );
@@ -68,24 +65,23 @@ class AudioManager {
   Future<bool> importZipAsPack(String name, Uint8List zipBytes) async {
     try {
       final archive = ZipDecoder().decodeBytes(zipBytes);
-      Map<String, Uint8List> extracted = {};
+      List<String> fileNames = [];
       for (final file in archive) {
         if (file.isFile) {
           final fileName = _stripExtension(file.name.split('/').last);
           if (fileName.isEmpty || fileName.startsWith('.')) continue;
-          extracted[fileName] = Uint8List.fromList(file.content as List<int>);
+          final content = Uint8List.fromList(file.content as List<int>);
+          await _packDataBox.put("$name:$fileName", content);
+          fileNames.add(fileName);
         }
       }
-
-      if (extracted.isEmpty) return false;
-
-      await _packBox.put(name, {
+      if (fileNames.isEmpty) return false;
+      await _packMetaBox.put(name, {
         'name': name,
         'timestamp': DateTime.now().millisecondsSinceEpoch,
-        'files': extracted,
+        'fileNames': fileNames,
         'isEnabled': true,
       });
-
       await _loadStoredPacks();
       return true;
     } catch (e) {
@@ -96,21 +92,25 @@ class AudioManager {
   Future<void> togglePackStatus(int index, bool enabled) async {
     final pack = voicePacks[index];
     pack.isEnabled = enabled;
-    final data = _packBox.get(pack.name);
+    final data = _packMetaBox.get(pack.name);
     if (data != null) {
       data['isEnabled'] = enabled;
-      await _packBox.put(pack.name, data);
+      await _packMetaBox.put(pack.name, data);
     }
   }
 
   Future<bool> replacePack(int index, Uint8List zipBytes) async {
     final packName = voicePacks[index].name;
+    await removePack(index);
     return await importZipAsPack(packName, zipBytes);
   }
 
   Future<void> removePack(int index) async {
-    final packName = voicePacks[index].name;
-    await _packBox.delete(packName);
+    final pack = voicePacks[index];
+    for (var fileName in pack.fileNames) {
+      await _packDataBox.delete("${pack.name}:$fileName");
+    }
+    await _packMetaBox.delete(pack.name);
     voicePacks.removeAt(index);
   }
 
@@ -119,43 +119,49 @@ class AudioManager {
     return (lastDot != -1) ? name.substring(0, lastDot) : name;
   }
 
-  Uint8List? _getRandomBytes(String baseName) {
-    List<Uint8List> candidates = [];
+  Future<Uint8List?> getPackBytes(String packName, String fileName) async {
+    return await _packDataBox.get("$packName:$fileName");
+  }
 
-    for (var key in _audioBox.keys.cast<String>()) {
-      if (key == baseName || key.startsWith("${baseName}_[")) {
-        final b = _audioBox.get(key);
-        if (b != null) candidates.add(b);
-      }
+  Future<Uint8List?> _getRandomBytes(String baseName) async {
+    List<String> audioBoxKeys = _audioBox.keys.cast<String>().toList();
+    List<String> audioBoxMatches = audioBoxKeys
+        .where((key) => key == baseName || key.startsWith("${baseName}_["))
+        .toList();
+
+    if (audioBoxMatches.isNotEmpty) {
+      final selectedKey =
+          audioBoxMatches[_random.nextInt(audioBoxMatches.length)];
+      return await _audioBox.get(selectedKey);
     }
 
+    List<String> packKeys = [];
     for (var pack in voicePacks) {
       if (!pack.isEnabled) continue;
-      if (pack.files.containsKey(baseName)) {
-        candidates.add(pack.files[baseName]!);
-      }
-      pack.files.forEach((key, value) {
-        if (key.startsWith("${baseName}_[")) {
-          candidates.add(value);
+      for (var fileName in pack.fileNames) {
+        if (fileName == baseName || fileName.startsWith("${baseName}_[")) {
+          packKeys.add("${pack.name}:$fileName");
         }
-      });
+      }
     }
 
-    if (candidates.isEmpty) return null;
-    return candidates[_random.nextInt(candidates.length)];
+    if (packKeys.isNotEmpty) {
+      final selectedKey = packKeys[_random.nextInt(packKeys.length)];
+      return await _packDataBox.get(selectedKey);
+    }
+    return null;
   }
 
   bool hasAudio(String name) {
-    bool localExists = _audioBox.keys.cast<String>().any(
-      (k) => k == name || k.startsWith("${name}_["),
-    );
-    bool packExists = voicePacks.any(
-      (p) =>
-          p.isEnabled &&
-          (p.files.containsKey(name) ||
-              p.files.keys.any((k) => k.startsWith("${name}_["))),
-    );
-    return localExists || packExists;
+    if (_audioBox.containsKey(name)) return true;
+    if (_audioBox.keys.any((k) => k.toString().startsWith("${name}_[")))
+      return true;
+    for (var pack in voicePacks) {
+      if (pack.isEnabled &&
+          pack.fileNames.any((k) => k == name || k.startsWith("${name}_[")))
+        return true;
+    }
+    return false;
   }
 
   Future<void> _applySettings(double localSpeed) async {
@@ -166,7 +172,7 @@ class AudioManager {
   }
 
   Future<void> playAudio(String name, {double localSpeed = 1.0}) async {
-    final bytes = _getRandomBytes(name);
+    final bytes = await _getRandomBytes(name);
     if (bytes != null) {
       await _player.stop();
       await _player.setSource(BytesSource(bytes));
@@ -184,7 +190,7 @@ class AudioManager {
   }
 
   Future<void> playAndWait(String name, {double localSpeed = 1.0}) async {
-    final bytes = _getRandomBytes(name);
+    final bytes = await _getRandomBytes(name);
     if (bytes != null) {
       await _player.stop();
       await Future.delayed(const Duration(milliseconds: 100));
@@ -205,25 +211,21 @@ class AudioManager {
     try {
       await _player.stop();
       if (kIsWeb) await _player.release();
-
       await _player.setSource(AssetSource(path));
       await _player.setVolume(Static.globalVolume.clamp(0.0, 1.0));
-
       final completer = Completer<void>();
       StreamSubscription? sub;
       sub = _player.onPlayerComplete.listen((_) {
         if (!completer.isCompleted) completer.complete();
         sub?.cancel();
       });
-
       await _player.resume();
       await _player.setPlaybackRate(
         (Static.globalSpeed * localSpeed).clamp(0.5, 2.0),
       );
-
       await completer.future;
     } catch (e) {
-      debugPrint("Error playing asset ($path): $e");
+      debugPrint("Error: $e");
     }
   }
 
@@ -240,22 +242,21 @@ class AudioManager {
     }
   }
 
-  bool hasLocalAudio(String name) {
-    return _audioBox.containsKey(_stripExtension(name));
-  }
+  bool hasLocalAudio(String name) =>
+      _audioBox.containsKey(_stripExtension(name));
 
   String generateUniqueName(String base) {
     String name = _stripExtension(base);
-    if (!_audioBox.containsKey(name)) return name;
-    int i = 1;
-    while (_audioBox.containsKey("${name}_[$i]")) {
-      i++;
+    if (_audioBox.containsKey(name)) {
+      int i = 1;
+      while (_audioBox.containsKey("${name}_[$i]")) i++;
+      return "${name}_[$i]";
     }
-    return "${name}_[$i]";
+    return name;
   }
 
   Future<void> renameAudio(String o, String n) async {
-    final b = _audioBox.get(o);
+    final b = await _audioBox.get(o);
     if (b != null) {
       await _audioBox.put(n, b);
       await _audioBox.delete(o);
@@ -265,41 +266,26 @@ class AudioManager {
   Future<void> deleteAudio(String n) async => await _audioBox.delete(n);
 
   Future<void> exportSingle(String n) async {
-    final b = _audioBox.get(n);
+    final b = await _audioBox.get(n);
     if (b != null) downloadFile(b, "$n.mp3");
   }
 
   Future<void> exportAllZip() async {
     final archive = Archive();
-
     final names = allAudioNames;
     if (names.isEmpty) return;
-
     for (var name in names) {
-      final bytes = _audioBox.get(name);
+      final bytes = await _audioBox.get(name);
       if (bytes != null) {
         archive.addFile(ArchiveFile("$name.mp3", bytes.length, bytes));
       }
     }
-
     final zipData = ZipEncoder().encode(archive);
     if (zipData != null) {
-      final Uint8List finalZip = Uint8List.fromList(zipData);
-
       downloadFile(
-        finalZip,
+        Uint8List.fromList(zipData),
         "backup_${DateTime.now().millisecondsSinceEpoch}.zip",
       );
-    }
-  }
-
-  Future<void> pickAndSave(String name) async {
-    FilePickerResult? result = await FilePicker.pickFiles(
-      type: FileType.audio,
-      withData: true,
-    );
-    if (result != null && result.files.first.bytes != null) {
-      await saveAudio(name, result.files.first.bytes!);
     }
   }
 

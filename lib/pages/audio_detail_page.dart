@@ -23,7 +23,7 @@ class _AudioPackDetailPageState extends State<AudioPackDetailPage> {
   @override
   void initState() {
     super.initState();
-    _allKeys = widget.pack.files.keys.toList()..sort();
+    _allKeys = List<String>.from(widget.pack.fileNames)..sort();
     _filteredKeys = _allKeys;
   }
 
@@ -47,7 +47,7 @@ class _AudioPackDetailPageState extends State<AudioPackDetailPage> {
             child: Padding(
               padding: const EdgeInsets.only(right: 16),
               child: Text(
-                "${widget.pack.files.length} 個檔案",
+                "${widget.pack.fileNames.length} 個檔案",
                 style: const TextStyle(fontSize: 12),
               ),
             ),
@@ -105,10 +105,8 @@ class _AudioPackDetailPageState extends State<AudioPackDetailPage> {
                           mainAxisSpacing: 8,
                         ),
                     itemCount: _filteredKeys.length,
-                    itemBuilder: (context, index) {
-                      final name = _filteredKeys[index];
-                      return _buildAudioCard(name, theme);
-                    },
+                    itemBuilder: (context, index) =>
+                        _buildAudioCard(_filteredKeys[index], theme),
                   ),
           ),
         ],
@@ -119,7 +117,6 @@ class _AudioPackDetailPageState extends State<AudioPackDetailPage> {
   Widget _buildAudioCard(String name, ThemeData theme) {
     return Card(
       elevation: 1,
-      margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
         side: BorderSide(color: theme.dividerColor.withOpacity(0.1)),
@@ -128,11 +125,14 @@ class _AudioPackDetailPageState extends State<AudioPackDetailPage> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           IconButton(
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
             icon: const Icon(Icons.play_circle, color: Colors.blue, size: 32),
-            onPressed: () =>
-                Static.audioManager.playRawBytes(widget.pack.files[name]!),
+            onPressed: () async {
+              final bytes = await Static.audioManager.getPackBytes(
+                widget.pack.name,
+                name,
+              );
+              if (bytes != null) Static.audioManager.playRawBytes(bytes);
+            },
           ),
           const SizedBox(height: 6),
           Padding(
@@ -144,12 +144,14 @@ class _AudioPackDetailPageState extends State<AudioPackDetailPage> {
           ),
           const SizedBox(height: 4),
           IconButton(
-            visualDensity: VisualDensity.compact,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
             icon: const Icon(Icons.download, size: 18, color: Colors.green),
-            onPressed: () =>
-                downloadFile(widget.pack.files[name]!, "$name.mp3"),
+            onPressed: () async {
+              final bytes = await Static.audioManager.getPackBytes(
+                widget.pack.name,
+                name,
+              );
+              if (bytes != null) downloadFile(bytes, "$name.mp3");
+            },
           ),
         ],
       ),
@@ -163,13 +165,12 @@ class _AudioPackDetailPageState extends State<AudioPackDetailPage> {
     );
     return LayoutBuilder(
       builder: (context, constraints) {
-        final textPainter = TextPainter(
+        final tp = TextPainter(
           text: TextSpan(text: text, style: style),
           maxLines: 1,
           textDirection: TextDirection.ltr,
         )..layout(maxWidth: double.infinity);
-
-        if (textPainter.size.width > constraints.maxWidth) {
+        if (tp.size.width > constraints.maxWidth) {
           return Marquee(
             text: text,
             style: style,

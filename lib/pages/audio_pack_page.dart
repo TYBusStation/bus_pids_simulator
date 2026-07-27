@@ -3,7 +3,6 @@ import 'dart:ui';
 import 'package:bus_pids_simulator/utils/formatter_utils.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../utils/static.dart';
 import 'audio_detail_page.dart';
@@ -19,17 +18,6 @@ class _AudioPackPageState extends State<AudioPackPage> {
   bool _loading = false;
   String _loadingText = "處理中...";
 
-  Future<void> _launchDownloadUrl() async {
-    final Uri url = Uri.parse(
-      'https://github.com/TYBusStation/bus_pids_simulator/releases/latest',
-    );
-    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-      if (mounted) {
-        FormatterUtils.showSnackbar(context, "無法開啟連結");
-      }
-    }
-  }
-
   void _importLocalZip() async {
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
@@ -37,10 +25,8 @@ class _AudioPackPageState extends State<AudioPackPage> {
       withData: true,
     );
     if (result == null || result.files.first.bytes == null) return;
-
     final defaultName = result.files.first.name.replaceAll('.zip', '');
     final nameController = TextEditingController(text: defaultName);
-
     final packName = await showDialog<String>(
       context: context,
       builder: (v) => AlertDialog(
@@ -61,25 +47,19 @@ class _AudioPackPageState extends State<AudioPackPage> {
         ],
       ),
     );
-
     if (packName != null && packName.isNotEmpty) {
       setState(() {
         _loading = true;
         _loadingText = "正在解壓並儲存語音包...";
       });
-
-      await Future.delayed(const Duration(milliseconds: 300));
-
       final ok = await Static.audioManager.importZipAsPack(
         packName,
         result.files.first.bytes!,
       );
-
       if (mounted) {
         setState(() => _loading = false);
-        if (!ok) {
+        if (!ok)
           FormatterUtils.showSnackbar(context, "匯入失敗", color: Colors.red);
-        }
       }
     }
   }
@@ -91,26 +71,20 @@ class _AudioPackPageState extends State<AudioPackPage> {
       withData: true,
     );
     if (result == null || result.files.first.bytes == null) return;
-
     setState(() {
       _loading = true;
       _loadingText = "正在替換語音包內容...";
     });
-
-    await Future.delayed(const Duration(milliseconds: 300));
-
     final ok = await Static.audioManager.replacePack(
       index,
       result.files.first.bytes!,
     );
-
     if (mounted) {
       setState(() => _loading = false);
-      if (!ok) {
+      if (!ok)
         FormatterUtils.showSnackbar(context, "替換失敗", color: Colors.red);
-      } else {
+      else
         FormatterUtils.showSnackbar(context, "替換成功");
-      }
     }
   }
 
@@ -141,7 +115,6 @@ class _AudioPackPageState extends State<AudioPackPage> {
   @override
   Widget build(BuildContext context) {
     final packs = Static.audioManager.voicePacks;
-
     return Stack(
       children: [
         Scaffold(
@@ -180,7 +153,7 @@ class _AudioPackPageState extends State<AudioPackPage> {
                                   : TextDecoration.lineThrough,
                             ),
                           ),
-                          subtitle: Text("檔案數: ${pack.files.length}"),
+                          subtitle: Text("檔案數: ${pack.fileNames.length}"),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
