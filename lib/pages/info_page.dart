@@ -88,6 +88,7 @@ class _InfoPageState extends State<InfoPage>
 
         String nextStationName = "(無停靠站)";
         String nextStationNameEn = "";
+        int nextStationNo = 0;
         String distanceText = "";
 
         if (currentStatus.dutyStatus == DutyStatus.offDuty) {
@@ -102,6 +103,7 @@ class _InfoPageState extends State<InfoPage>
               distPrev < Static.nextStationDepartureDistance) {
             nextStationName = analysis.prevStation!.name;
             nextStationNameEn = analysis.prevStation!.nameEn;
+            nextStationNo = analysis.prevStation!.order;
             distanceText = "0 m(離站 ${distPrev.toStringAsFixed(0)} m)";
           } else if (analysis.nextStation != null &&
               (distPrev >= Static.nextStationDepartureDistance ||
@@ -109,6 +111,7 @@ class _InfoPageState extends State<InfoPage>
                       distNext < Static.nextStationDistance))) {
             nextStationName = analysis.nextStation!.name;
             nextStationNameEn = analysis.nextStation!.nameEn;
+            nextStationNo = analysis.nextStation!.order;
             String baseDist = analysis.distToNextStation != null
                 ? "${analysis.distToNextStation!.toStringAsFixed(0)} m"
                 : "";
@@ -129,6 +132,7 @@ class _InfoPageState extends State<InfoPage>
                   currentStatus: currentStatus,
                   nextStationName: nextStationName,
                   nextStationNameEn: nextStationNameEn,
+                  nextStationNo: nextStationNo,
                   distanceText: distanceText,
                   isOnDuty: currentStatus.dutyStatus == DutyStatus.onDuty,
                   isOffDutyAlert: analysisProvider.isOffDutyAlert,
@@ -217,7 +221,6 @@ class _InfoPageState extends State<InfoPage>
               child: const Text("重新定位", style: TextStyle(fontSize: 10)),
             ),
           ),
-          const SizedBox(height: 4),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [

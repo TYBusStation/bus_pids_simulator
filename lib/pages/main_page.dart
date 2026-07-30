@@ -205,15 +205,7 @@ class _MainPageState extends State<MainPage> {
                 titleSpacing: 0,
                 title: Row(
                   children: [
-                    const SizedBox(width: 15),
-                    const Text(
-                      "公車 PIDS 模擬器",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const Spacer(),
+                    const SizedBox(width: 30),
                     InkWell(
                       onTap: _editLicensePlate,
                       child: Row(
@@ -242,21 +234,27 @@ class _MainPageState extends State<MainPage> {
                       ),
                     ),
                     const Spacer(),
-                  ],
-                ),
-                actions: [
-                  StreamBuilder(
-                    stream: Stream.periodic(const Duration(seconds: 1)),
-                    builder: (context, snapshot) => Text(
-                      DateFormat('HH:mm:ss').format(DateTime.now()),
-                      style: const TextStyle(
-                        fontSize: 14,
+                    const Text(
+                      "公車 PIDS 模擬器",
+                      style: TextStyle(
+                        fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 15),
-                ],
+                    const Spacer(),
+                    StreamBuilder(
+                      stream: Stream.periodic(const Duration(seconds: 1)),
+                      builder: (context, snapshot) => Text(
+                        DateFormat('HH:mm:ss').format(DateTime.now()),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 30),
+                  ],
+                ),
               ),
               body: SafeArea(
                 child: Row(

@@ -10,6 +10,7 @@ class StatusPanel extends StatelessWidget {
   final Status currentStatus;
   final String nextStationName;
   final String nextStationNameEn;
+  final int nextStationNo;
   final String distanceText;
   final bool isOnDuty;
   final bool isOffDutyAlert;
@@ -21,6 +22,7 @@ class StatusPanel extends StatelessWidget {
     required this.currentStatus,
     required this.nextStationName,
     required this.nextStationNameEn,
+    required this.nextStationNo,
     required this.distanceText,
     required this.isOnDuty,
     required this.isOffDutyAlert,
@@ -150,7 +152,7 @@ class StatusPanel extends StatelessWidget {
                   child: SizedBox(
                     height: 40,
                     child: _buildAutoScrollingText(
-                      text: nextStationName,
+                      text: "$nextStationNo. $nextStationName",
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 40,
@@ -285,7 +287,7 @@ class StatusPanel extends StatelessWidget {
                     _showConfirmDialog(
                       context: context,
                       title:
-                          "切換${currentStatus.direction == Direction.go ? '返程' : '去程'}",
+                          "切${currentStatus.direction == Direction.go ? '返程' : '去程'}",
                       content:
                           "是否確定切換${currentStatus.direction == Direction.go ? '返程' : '去程'}？",
                       onConfirm: () => statusNotifier.setStatus(
@@ -304,7 +306,7 @@ class StatusPanel extends StatelessWidget {
                     child: Center(
                       child: FittedBox(
                         child: Text(
-                          "切換${currentStatus.direction == Direction.go ? '返程' : '去程'}",
+                          "切${currentStatus.direction == Direction.go ? '返程' : '去程'}",
                           textAlign: TextAlign.center,
                           style: const TextStyle(
                             color: Colors.white,
@@ -359,7 +361,8 @@ class StatusPanel extends StatelessWidget {
                   child: Center(
                     child: FittedBox(
                       child: Text(
-                        '車輛狀態：${isOnDuty ? "營運中 【點我結束營運】" : "非營運 【點我開始營運】"}',
+                        '車輛狀態：${isOnDuty ? "營運中\n點我結束營運" : "非營運\n點我開始營運"}',
+                        textAlign: TextAlign.center,
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 20,
