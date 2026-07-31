@@ -17,6 +17,7 @@ import 'tts_helper.dart';
 abstract class Static {
   static Map<String, List<BusRoute>> routeData = {};
   static List<String> availableCities = ['Custom'];
+  static List<String> _serverCitiesCache = [];
   static Status currentStatus = Status.unknown;
   static final TTS = getTTS();
   static final audioManager = AudioManager();
@@ -26,7 +27,10 @@ abstract class Static {
   static late Box _box;
   static late Box _customBox;
   static late Box _cityBox;
+
   static const String API_BASE = "https://myster.freeddns.org:25566";
+
+  // static const String API_BASE = "http://192.168.1.249:25567";
   static final dio = Dio(
     BaseOptions(
       connectTimeout: const Duration(seconds: 120),
@@ -100,16 +104,24 @@ abstract class Static {
   }
 
   static void _updateAvailableCitiesList(List<String> serverCities) {
+    if (serverCities.isNotEmpty) {
+      _serverCitiesCache = serverCities;
+    }
     final cachedCities = _cityBox.keys.map((e) => e.toString()).toList();
-    availableCities = {'Custom', ...serverCities, ...cachedCities}.toList();
+    availableCities = {
+      'Custom',
+      ..._serverCitiesCache,
+      ...cachedCities,
+    }.toList();
   }
 
-  static Future<void> saveCityData(String city, String jsonRaw) async {
+  static Future<void> saveCityData(String city, dynamic data) async {
+    String jsonRaw = data is String ? data : jsonEncode(data);
     await _cityBox.put(city, {
       'timestamp': DateTime.now().millisecondsSinceEpoch,
       'data': jsonRaw,
     });
-    _updateAvailableCitiesList([]);
+    _updateAvailableCitiesList(_serverCitiesCache);
   }
 
   static Map<String, dynamic>? getCityCache(String city) {
@@ -122,11 +134,11 @@ abstract class Static {
     try {
       final res = await dio.get("$API_BASE/simulator_cities");
       if (res.statusCode == 200) {
-        List<dynamic> cities = res.data;
-        _updateAvailableCitiesList(cities.map((e) => e.toString()).toList());
+        List<String> cities = List<String>.from(res.data);
+        _updateAvailableCitiesList(cities);
       }
     } catch (e) {
-      _updateAvailableCitiesList([]);
+      _updateAvailableCitiesList(_serverCitiesCache);
     }
   }
 

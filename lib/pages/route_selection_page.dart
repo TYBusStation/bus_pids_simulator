@@ -55,7 +55,10 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
         final DateTime updateTime = DateTime.fromMillisecondsSinceEpoch(ts);
         _isDataExpired = DateTime.now().difference(updateTime).inDays >= 7;
         _lastUpdatedInfo = "${updateTime.month}/${updateTime.day}";
-        final List<dynamic> data = jsonDecode(cache['data']);
+        final dynamic rawData = cache['data'];
+        final List<dynamic> data = rawData is String
+            ? jsonDecode(rawData)
+            : rawData;
         Static.routeData[key] = data.map((r) => BusRoute.fromJson(r)).toList();
       } else {
         Static.routeData[key] = [];
@@ -64,7 +67,7 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
       }
     } catch (e) {
       Static.routeData[key] = [];
-      _lastUpdatedInfo = "資料損毀";
+      _lastUpdatedInfo = "解析錯誤";
     }
     _performSearch();
   }
@@ -78,14 +81,18 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
   }
 
   void _performSearch() {
-    final query = _searchQuery.toLowerCase();
+    final query = _searchQuery.toLowerCase().trim();
     final routes = Static.routeData[_activeCityKey] ?? [];
-    _displayRoutes = routes.where((route) {
-      final content =
-          '${route.id} ${route.name} ${route.description} ${route.departure} ${route.destination}'
-              .toLowerCase();
-      return content.contains(query);
-    }).toList();
+    if (query.isEmpty) {
+      _displayRoutes = List.from(routes);
+    } else {
+      _displayRoutes = routes.where((route) {
+        final content =
+            '${route.id} ${route.name} ${route.description} ${route.departure} ${route.destination}'
+                .toLowerCase();
+        return content.contains(query);
+      }).toList();
+    }
     _displayRoutes.sort((a, b) => FormatterUtils.compareRoutes(a.name, b.name));
     if (mounted) setState(() {});
   }
@@ -107,12 +114,14 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
         queryParameters: {'city': _activeCityKey},
       );
       if (res.statusCode == 200) {
-        final String rawJson = jsonEncode(res.data);
-        await Static.saveCityData(_activeCityKey, rawJson);
-        if (mounted) _loadCityFromCache(_activeCityKey);
+        await Static.saveCityData(_activeCityKey, res.data);
+        if (mounted) {
+          _loadCityFromCache(_activeCityKey);
+          FormatterUtils.showSnackbar(context, "更新成功");
+        }
       }
     } on DioException catch (e) {
-      if (mounted) FormatterUtils.showSnackbar(context, "更新失敗: ${e.type}");
+      if (mounted) FormatterUtils.showSnackbar(context, "連線失敗: ${e.message}");
     } catch (e) {
       if (mounted) FormatterUtils.showSnackbar(context, "系統錯誤");
     } finally {
@@ -172,7 +181,7 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
                     ),
                   ),
             icon: const Icon(Icons.check_circle, size: 16),
-            style: FilledButton.styleFrom(
+            style: ElevatedButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 8),
               visualDensity: VisualDensity.compact,
             ),
