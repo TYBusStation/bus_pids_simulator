@@ -32,9 +32,7 @@ class SourceSidebar extends StatelessWidget {
           itemBuilder: (context, index) {
             final key = cityKeys[index];
             final isSelected = selectedSources.contains(key);
-            final bool isLoaded =
-                Static.routeData.containsKey(key) &&
-                Static.routeData[key]!.isNotEmpty;
+            final bool isLoaded = Static.isCityLoaded(key);
 
             return InkWell(
               onTap: () => onSourceToggle(key),
@@ -50,7 +48,7 @@ class SourceSidebar extends StatelessWidget {
                       : null,
                 ),
                 child: Text(
-                  "${key == 'Custom' ? '自定義' : key}${isLoaded || key == 'Custom' ? '' : '\n(未載入)'}",
+                  "${key == 'Custom' ? '自定義' : key}${isLoaded ? '' : '\n(未載入)'}",
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 11,

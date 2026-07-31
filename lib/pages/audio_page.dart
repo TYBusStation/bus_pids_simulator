@@ -141,22 +141,21 @@ class _AudioPageState extends State<AudioPage> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                IconButton(
-                  icon: const Icon(Icons.edit, size: 18),
+                _buildCompactActionButton(
+                  icon: Icons.edit,
+                  color: theme.iconTheme.color,
                   onPressed: () => _showRenameDialog(name),
                 ),
-                IconButton(
-                  icon: const Icon(
-                    Icons.download,
-                    size: 18,
-                    color: Colors.green,
-                  ),
+                _buildCompactActionButton(
+                  icon: Icons.download,
+                  color: Colors.green,
                   onPressed: () => Static.audioManager.exportSingle(name),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.delete, size: 18, color: Colors.red),
+                _buildCompactActionButton(
+                  icon: Icons.delete,
+                  color: Colors.red,
                   onPressed: () => _handleDelete(name),
                 ),
               ],
@@ -165,6 +164,21 @@ class _AudioPageState extends State<AudioPage> {
           const SizedBox(height: 6),
         ],
       ),
+    );
+  }
+
+  Widget _buildCompactActionButton({
+    required IconData icon,
+    required Color? color,
+    required VoidCallback onPressed,
+  }) {
+    return IconButton(
+      icon: Icon(icon, size: 18),
+      color: color,
+      onPressed: onPressed,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+      visualDensity: VisualDensity.compact,
     );
   }
 

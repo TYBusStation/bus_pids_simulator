@@ -1,18 +1,16 @@
 import 'package:flutter/material.dart';
 
 class MapControls extends StatelessWidget {
-  final bool isFabMenuExpanded, isMapTapMode;
+  final bool isFabMenuExpanded;
   final double brightness;
-  final VoidCallback onToggleFab, onToggleTapMode, onRecenter;
+  final VoidCallback onToggleFab, onRecenter;
   final Function(double) onBrightnessChanged;
 
   const MapControls({
     super.key,
     required this.isFabMenuExpanded,
-    required this.isMapTapMode,
     required this.brightness,
     required this.onToggleFab,
-    required this.onToggleTapMode,
     required this.onRecenter,
     required this.onBrightnessChanged,
   });
@@ -83,25 +81,6 @@ class MapControls extends StatelessWidget {
               ),
               const SizedBox(width: 4),
             ],
-            SizedBox(
-              width: 34,
-              height: 34,
-              child: FloatingActionButton.small(
-                onPressed: onToggleTapMode,
-                backgroundColor: isMapTapMode
-                    ? Colors.orange
-                    : theme.colorScheme.surface,
-                heroTag: 'add',
-                child: Icon(
-                  Icons.add_location_alt,
-                  size: 16,
-                  color: isMapTapMode
-                      ? Colors.white
-                      : theme.colorScheme.primary,
-                ),
-              ),
-            ),
-            const SizedBox(width: 4),
             SizedBox(
               width: 38,
               height: 38,

@@ -55,9 +55,7 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
         final DateTime updateTime = DateTime.fromMillisecondsSinceEpoch(ts);
         _isDataExpired = DateTime.now().difference(updateTime).inDays >= 7;
         _lastUpdatedInfo = "${updateTime.month}/${updateTime.day}";
-
         final List<dynamic> data = jsonDecode(cache['data']);
-
         Static.routeData[key] = data.map((r) => BusRoute.fromJson(r)).toList();
       } else {
         Static.routeData[key] = [];
@@ -65,7 +63,6 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
         _isDataExpired = false;
       }
     } catch (e) {
-      print("解析城市 $key 出錯: $e");
       Static.routeData[key] = [];
       _lastUpdatedInfo = "資料損毀";
     }
@@ -105,25 +102,18 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
     if (_activeCityKey == 'Custom' || _isLoading) return;
     setState(() => _isLoading = true);
     try {
-      print("正在請求: ${Static.API_BASE}/simulator_data?city=$_activeCityKey");
-
       final res = await Static.dio.get(
         "${Static.API_BASE}/simulator_data",
         queryParameters: {'city': _activeCityKey},
       );
-
       if (res.statusCode == 200) {
         final String rawJson = jsonEncode(res.data);
         await Static.saveCityData(_activeCityKey, rawJson);
         if (mounted) _loadCityFromCache(_activeCityKey);
-        print("下載成功！");
       }
     } on DioException catch (e) {
-      print("網路請求錯誤類型: ${e.type}");
-      print("錯誤詳情: ${e.message}");
       if (mounted) FormatterUtils.showSnackbar(context, "更新失敗: ${e.type}");
     } catch (e) {
-      print("其他錯誤: $e");
       if (mounted) FormatterUtils.showSnackbar(context, "系統錯誤");
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -158,9 +148,7 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final bool hasData =
-        Static.routeData.containsKey(_activeCityKey) &&
-        Static.routeData[_activeCityKey]!.isNotEmpty;
+    final bool hasData = Static.isCityLoaded(_activeCityKey);
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
@@ -239,6 +227,7 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
                         itemBuilder: (context, index) {
                           final key = Static.availableCities[index];
                           final isSelected = _activeCityKey == key;
+                          final bool cityLoaded = Static.isCityLoaded(key);
                           return InkWell(
                             onTap: () => _onCityTabTap(key),
                             child: Container(
@@ -258,16 +247,18 @@ class _RouteSelectionPageState extends State<RouteSelectionPage> {
                                     : null,
                               ),
                               child: Text(
-                                key == 'Custom' ? '自定義' : key,
+                                "${key == 'Custom' ? '自定義' : key}${cityLoaded ? '' : '\n(未載入)'}",
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
-                                  fontSize: 10,
+                                  fontSize: 9,
                                   fontWeight: isSelected
                                       ? FontWeight.bold
                                       : FontWeight.normal,
                                   color: isSelected
                                       ? cs.primary
-                                      : cs.onSurfaceVariant,
+                                      : cs.onSurfaceVariant.withOpacity(
+                                          cityLoaded ? 1.0 : 0.5,
+                                        ),
                                 ),
                               ),
                             ),

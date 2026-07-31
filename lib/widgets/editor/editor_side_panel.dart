@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../../data/bus_station.dart';
 
@@ -9,14 +10,15 @@ class EditorSidePanel extends StatelessWidget {
       depCtrl,
       destCtrl,
       wktCtrl;
-  final bool isEditingGo, autoWkt;
+  final bool isEditingGo, autoWkt, isPathEditing;
   final List<BusStation> stations;
-  final Function(bool) onDirectionChanged;
-  final Function(bool) onAutoWktChanged;
-  final VoidCallback onWktManualChanged;
+  final List<LatLng> pathPoints;
+  final Function(bool) onDirectionChanged, onAutoWktChanged;
+  final VoidCallback onTogglePathEdit, onWktManualChanged;
   final Function(int, int) onReorder;
   final Function(int) onStationRemove;
   final Function(int, BusStation) onStationTap;
+  final Function(int) onPathPointTap;
 
   const EditorSidePanel({
     super.key,
@@ -28,13 +30,17 @@ class EditorSidePanel extends StatelessWidget {
     required this.wktCtrl,
     required this.isEditingGo,
     required this.autoWkt,
+    required this.isPathEditing,
     required this.stations,
+    required this.pathPoints,
     required this.onDirectionChanged,
     required this.onAutoWktChanged,
     required this.onWktManualChanged,
+    required this.onTogglePathEdit,
     required this.onReorder,
     required this.onStationRemove,
     required this.onStationTap,
+    required this.onPathPointTap,
   });
 
   InputDecoration _denseInp(String label) => InputDecoration(
@@ -50,100 +56,120 @@ class EditorSidePanel extends StatelessWidget {
       width: 260,
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(4, 2, 4, 4),
-            child: Column(
+          _buildHeader(),
+          const Divider(height: 1),
+          Expanded(
+            child: isPathEditing ? _buildPathList() : _buildStationList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 2, 4, 4),
+      child: Column(
+        children: [
+          if (!isPathEditing) ...[
+            Row(
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: idCtrl,
-                        style: const TextStyle(fontSize: 11),
-                        decoration: _denseInp("ID"),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: TextField(
-                        controller: nameCtrl,
-                        style: const TextStyle(fontSize: 11),
-                        decoration: _denseInp("名稱"),
-                      ),
-                    ),
-                  ],
+                Expanded(
+                  child: TextField(
+                    controller: idCtrl,
+                    enabled: !isPathEditing,
+                    style: const TextStyle(fontSize: 11),
+                    decoration: _denseInp("ID"),
+                  ),
                 ),
-                TextField(
-                  controller: descCtrl,
-                  style: const TextStyle(fontSize: 10),
-                  decoration: _denseInp("描述"),
-                ),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: depCtrl,
-                        style: const TextStyle(fontSize: 10),
-                        decoration: _denseInp("起點"),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: TextField(
-                        controller: destCtrl,
-                        style: const TextStyle(fontSize: 10),
-                        decoration: _denseInp("終點"),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Row(children: [_dirBtn(true, "去程"), _dirBtn(false, "回程")]),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: wktCtrl,
-                        enabled: !autoWkt,
-                        style: const TextStyle(
-                          fontSize: 9,
-                          fontFamily: 'monospace',
-                        ),
-                        decoration: const InputDecoration(
-                          helperText: "WKT LINESTRING",
-                          isDense: true,
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.all(4),
-                        ),
-                        onChanged: (_) => onWktManualChanged(),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    const Text("自動", style: TextStyle(fontSize: 8)),
-                    SizedBox(
-                      height: 18,
-                      width: 28,
-                      child: Transform.scale(
-                        scale: 0.5,
-                        child: Switch(
-                          value: autoWkt,
-                          onChanged: onAutoWktChanged,
-                        ),
-                      ),
-                    ),
-                  ],
+                const SizedBox(width: 4),
+                Expanded(
+                  child: TextField(
+                    controller: nameCtrl,
+                    enabled: !isPathEditing,
+                    style: const TextStyle(fontSize: 11),
+                    decoration: _denseInp("名稱"),
+                  ),
                 ),
               ],
             ),
-          ),
-          const Divider(height: 1),
-          Expanded(
-            child: ReorderableListView.builder(
-              buildDefaultDragHandles: false,
-              itemCount: stations.length,
-              onReorder: onReorder,
-              itemBuilder: (ctx, i) => _compactStationTile(i, stations[i]),
+            TextField(
+              controller: descCtrl,
+              enabled: !isPathEditing,
+              style: const TextStyle(fontSize: 10),
+              decoration: _denseInp("描述"),
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: depCtrl,
+                    enabled: !isPathEditing,
+                    style: const TextStyle(fontSize: 10),
+                    decoration: _denseInp("起點"),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: TextField(
+                    controller: destCtrl,
+                    enabled: !isPathEditing,
+                    style: const TextStyle(fontSize: 10),
+                    decoration: _denseInp("終點"),
+                  ),
+                ),
+              ],
+            ),
+          ] else ...[
+            Row(
+              children: [
+                const Text(
+                  "路徑節點編輯",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: onTogglePathEdit,
+                ),
+              ],
+            ),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(6),
+              margin: const EdgeInsets.only(bottom: 4),
+              decoration: BoxDecoration(
+                color: Colors.black26,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                wktCtrl.text,
+                style: const TextStyle(fontSize: 9, fontFamily: 'monospace'),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+          const SizedBox(height: 4),
+          Row(children: [_dirBtn(true, "去程"), _dirBtn(false, "回程")]),
+          const SizedBox(height: 4),
+          SizedBox(
+            width: double.infinity,
+            height: 28,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                padding: EdgeInsets.zero,
+                shape: const RoundedRectangleBorder(),
+              ),
+              onPressed: onTogglePathEdit,
+              icon: Icon(
+                isPathEditing ? Icons.list : Icons.edit_road,
+                size: 14,
+              ),
+              label: Text(
+                isPathEditing ? "返回編輯站點" : "編輯 WKT 線形",
+                style: const TextStyle(fontSize: 10),
+              ),
             ),
           ),
         ],
@@ -172,6 +198,34 @@ class EditorSidePanel extends StatelessWidget {
     ),
   );
 
+  Widget _buildStationList() => ReorderableListView.builder(
+    buildDefaultDragHandles: false,
+    itemCount: stations.length,
+    onReorder: onReorder,
+    itemBuilder: (ctx, i) => _compactStationTile(i, stations[i]),
+  );
+
+  Widget _buildPathList() => ListView.builder(
+    itemCount: pathPoints.length,
+    itemBuilder: (ctx, i) => ListTile(
+      dense: true,
+      visualDensity: VisualDensity.compact,
+      leading: CircleAvatar(
+        radius: 7,
+        child: Text("${i + 1}", style: const TextStyle(fontSize: 7)),
+      ),
+      title: Text(
+        "${pathPoints[i].latitude.toStringAsFixed(6)}, ${pathPoints[i].longitude.toStringAsFixed(6)}",
+        style: const TextStyle(
+          fontSize: 9,
+          fontFamily: 'monospace',
+          color: Colors.grey,
+        ),
+      ),
+      onTap: () => onPathPointTap(i),
+    ),
+  );
+
   Widget _compactStationTile(int i, BusStation s) => Padding(
     key: ValueKey("${isEditingGo ? 'g' : 'b'}$i"),
     padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -196,7 +250,6 @@ class EditorSidePanel extends StatelessWidget {
             onTap: () => onStationTap(i, s),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   s.name,

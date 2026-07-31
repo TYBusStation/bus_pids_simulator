@@ -26,16 +26,13 @@ abstract class Static {
   static late Box _box;
   static late Box _customBox;
   static late Box _cityBox;
-
   static const String API_BASE = "https://myster.freeddns.org:25566";
-
   static final dio = Dio(
     BaseOptions(
       connectTimeout: const Duration(seconds: 120),
       receiveTimeout: const Duration(seconds: 120),
     ),
   );
-
   static final ChangeNotifier settingsNotifier = ChangeNotifier();
   static String licensePlate = "KKA-0000";
   static String driverId = "000000";
@@ -83,6 +80,11 @@ abstract class Static {
 
   static void log(String message) =>
       print("[${DateTime.now().toIso8601String()}] $message");
+
+  static bool isCityLoaded(String key) {
+    if (key == 'Custom') return true;
+    return _cityBox.containsKey(key);
+  }
 
   static Future<void> init() async {
     await Hive.initFlutter();

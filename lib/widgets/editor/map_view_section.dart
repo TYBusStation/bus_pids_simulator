@@ -7,12 +7,15 @@ import '../../data/bus_station.dart';
 class MapViewSection extends StatelessWidget {
   final MapController mapController;
   final List<LatLng> goPath, backPath;
-  final bool isEditingGo, isMapTapMode;
+  final bool isEditingGo, isMapTapMode, isPathEditing;
+  final int? movingStationIndex, movingPathIndex;
+  final LatLng? previewPoint;
   final double brightness;
   final List<BusStation> nearbySourceStations, goStations, backStations;
   final Function(MapCamera) onPositionChanged;
   final Function(LatLng) onMapTap;
   final Function(LatLng, BusStation) onMarkerTap;
+  final Function(int) onPathPointTap;
 
   const MapViewSection({
     super.key,
@@ -27,90 +30,183 @@ class MapViewSection extends StatelessWidget {
     required this.onPositionChanged,
     required this.onMapTap,
     required this.onMarkerTap,
+    required this.isPathEditing,
+    required this.onPathPointTap,
     required this.isMapTapMode,
+    this.movingStationIndex,
+    this.movingPathIndex,
+    this.previewPoint,
   });
 
   @override
   Widget build(BuildContext context) {
-    return FlutterMap(
-      mapController: mapController,
-      options: MapOptions(
-        initialCenter: const LatLng(24.9892, 121.3135),
-        initialZoom: 16,
-        onPositionChanged: (p, g) => onPositionChanged(p),
-        onTap: (p, point) => onMapTap(point),
-      ),
+    final activePath = isEditingGo ? goPath : backPath;
+    final isMoving = movingStationIndex != null || movingPathIndex != null;
+
+    return Stack(
       children: [
-        ColorFiltered(
-          colorFilter: ColorFilter.matrix([
-            brightness,
-            0,
-            0,
-            0,
-            0,
-            0,
-            brightness,
-            0,
-            0,
-            0,
-            0,
-            0,
-            brightness,
-            0,
-            0,
-            0,
-            0,
-            0,
-            1,
-            0,
-          ]),
-          child: TileLayer(
-            urlTemplate:
-                'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-            tileProvider: NetworkTileProvider(),
+        FlutterMap(
+          mapController: mapController,
+          options: MapOptions(
+            initialCenter: const LatLng(24.9892, 121.3135),
+            initialZoom: 16,
+            onPositionChanged: (p, g) => onPositionChanged(p),
+            onTap: (p, point) => onMapTap(point),
           ),
-        ),
-        TileLayer(
-          urlTemplate:
-              'https://wmts.nlsc.gov.tw/wmts/EMAP2/default/GoogleMapsCompatible/{z}/{y}/{x}',
-          tileProvider: NetworkTileProvider(),
-        ),
-        PolylineLayer(
-          polylines: [
-            if (isEditingGo && backPath.isNotEmpty)
-              Polyline(
-                points: backPath,
-                color: Colors.blue.withOpacity(0.5),
-                strokeWidth: 4,
+          children: [
+            ColorFiltered(
+              colorFilter: ColorFilter.matrix([
+                brightness,
+                0,
+                0,
+                0,
+                0,
+                0,
+                brightness,
+                0,
+                0,
+                0,
+                0,
+                0,
+                brightness,
+                0,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+              ]),
+              child: TileLayer(
+                urlTemplate:
+                    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                tileProvider: NetworkTileProvider(),
               ),
-            if (!isEditingGo && goPath.isNotEmpty)
-              Polyline(
-                points: goPath,
-                color: Colors.blue.withOpacity(0.5),
-                strokeWidth: 4,
-              ),
-            if (isEditingGo && goPath.isNotEmpty)
-              Polyline(points: goPath, color: Colors.orange, strokeWidth: 6),
-            if (!isEditingGo && backPath.isNotEmpty)
-              Polyline(points: backPath, color: Colors.orange, strokeWidth: 6),
+            ),
+            TileLayer(
+              urlTemplate:
+                  'https://wmts.nlsc.gov.tw/wmts/EMAP2/default/GoogleMapsCompatible/{z}/{y}/{x}',
+              tileProvider: NetworkTileProvider(),
+            ),
+            PolylineLayer(
+              polylines: [
+                if (isEditingGo && backPath.isNotEmpty)
+                  Polyline(
+                    points: backPath,
+                    color: Colors.blue.withOpacity(0.5),
+                    strokeWidth: 4,
+                  ),
+                if (!isEditingGo && goPath.isNotEmpty)
+                  Polyline(
+                    points: goPath,
+                    color: Colors.blue.withOpacity(0.5),
+                    strokeWidth: 4,
+                  ),
+                if (activePath.isNotEmpty)
+                  Polyline(
+                    points: activePath,
+                    color: Colors.orange,
+                    strokeWidth: 6,
+                  ),
+                if (isPathEditing &&
+                    isMapTapMode &&
+                    activePath.isNotEmpty &&
+                    previewPoint != null)
+                  Polyline(
+                    points: [activePath.last, previewPoint!],
+                    color: Colors.orange,
+                    strokeWidth: 6,
+                  ),
+              ],
+            ),
+            MarkerLayer(
+              markers: [
+                ...nearbySourceStations.map(
+                  (s) => _buildMarker(s, Colors.green),
+                ),
+                ..._getSortedRouteMarkers(),
+                if (isPathEditing)
+                  ...activePath.asMap().entries.map(
+                    (e) => _buildPathNode(e.key, e.value),
+                  ),
+              ],
+            ),
           ],
         ),
-        MarkerLayer(
-          markers: [
-            ...nearbySourceStations.map((s) => _buildMarker(s, Colors.green)),
-            ..._getSortedRouteMarkers(),
-          ],
-        ),
+        if (isMapTapMode || isMoving)
+          IgnorePointer(
+            child: Center(
+              child: isPathEditing
+                  ? Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.blue, width: 3),
+                        boxShadow: const [
+                          BoxShadow(color: Colors.black45, blurRadius: 4),
+                        ],
+                      ),
+                      child: Center(
+                        child: Text(
+                          isMoving
+                              ? "${(movingPathIndex ?? 0) + 1}"
+                              : "${activePath.length + 1}",
+                          style: const TextStyle(
+                            color: Colors.black,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    )
+                  : Padding(
+                      padding: const EdgeInsets.only(bottom: 28),
+                      child: const Icon(
+                        Icons.location_on,
+                        size: 42,
+                        color: Colors.orange,
+                        shadows: [Shadow(color: Colors.black54, blurRadius: 8)],
+                      ),
+                    ),
+            ),
+          ),
       ],
     );
   }
+
+  Marker _buildPathNode(int index, LatLng point) => Marker(
+    point: point,
+    width: 20,
+    height: 20,
+    child: GestureDetector(
+      onTap: () => onPathPointTap(index),
+      child: Container(
+        decoration: BoxDecoration(
+          color: movingPathIndex == index ? Colors.blue : Colors.white,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.orange, width: 2),
+        ),
+        child: Center(
+          child: Text(
+            "${index + 1}",
+            style: TextStyle(
+              fontSize: 8,
+              fontWeight: FontWeight.bold,
+              color: movingPathIndex == index ? Colors.white : Colors.black,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 
   List<Marker> _getSortedRouteMarkers() {
     final activeList = isEditingGo ? goStations : backStations;
     final inactiveList = isEditingGo ? backStations : goStations;
     final activeKeys = activeList.map((s) => "${s.lat}_${s.lon}").toSet();
     final inactiveKeys = inactiveList.map((s) => "${s.lat}_${s.lon}").toSet();
-
     final List<Marker> markers = [];
     final Set<String> processed = {};
 
@@ -120,14 +216,20 @@ class MapViewSection extends StatelessWidget {
       if (!processed.add(key)) continue;
       markers.add(_buildMarker(s, Colors.blue));
     }
-
-    for (var s in activeList) {
+    for (var i = 0; i < activeList.length; i++) {
+      final s = activeList[i];
       final key = "${s.lat}_${s.lon}";
       if (!processed.add(key)) continue;
       bool overlap = inactiveKeys.contains(key);
-      markers.add(_buildMarker(s, overlap ? Colors.red : Colors.orange));
+      markers.add(
+        _buildMarker(
+          s,
+          movingStationIndex == i
+              ? Colors.blue
+              : (overlap ? Colors.red : Colors.orange),
+        ),
+      );
     }
-
     return markers;
   }
 
@@ -138,7 +240,7 @@ class MapViewSection extends StatelessWidget {
     rotate: true,
     alignment: Alignment.topCenter,
     child: GestureDetector(
-      onTap: () => onMarkerTap(s.position, s),
+      onTap: isPathEditing ? null : () => onMarkerTap(s.position, s),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
