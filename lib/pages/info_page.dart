@@ -62,18 +62,6 @@ class _InfoPageState extends State<InfoPage>
     });
   }
 
-  void _toggleFullscreen() {
-    FocusScope.of(context).unfocus();
-    context.read<LandscapeChangeNotifier>().toggleOnlyFullscreen();
-  }
-
-  void _toggleWakeLock() {
-    setState(() {
-      _isWakeLocked = !_isWakeLocked;
-      WakelockPlus.toggle(enable: _isWakeLocked);
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -96,26 +84,35 @@ class _InfoPageState extends State<InfoPage>
         } else if (locNotifier.currentLocation == null) {
           nextStationName = "(無定位)";
         } else if (analysis != null) {
-          final double distPrev = analysis.distToPrevStation ?? double.infinity;
+          final double distPrev = analysis.distToPrevStation ?? 0;
           final double distNext = analysis.distToNextStation ?? double.infinity;
 
-          if (analysis.prevStation != null &&
-              distPrev < Static.nextStationDepartureDistance) {
-            nextStationName = analysis.prevStation!.name;
-            nextStationNameEn = analysis.prevStation!.nameEn;
-            nextStationNo = analysis.prevStation!.order;
-            distanceText = "0 m(離站 ${distPrev.toStringAsFixed(0)} m)";
-          } else if (analysis.nextStation != null &&
-              (distPrev >= Static.nextStationDepartureDistance ||
-                  (Static.nextStationDistance >= 0 &&
-                      distNext < Static.nextStationDistance))) {
-            nextStationName = analysis.nextStation!.name;
-            nextStationNameEn = analysis.nextStation!.nameEn;
-            nextStationNo = analysis.nextStation!.order;
-            String baseDist = analysis.distToNextStation != null
-                ? "${analysis.distToNextStation!.toStringAsFixed(0)} m"
-                : "";
-            distanceText = analysis.isOffRoute ? "$baseDist (脫離路線)" : baseDist;
+          bool isDeparted = distPrev > Static.nextStationDepartureDistance;
+          bool isEnteringNext =
+              Static.nextStationDistance >= 0 &&
+              distNext < Static.nextStationDistance;
+
+          if (isDeparted ||
+              isEnteringNext ||
+              analysisProvider.displayStation?.order ==
+                  analysis.nextStation?.order) {
+            if (analysis.nextStation != null) {
+              nextStationName = analysis.nextStation!.name;
+              nextStationNameEn = analysis.nextStation!.nameEn;
+              nextStationNo = analysis.nextStation!.order;
+              distanceText =
+                  "${distNext.toStringAsFixed(0)} m${analysis.isOffRoute ? ' (脫離)' : ''}";
+            }
+          } else {
+            if (analysis.prevStation != null) {
+              nextStationName = analysis.prevStation!.name;
+              nextStationNameEn = analysis.prevStation!.nameEn;
+              nextStationNo = analysis.prevStation!.order;
+              distanceText = "(離站 ${distPrev.toStringAsFixed(0)} m)";
+            } else {
+              nextStationName = analysis.nextStation?.name ?? "(起點)";
+              distanceText = "準備出發";
+            }
           }
         }
 
@@ -221,12 +218,18 @@ class _InfoPageState extends State<InfoPage>
               child: const Text("重新定位", style: TextStyle(fontSize: 10)),
             ),
           ),
+          const SizedBox(height: 4),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: _toggleWakeLock,
+                  onPressed: () {
+                    setState(() {
+                      _isWakeLocked = !_isWakeLocked;
+                      WakelockPlus.toggle(enable: _isWakeLocked);
+                    });
+                  },
                   icon: Icon(
                     _isWakeLocked ? Icons.lightbulb : Icons.lightbulb_outline,
                     size: 12,
@@ -247,20 +250,23 @@ class _InfoPageState extends State<InfoPage>
               const SizedBox(width: 4),
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: _toggleFullscreen,
-                  icon: Consumer<LandscapeChangeNotifier>(
-                    builder: (context, geo, _) => Icon(
-                      geo.isFullscreen
-                          ? Icons.fullscreen_exit
-                          : Icons.fullscreen,
-                      size: 12,
-                    ),
+                  onPressed: () {
+                    FocusScope.of(context).unfocus();
+                    context
+                        .read<LandscapeChangeNotifier>()
+                        .toggleOnlyFullscreen();
+                  },
+                  icon: Icon(
+                    context.watch<LandscapeChangeNotifier>().isFullscreen
+                        ? Icons.fullscreen_exit
+                        : Icons.fullscreen,
+                    size: 12,
                   ),
-                  label: Consumer<LandscapeChangeNotifier>(
-                    builder: (context, geo, _) => Text(
-                      geo.isFullscreen ? "退出全螢幕" : "全螢幕",
-                      style: const TextStyle(fontSize: 9),
-                    ),
+                  label: Text(
+                    context.watch<LandscapeChangeNotifier>().isFullscreen
+                        ? "退出全螢幕"
+                        : "全螢幕",
+                    style: const TextStyle(fontSize: 9),
                   ),
                   style: FilledButton.styleFrom(
                     backgroundColor: theme.colorScheme.secondary,
@@ -294,29 +300,24 @@ class _InfoPageState extends State<InfoPage>
     );
   }
 
-  Widget _buildInfoRow(String label, String value, Color valueColor) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 1),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(color: Colors.white70, fontSize: 9),
+  Widget _buildInfoRow(String label, String value, Color valueColor) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 1),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 9)),
+        Text(
+          value,
+          style: TextStyle(
+            color: valueColor,
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'monospace',
           ),
-          Text(
-            value,
-            style: TextStyle(
-              color: valueColor,
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              fontFamily: 'monospace',
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
 
   Widget _buildControlRow(
     IconData icon,
@@ -325,48 +326,46 @@ class _InfoPageState extends State<InfoPage>
     double max,
     Function(double) onSlider,
     TextEditingController ctrl,
-  ) {
-    return Row(
-      children: [
-        Icon(icon, size: 16),
-        Expanded(
-          child: SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              trackHeight: 2,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
-              overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
-            ),
-            child: Slider(
-              value: value,
-              min: min,
-              max: max,
-              onChanged: (v) {
-                Static.TTS.speak(" ");
-                onSlider(v);
-              },
-            ),
+  ) => Row(
+    children: [
+      Icon(icon, size: 16),
+      Expanded(
+        child: SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            trackHeight: 2,
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
+            overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
           ),
-        ),
-        SizedBox(
-          width: 35,
-          height: 24,
-          child: TextField(
-            controller: ctrl,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold),
-            decoration: const InputDecoration(
-              contentPadding: EdgeInsets.zero,
-              border: OutlineInputBorder(),
-              isDense: true,
-            ),
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            onSubmitted: (s) {
-              final val = double.tryParse(s);
-              if (val != null) onSlider(val);
+          child: Slider(
+            value: value,
+            min: min,
+            max: max,
+            onChanged: (v) {
+              Static.TTS.speak(" ");
+              onSlider(v);
             },
           ),
         ),
-      ],
-    );
-  }
+      ),
+      SizedBox(
+        width: 35,
+        height: 24,
+        child: TextField(
+          controller: ctrl,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold),
+          decoration: const InputDecoration(
+            contentPadding: EdgeInsets.zero,
+            border: OutlineInputBorder(),
+            isDense: true,
+          ),
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          onSubmitted: (s) {
+            final val = double.tryParse(s);
+            if (val != null) onSlider(val);
+          },
+        ),
+      ),
+    ],
+  );
 }

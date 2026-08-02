@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'audio_page.dart';
 import 'led_setting_tab.dart';
+import 'lottie_settings_tab.dart';
 import 'rules_tab.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -18,20 +19,36 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 6,
+      length: 7,
       child: Scaffold(
-        appBar: AppBar(
-          toolbarHeight: 0,
-          bottom: const TabBar(
-            isScrollable: true,
-            tabs: [
-              Tab(text: "定位模式"),
-              Tab(text: "報站規則"),
-              Tab(text: "字幕設定"),
-              Tab(text: "單獨語音"),
-              Tab(text: "語音包"),
-              Tab(text: "遠端語音"),
-            ],
+        appBar: PreferredSize(
+          preferredSize: const Size.fromHeight(40),
+          child: Container(
+            color: Theme.of(context).appBarTheme.backgroundColor,
+            child: const SafeArea(
+              bottom: false,
+              child: TabBar(
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                labelPadding: EdgeInsets.symmetric(horizontal: 12),
+                indicatorSize: TabBarIndicatorSize.label,
+                labelStyle: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                ),
+                unselectedLabelStyle: TextStyle(fontSize: 13),
+                indicatorWeight: 2,
+                tabs: [
+                  Tab(height: 38, text: "定位模式"),
+                  Tab(height: 38, text: "報站規則"),
+                  Tab(height: 38, text: "字幕設定"),
+                  Tab(height: 38, text: "Lottie設定"),
+                  Tab(height: 38, text: "單獨語音"),
+                  Tab(height: 38, text: "語音包"),
+                  Tab(height: 38, text: "遠端語音"),
+                ],
+              ),
+            ),
           ),
         ),
         body: const TabBarView(
@@ -39,6 +56,7 @@ class _SettingsPageState extends State<SettingsPage> {
             GpsControlPage(),
             RulesTab(),
             LedSettingsTab(),
+            LottieSettingsTab(),
             AudioPage(),
             AudioPackPage(),
             RemoteAudioPage(),

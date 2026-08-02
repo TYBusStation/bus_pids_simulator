@@ -129,11 +129,16 @@ class _AudioPackPageState extends State<AudioPackPage> {
                     style: TextStyle(color: Colors.grey),
                   ),
                 )
-              : ListView.builder(
+              : ReorderableListView.builder(
+                  onReorder: (oldIndex, newIndex) async {
+                    await Static.audioManager.reorderPack(oldIndex, newIndex);
+                    setState(() {});
+                  },
                   itemCount: packs.length,
                   itemBuilder: (context, index) {
                     final pack = packs[index];
                     return Card(
+                      key: ValueKey(pack.name),
                       margin: const EdgeInsets.symmetric(
                         horizontal: 12,
                         vertical: 6,
@@ -141,19 +146,41 @@ class _AudioPackPageState extends State<AudioPackPage> {
                       child: Opacity(
                         opacity: pack.isEnabled ? 1.0 : 0.6,
                         child: ListTile(
-                          leading: Icon(
-                            Icons.folder_zip,
-                            color: pack.isEnabled ? Colors.blue : Colors.grey,
+                          leading: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.drag_handle, color: Colors.grey),
+                              Text(
+                                "${index + 1}",
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
                           ),
                           title: Text(
                             pack.name,
                             style: TextStyle(
+                              fontWeight: FontWeight.normal,
                               decoration: pack.isEnabled
                                   ? null
                                   : TextDecoration.lineThrough,
                             ),
                           ),
-                          subtitle: Text("檔案數: ${pack.fileNames.length}"),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text("檔案數: ${pack.fileNames.length}"),
+                              Text(
+                                "更新於: ${pack.updatedAt.toString().substring(0, 16)}",
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [

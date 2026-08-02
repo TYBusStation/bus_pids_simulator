@@ -11,8 +11,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   runApp(
     MultiProvider(
       providers: [
@@ -208,11 +209,10 @@ class _UpdatePageState extends State<UpdatePage> {
       );
     } catch (e) {
       setState(() => _isDownloading = false);
-      if (mounted) {
+      if (mounted)
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('更新失敗: $e')));
-      }
     }
   }
 
@@ -220,31 +220,43 @@ class _UpdatePageState extends State<UpdatePage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: Colors.black87,
+      backgroundColor: Colors.black54,
       body: Center(
         child: Container(
-          width: 300,
-          padding: const EdgeInsets.all(24),
+          width: 260,
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: theme.colorScheme.surface,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(10),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.system_update, size: 40, color: Colors.blue),
-              const SizedBox(height: 16),
+              const Icon(Icons.system_update, size: 32, color: Colors.blue),
+              const SizedBox(height: 12),
               Text(
                 '發現新版本 v${widget.updateInfo['version']}',
-                style: const TextStyle(fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
               if (_isDownloading)
                 Column(
                   children: [
-                    LinearProgressIndicator(value: _progress),
-                    const SizedBox(height: 8),
-                    Text('${(_progress * 100).toStringAsFixed(1)}%'),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: _progress,
+                        minHeight: 6,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${(_progress * 100).toStringAsFixed(0)}%',
+                      style: const TextStyle(fontSize: 11),
+                    ),
                   ],
                 )
               else
@@ -253,11 +265,11 @@ class _UpdatePageState extends State<UpdatePage> {
                   children: [
                     TextButton(
                       onPressed: widget.onSkip,
-                      child: const Text('略過'),
+                      child: const Text('略過', style: TextStyle(fontSize: 13)),
                     ),
                     ElevatedButton(
                       onPressed: _startUpdate,
-                      child: const Text('更新'),
+                      child: const Text('更新', style: TextStyle(fontSize: 13)),
                     ),
                   ],
                 ),

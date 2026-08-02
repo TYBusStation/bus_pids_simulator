@@ -57,6 +57,62 @@ class _LedPageState extends State<LedPage> {
     }
   }
 
+  String _formatText(String template, LedEvent event) {
+    final status = context.read<StatusChangeNotifier>().currentStatus;
+    final analysis = context.read<RouteAnalysisProvider>().currentAnalysis;
+    final now = DateTime.now();
+
+    String destination = status.direction == Direction.go
+        ? status.route.destination
+        : status.route.departure;
+
+    final stations = status.direction == Direction.go
+        ? status.route.stations.go
+        : status.route.stations.back;
+
+    int idx = -1;
+    if (analysis?.nextStation != null) {
+      idx = stations.indexWhere((s) => s.order == analysis!.nextStation!.order);
+    }
+
+    String result = template
+        .replaceAll('{name}', event.name)
+        .replaceAll('{nameEn}', event.nameEn)
+        .replaceAll('{terminal}', event.isTerminal ? "終點站" : "")
+        .replaceAll('{route_name}', status.route.name)
+        .replaceAll('{route_desc}', status.route.description ?? "")
+        .replaceAll('{route_dest}', destination)
+        .replaceAll('{hh}', now.hour.toString().padLeft(2, '0'))
+        .replaceAll('{mm}', now.minute.toString().padLeft(2, '0'))
+        .replaceAll('{ss}', now.second.toString().padLeft(2, '0'));
+
+    for (int i = 1; i <= 15; i++) {
+      String pName = "";
+      String pEn = "";
+      String nName = "";
+      String nEn = "";
+
+      if (idx != -1) {
+        if (idx - i >= 0) {
+          pName = stations[idx - i].name;
+          pEn = stations[idx - i].nameEn;
+        }
+        if (idx + i < stations.length) {
+          nName = stations[idx + i].name;
+          nEn = stations[idx + i].nameEn;
+        }
+      }
+
+      result = result
+          .replaceAll('{PrevName$i}', pName)
+          .replaceAll('{PrevNameEn$i}', pEn)
+          .replaceAll('{NextName$i}', nName)
+          .replaceAll('{NextNameEn$i}', nEn);
+    }
+
+    return result;
+  }
+
   void _startPrioritySequence(LedEvent event) {
     setState(() {
       _isPriorityMode = true;
@@ -83,10 +139,7 @@ class _LedPageState extends State<LedPage> {
   void _updateCurrentText(LedEvent event) {
     if (_queueIndex < _activeQueue.length) {
       final config = _activeQueue[_queueIndex];
-      String processed = config.template
-          .replaceAll('{name}', event.name)
-          .replaceAll('{nameEn}', event.nameEn)
-          .replaceAll('{terminal}', event.isTerminal ? "終點站" : "");
+      String processed = _formatText(config.template, event);
 
       if (processed.trim().isEmpty) {
         _queueIndex++;
@@ -160,7 +213,10 @@ class _LedPageState extends State<LedPage> {
       _currentConfig = null;
     } else {
       final config = slogans[_sloganIndex % slogans.length];
-      _currentText = config.template;
+      _currentText = _formatText(
+        config.template,
+        LedEvent(type: LedBroadcastType.slogan, name: "", nameEn: ""),
+      );
       _currentConfig = config;
       _sloganIndex++;
     }

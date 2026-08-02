@@ -15,13 +15,17 @@ class VoicePack {
   final int timestamp;
   final List<String> fileNames;
   bool isEnabled;
+  int priority;
 
   VoicePack({
     required this.name,
     required this.timestamp,
     required this.fileNames,
     this.isEnabled = true,
+    this.priority = 0,
   });
+
+  DateTime get updatedAt => DateTime.fromMillisecondsSinceEpoch(timestamp);
 }
 
 class AudioManager {
@@ -47,17 +51,33 @@ class AudioManager {
 
   Future<void> _loadStoredPacks() async {
     voicePacks.clear();
-    for (var key in _packMetaBox.keys) {
-      final data = _packMetaBox.get(key);
+    final List<Map> metaList = _packMetaBox.values.cast<Map>().toList();
+    metaList.sort((a, b) => (a['priority'] ?? 0).compareTo(b['priority'] ?? 0));
+
+    for (var data in metaList) {
+      voicePacks.add(
+        VoicePack(
+          name: data['name'],
+          timestamp: data['timestamp'] ?? 0,
+          fileNames: List<String>.from(data['fileNames'] ?? []),
+          isEnabled: data['isEnabled'] ?? true,
+          priority: data['priority'] ?? 0,
+        ),
+      );
+    }
+  }
+
+  Future<void> reorderPack(int oldIndex, int newIndex) async {
+    if (oldIndex < newIndex) newIndex -= 1;
+    final item = voicePacks.removeAt(oldIndex);
+    voicePacks.insert(newIndex, item);
+
+    for (int i = 0; i < voicePacks.length; i++) {
+      voicePacks[i].priority = i;
+      final data = _packMetaBox.get(voicePacks[i].name);
       if (data != null) {
-        voicePacks.add(
-          VoicePack(
-            name: data['name'] ?? key.toString(),
-            timestamp: data['timestamp'] ?? 0,
-            fileNames: List<String>.from(data['fileNames'] ?? []),
-            isEnabled: data['isEnabled'] ?? true,
-          ),
-        );
+        data['priority'] = i;
+        await _packMetaBox.put(voicePacks[i].name, data);
       }
     }
   }
@@ -76,11 +96,13 @@ class AudioManager {
         }
       }
       if (fileNames.isEmpty) return false;
+
       await _packMetaBox.put(name, {
         'name': name,
         'timestamp': DateTime.now().millisecondsSinceEpoch,
         'fileNames': fileNames,
         'isEnabled': true,
+        'priority': voicePacks.length,
       });
       await _loadStoredPacks();
       return true;
@@ -101,8 +123,19 @@ class AudioManager {
 
   Future<bool> replacePack(int index, Uint8List zipBytes) async {
     final packName = voicePacks[index].name;
+    final oldPriority = voicePacks[index].priority;
     await removePack(index);
-    return await importZipAsPack(packName, zipBytes);
+
+    bool ok = await importZipAsPack(packName, zipBytes);
+    if (ok) {
+      final data = _packMetaBox.get(packName);
+      if (data != null) {
+        data['priority'] = oldPriority;
+        await _packMetaBox.put(packName, data);
+        await _loadStoredPacks();
+      }
+    }
+    return ok;
   }
 
   Future<void> removePack(int index) async {
@@ -112,6 +145,13 @@ class AudioManager {
     }
     await _packMetaBox.delete(pack.name);
     voicePacks.removeAt(index);
+    for (int i = 0; i < voicePacks.length; i++) {
+      final data = _packMetaBox.get(voicePacks[i].name);
+      if (data != null) {
+        data['priority'] = i;
+        await _packMetaBox.put(voicePacks[i].name, data);
+      }
+    }
   }
 
   String _stripExtension(String name) {
@@ -135,19 +175,18 @@ class AudioManager {
       return await _audioBox.get(selectedKey);
     }
 
-    List<String> packKeys = [];
     for (var pack in voicePacks) {
       if (!pack.isEnabled) continue;
-      for (var fileName in pack.fileNames) {
-        if (fileName == baseName || fileName.startsWith("${baseName}_[")) {
-          packKeys.add("${pack.name}:$fileName");
-        }
-      }
-    }
 
-    if (packKeys.isNotEmpty) {
-      final selectedKey = packKeys[_random.nextInt(packKeys.length)];
-      return await _packDataBox.get(selectedKey);
+      List<String> packMatches = pack.fileNames
+          .where((fn) => fn == baseName || fn.startsWith("${baseName}_["))
+          .toList();
+
+      if (packMatches.isNotEmpty) {
+        final selectedFileName =
+            packMatches[_random.nextInt(packMatches.length)];
+        return await _packDataBox.get("${pack.name}:$selectedFileName");
+      }
     }
     return null;
   }
@@ -156,10 +195,12 @@ class AudioManager {
     if (_audioBox.containsKey(name)) return true;
     if (_audioBox.keys.any((k) => k.toString().startsWith("${name}_[")))
       return true;
+
     for (var pack in voicePacks) {
       if (pack.isEnabled &&
-          pack.fileNames.any((k) => k == name || k.startsWith("${name}_[")))
+          pack.fileNames.any((k) => k == name || k.startsWith("${name}_["))) {
         return true;
+      }
     }
     return false;
   }

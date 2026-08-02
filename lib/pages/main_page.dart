@@ -14,6 +14,7 @@ import '../widgets/map_bottom_panel.dart';
 import 'contact_page.dart';
 import 'info_page.dart';
 import 'led_page.dart';
+import 'lottie_page.dart';
 import 'map_page.dart';
 
 class MainPage extends StatefulWidget {
@@ -37,28 +38,33 @@ class _MainPageState extends State<MainPage> {
 
   static final List<NavigationDestination> _allDestinations = const [
     NavigationDestination(
-      icon: Icon(Icons.info_outline, size: 20),
-      selectedIcon: Icon(Icons.info, size: 20),
+      icon: Icon(Icons.info_outline, size: 18),
+      selectedIcon: Icon(Icons.info, size: 18),
       label: '資訊',
     ),
     NavigationDestination(
-      icon: Icon(Icons.map_outlined, size: 20),
-      selectedIcon: Icon(Icons.map, size: 20),
+      icon: Icon(Icons.map_outlined, size: 18),
+      selectedIcon: Icon(Icons.map, size: 18),
       label: '地圖',
     ),
     NavigationDestination(
-      icon: Icon(Icons.text_fields_outlined, size: 20),
-      selectedIcon: Icon(Icons.text_fields, size: 20),
+      icon: Icon(Icons.text_fields_outlined, size: 18),
+      selectedIcon: Icon(Icons.text_fields, size: 18),
       label: '字幕',
     ),
     NavigationDestination(
-      icon: Icon(Icons.settings_outlined, size: 20),
-      selectedIcon: Icon(Icons.settings, size: 20),
+      icon: Icon(Icons.print_outlined, size: 18),
+      selectedIcon: Icon(Icons.print, size: 18),
+      label: 'Lottie',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.settings_outlined, size: 18),
+      selectedIcon: Icon(Icons.settings, size: 18),
       label: '設定',
     ),
     NavigationDestination(
-      icon: Icon(Icons.link_outlined, size: 20),
-      selectedIcon: Icon(Icons.link, size: 20),
+      icon: Icon(Icons.link_outlined, size: 18),
+      selectedIcon: Icon(Icons.link, size: 18),
       label: '連結',
     ),
   ];
@@ -72,9 +78,8 @@ class _MainPageState extends State<MainPage> {
           .eventStream
           .listen((event) {
             if (event == "SPEED_WARNING" &&
-                (selectedIndex == 0 || selectedIndex == 1)) {
+                (selectedIndex == 0 || selectedIndex == 1))
               _showSpeedWarningDialog();
-            }
           });
     });
   }
@@ -96,54 +101,33 @@ class _MainPageState extends State<MainPage> {
         });
         return AlertDialog(
           backgroundColor: Colors.red.shade900,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
           title: const Row(
             children: [
               Icon(Icons.warning, color: Colors.white),
-              SizedBox(width: 10),
-              Text("警告", style: TextStyle(color: Colors.white)),
+              SizedBox(width: 8),
+              Text("警告", style: TextStyle(color: Colors.white, fontSize: 16)),
             ],
           ),
           content: const Text(
             "進站速度過快",
             style: TextStyle(
               color: Colors.white,
-              fontSize: 22,
+              fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text(
-                "關閉",
-                style: TextStyle(color: Colors.white, fontSize: 16),
-              ),
-            ),
-          ],
         );
       },
     );
   }
 
-  void _editLicensePlate() {
-    final controller = TextEditingController(text: Static.licensePlate);
+  void _editValue(String title, String current, Function(String) onSave) {
+    final c = TextEditingController(text: current);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.directions_bus),
-            SizedBox(width: 10),
-            Text("設定車牌號碼"),
-          ],
-        ),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(labelText: "車牌號碼"),
-        ),
+        title: Text(title, style: const TextStyle(fontSize: 14)),
+        content: TextField(controller: c, style: const TextStyle(fontSize: 14)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -151,38 +135,7 @@ class _MainPageState extends State<MainPage> {
           ),
           TextButton(
             onPressed: () {
-              setState(() => Static.licensePlate = controller.text);
-              Static.saveSettings();
-              Navigator.pop(context);
-            },
-            child: const Text("確定"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _editDriverId() {
-    final controller = TextEditingController(text: Static.driverId);
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [Icon(Icons.person), SizedBox(width: 10), Text("設定駕駛長編號")],
-        ),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(labelText: "駕駛長編號"),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("取消"),
-          ),
-          TextButton(
-            onPressed: () {
-              setState(() => Static.driverId = controller.text);
-              Static.saveSettings();
+              onSave(c.text);
               Navigator.pop(context);
             },
             child: const Text("確定"),
@@ -200,88 +153,100 @@ class _MainPageState extends State<MainPage> {
           children: [
             Scaffold(
               resizeToAvoidBottomInset: false,
-              appBar: AppBar(
-                toolbarHeight: 40,
-                titleSpacing: 0,
-                title: Row(
-                  children: [
-                    const SizedBox(width: 30),
-                    InkWell(
-                      onTap: _editLicensePlate,
-                      child: Row(
+              appBar: widget.showBottomInfo
+                  ? AppBar(
+                      toolbarHeight: 32,
+                      titleSpacing: 0,
+                      title: Row(
                         children: [
-                          const Icon(Icons.directions_bus, size: 16),
-                          const SizedBox(width: 4),
-                          Text(
-                            Static.licensePlate,
-                            style: const TextStyle(fontSize: 14),
+                          const SizedBox(width: 30),
+                          InkWell(
+                            onTap: () =>
+                                _editValue("設定車牌", Static.licensePlate, (v) {
+                                  setState(() => Static.licensePlate = v);
+                                  Static.saveSettings();
+                                }),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.directions_bus, size: 14),
+                                const SizedBox(width: 4),
+                                Text(
+                                  Static.licensePlate,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ],
+                            ),
                           ),
+                          const SizedBox(width: 20),
+                          InkWell(
+                            onTap: () =>
+                                _editValue("設定駕駛編號", Static.driverId, (v) {
+                                  setState(() => Static.driverId = v);
+                                  Static.saveSettings();
+                                }),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.person, size: 14),
+                                const SizedBox(width: 4),
+                                Text(
+                                  Static.driverId,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Spacer(),
+                          const Text(
+                            "公車 PIDS 模擬器",
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const Spacer(),
+                          StreamBuilder(
+                            stream: Stream.periodic(const Duration(seconds: 1)),
+                            builder: (context, snapshot) => Text(
+                              DateFormat('HH:mm:ss').format(DateTime.now()),
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 30),
                         ],
                       ),
-                    ),
-                    const SizedBox(width: 30),
-                    InkWell(
-                      onTap: _editDriverId,
-                      child: Row(
-                        children: [
-                          const Icon(Icons.person, size: 16),
-                          const SizedBox(width: 4),
-                          Text(
-                            Static.driverId,
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Spacer(),
-                    const Text(
-                      "公車 PIDS 模擬器",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const Spacer(),
-                    StreamBuilder(
-                      stream: Stream.periodic(const Duration(seconds: 1)),
-                      builder: (context, snapshot) => Text(
-                        DateFormat('HH:mm:ss').format(DateTime.now()),
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 30),
-                  ],
-                ),
-              ),
+                    )
+                  : null,
               body: SafeArea(
                 child: Row(
                   children: [
-                    SizedBox(
-                      width: 60,
-                      child: NavigationRail(
-                        minWidth: 60,
-                        selectedIndex: selectedIndex,
-                        onDestinationSelected: (index) =>
-                            setState(() => selectedIndex = index),
-                        labelType: NavigationRailLabelType.all,
-                        destinations: _allDestinations
-                            .map(
-                              (d) => NavigationRailDestination(
-                                icon: d.icon,
-                                selectedIcon: d.selectedIcon,
-                                label: Text(
-                                  d.label,
-                                  style: const TextStyle(fontSize: 10),
+                    if (widget.showBottomInfo)
+                      SizedBox(
+                        width: 50,
+                        child: NavigationRail(
+                          minWidth: 50,
+                          selectedIndex: selectedIndex,
+                          onDestinationSelected: (index) =>
+                              setState(() => selectedIndex = index),
+                          labelType: NavigationRailLabelType.all,
+                          destinations: _allDestinations
+                              .map(
+                                (d) => NavigationRailDestination(
+                                  icon: d.icon,
+                                  selectedIcon: d.selectedIcon,
+                                  label: Text(
+                                    d.label,
+                                    style: const TextStyle(fontSize: 9),
+                                  ),
                                 ),
-                              ),
-                            )
-                            .toList(),
+                              )
+                              .toList(),
+                        ),
                       ),
-                    ),
-                    const VerticalDivider(thickness: 1, width: 1),
+                    if (widget.showBottomInfo)
+                      const VerticalDivider(thickness: 1, width: 1),
                     Expanded(
                       child: Stack(
                         children: [
@@ -295,13 +260,12 @@ class _MainPageState extends State<MainPage> {
                                 isVisible: selectedIndex == 1,
                               ),
                               const LedPage(),
+                              const LottiePage(),
                               const SettingsPage(),
                               const ContactPage(),
                             ],
                           ),
-                          if (selectedIndex >= 1 &&
-                              selectedIndex <= 2 &&
-                              widget.showBottomInfo)
+                          if (widget.showBottomInfo)
                             Positioned(
                               bottom: 0,
                               left: 0,
@@ -311,55 +275,42 @@ class _MainPageState extends State<MainPage> {
                                     StatusChangeNotifier,
                                     RouteAnalysisProvider
                                   >(
-                                    builder:
-                                        (
-                                          context,
-                                          statusNotifier,
-                                          analysisProvider,
-                                          child,
-                                        ) {
-                                          final status =
-                                              statusNotifier.currentStatus;
-                                          return MapBottomPanel(
-                                            key: _bottomPanelKey,
-                                            analysis: analysisProvider
-                                                .currentAnalysis,
-                                            stations:
-                                                status.direction == Direction.go
-                                                ? status.route.stations.go
-                                                : status.route.stations.back,
-                                          );
-                                        },
+                                    builder: (context, s, a, child) {
+                                      final st = s.currentStatus;
+                                      return MapBottomPanel(
+                                        key: _bottomPanelKey,
+                                        analysis: a.currentAnalysis,
+                                        stations: st.direction == Direction.go
+                                            ? st.route.stations.go
+                                            : st.route.stations.back,
+                                      );
+                                    },
                                   ),
                             ),
-                          if (selectedIndex >= 1 && selectedIndex <= 2)
-                            Positioned(
-                              bottom: widget.showBottomInfo ? 35 : 0,
-                              left: 0,
-                              right: 0,
-                              child: Center(
-                                child: GestureDetector(
-                                  onTap: widget.onToggleBottomInfo,
-                                  child: Container(
-                                    width: 40,
-                                    height: 18,
-                                    decoration: const BoxDecoration(
-                                      color: Colors.black54,
-                                      borderRadius: BorderRadius.vertical(
-                                        top: Radius.circular(8),
-                                      ),
-                                    ),
-                                    child: Icon(
-                                      widget.showBottomInfo
-                                          ? Icons.keyboard_arrow_down
-                                          : Icons.keyboard_arrow_up,
-                                      color: Colors.white,
-                                      size: 18,
-                                    ),
+                          Positioned(
+                            bottom: widget.showBottomInfo ? 35 : 0,
+                            left: 20,
+                            child: GestureDetector(
+                              onTap: widget.onToggleBottomInfo,
+                              child: Container(
+                                width: 48,
+                                height: 32,
+                                decoration: const BoxDecoration(
+                                  color: Colors.black54,
+                                  borderRadius: BorderRadius.vertical(
+                                    top: Radius.circular(6),
                                   ),
+                                ),
+                                child: Icon(
+                                  widget.showBottomInfo
+                                      ? Icons.keyboard_arrow_down
+                                      : Icons.keyboard_arrow_up,
+                                  color: Colors.white,
+                                  size: 32,
                                 ),
                               ),
                             ),
+                          ),
                         ],
                       ),
                     ),
@@ -377,19 +328,17 @@ class _MainPageState extends State<MainPage> {
                         const Text(
                           "請將螢幕打橫",
                           style: TextStyle(
-                            fontSize: 24,
+                            fontSize: 20,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 16),
                         ElevatedButton.icon(
-                          onPressed: () {
-                            context
-                                .read<LandscapeChangeNotifier>()
-                                .toggleRotateAndFullscreen();
-                          },
+                          onPressed: () => context
+                              .read<LandscapeChangeNotifier>()
+                              .toggleRotateAndFullscreen(),
                           icon: const Icon(Icons.screen_rotation),
-                          label: const Text("旋轉手機"),
+                          label: const Text("旋轉螢幕"),
                         ),
                       ],
                     ),

@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:latlong2/latlong.dart';
@@ -24,13 +24,13 @@ abstract class Static {
   static const String _settingsBoxName = "settings_box";
   static const String _customRoutesBoxName = "custom_routes_box";
   static const String _cityDataBoxName = "city_data_box";
+  static const String _lottieBoxName = "lottie_data_box";
   static late Box _box;
   static late Box _customBox;
   static late Box _cityBox;
+  static late Box _lottieBox;
 
   static const String API_BASE = "https://myster.freeddns.org:25566";
-
-  // static const String API_BASE = "http://192.168.1.249:25567";
   static final dio = Dio(
     BaseOptions(
       connectTimeout: const Duration(seconds: 120),
@@ -57,8 +57,11 @@ abstract class Static {
   static List<LedSequence> sloganList = [
     LedSequence(template: "搭車請招手、上車請刷卡、下車請按鈴"),
     LedSequence(template: "TPASS 2.0 常客優惠，月月領優惠回饋金"),
+    LedSequence(
+      template: "歡迎搭乘 {route_name} {route_desc} 往 {route_dest} {hh}:{mm}:{ss}",
+    ),
   ];
-  static bool showStationListSlogan = true;
+  static bool showStationListSlogan = false;
   static double ledScrollSpeed = 400.0;
   static int ledColor = 0xFFFF0000;
   static double ledHeight = 150.0;
@@ -82,6 +85,10 @@ abstract class Static {
     LedSequence(template: "到了"),
   ];
 
+  static Uint8List? lottieNext;
+  static Uint8List? lottieArrival;
+  static Uint8List? lottieSlogan;
+
   static void log(String message) =>
       print("[${DateTime.now().toIso8601String()}] $message");
 
@@ -95,6 +102,7 @@ abstract class Static {
     _box = await Hive.openBox(_settingsBoxName);
     _customBox = await Hive.openBox(_customRoutesBoxName);
     _cityBox = await Hive.openBox(_cityDataBoxName);
+    _lottieBox = await Hive.openBox(_lottieBoxName);
     await _loadSettings();
     await audioManager.init();
     await _loadCustomRoutes();
@@ -104,9 +112,7 @@ abstract class Static {
   }
 
   static void _updateAvailableCitiesList(List<String> serverCities) {
-    if (serverCities.isNotEmpty) {
-      _serverCitiesCache = serverCities;
-    }
+    if (serverCities.isNotEmpty) _serverCitiesCache = serverCities;
     final cachedCities = _cityBox.keys.map((e) => e.toString()).toList();
     availableCities = {
       'Custom',
@@ -137,9 +143,7 @@ abstract class Static {
         List<String> cities = List<String>.from(res.data);
         _updateAvailableCitiesList(cities);
       }
-    } catch (e) {
-      _updateAvailableCitiesList(_serverCitiesCache);
-    }
+    } catch (e) {}
   }
 
   static Future<void> _loadCustomRoutes() async {
@@ -154,19 +158,25 @@ abstract class Static {
   }
 
   static Future<void> _loadSettings() async {
-    licensePlate = _box.get('licensePlate', defaultValue: "KKA-0000");
-    driverId = _box.get('driverId', defaultValue: "000000");
-    globalVolume = _box.get('globalVolume', defaultValue: 0.7);
-    globalSpeed = _box.get('globalSpeed', defaultValue: 1.0);
-    arrivalDistance = _box.get('arrivalDistance', defaultValue: 100.0);
-    nextStationDistance = _box.get('nextStationDistance', defaultValue: 250.0);
+    licensePlate = _box.get('licensePlate', defaultValue: licensePlate);
+    driverId = _box.get('driverId', defaultValue: driverId);
+    globalVolume = _box.get('globalVolume', defaultValue: globalVolume);
+    globalSpeed = _box.get('globalSpeed', defaultValue: globalSpeed);
+    arrivalDistance = _box.get(
+      'arrivalDistance',
+      defaultValue: arrivalDistance,
+    );
+    nextStationDistance = _box.get(
+      'nextStationDistance',
+      defaultValue: nextStationDistance,
+    );
     nextStationDepartureDistance = _box.get(
       'nextStationDepartureDistance',
-      defaultValue: 50.0,
+      defaultValue: nextStationDepartureDistance,
     );
     enableArrivalBroadcast = _box.get(
       'enableArrivalBroadcast',
-      defaultValue: true,
+      defaultValue: enableArrivalBroadcast,
     );
     stationVoiceSequence = List<String>.from(
       _box.get('stationVoiceSequence', defaultValue: stationVoiceSequence),
@@ -184,7 +194,7 @@ abstract class Static {
     }
     showStationListSlogan = _box.get(
       'showStationListSlogan',
-      defaultValue: true,
+      defaultValue: showStationListSlogan,
     );
     ledScrollSpeed = _box.get('ledScrollSpeed', defaultValue: 400.0);
     ledHeight = _box.get('ledHeight', defaultValue: 150.0);
@@ -209,6 +219,9 @@ abstract class Static {
           .map((e) => LedSequence.fromJson(e))
           .toList();
     }
+    lottieNext = _lottieBox.get('next');
+    lottieArrival = _lottieBox.get('arrival');
+    lottieSlogan = _lottieBox.get('slogan');
   }
 
   static Future<void> saveSettings() async {
@@ -245,15 +258,17 @@ abstract class Static {
       'ledArrivalSeq',
       jsonEncode(ledArrivalSeq.map((e) => e.toJson()).toList()),
     );
+    await _lottieBox.put('next', lottieNext);
+    await _lottieBox.put('arrival', lottieArrival);
+    await _lottieBox.put('slogan', lottieSlogan);
     settingsNotifier.notifyListeners();
   }
 
   static Future<void> saveCustomRoute(BusRoute route, {String? oldId}) async {
     if (oldId != null && oldId != route.id) {
       await _customBox.delete("route_$oldId");
-      if (routeData.containsKey('Custom')) {
+      if (routeData.containsKey('Custom'))
         routeData['Custom']!.removeWhere((r) => r.id == oldId);
-      }
     }
     final String key = "route_${route.id}";
     await _customBox.put(key, jsonEncode(route.toJson()));
@@ -267,37 +282,13 @@ abstract class Static {
     settingsNotifier.notifyListeners();
   }
 
-  static Future<bool> hasStationAudio(String stationId) async {
-    try {
-      await rootBundle.load("assets/audio/stations/$stationId.mp3");
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  static List<String> getFilteredVoiceSequence(bool hasAudio) {
-    if (!hasAudio) return stationVoiceSequence;
-    return stationVoiceSequence
-        .where(
-          (s) =>
-              s != "{name_zh}" &&
-              s != "{name_ho}" &&
-              s != "{name_hk}" &&
-              s != "{name_en}",
-        )
-        .toList();
-  }
-
   static Future<void> requestLocationPermission() async {
     try {
       if (!await Geolocator.isLocationServiceEnabled()) return;
       LocationPermission p = await Geolocator.checkPermission();
       if (p == LocationPermission.denied)
         p = await Geolocator.requestPermission();
-    } catch (e) {
-      log("Error: $e");
-    }
+    } catch (e) {}
   }
 
   static Future<void> refreshRoutes() async {
