@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -13,6 +14,30 @@ import '../data/led_sequence.dart';
 import '../data/status.dart';
 import 'audio_manager.dart';
 import 'tts_helper.dart';
+
+class FontItem {
+  String id;
+  String name;
+  String type;
+  Uint8List? data;
+
+  FontItem({
+    required this.id,
+    required this.name,
+    required this.type,
+    this.data,
+  });
+
+  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'type': type};
+
+  factory FontItem.fromJson(Map<String, dynamic> json, Uint8List? data) =>
+      FontItem(
+        id: json['id'],
+        name: json['name'],
+        type: json['type'],
+        data: data,
+      );
+}
 
 abstract class Static {
   static Map<String, List<BusRoute>> routeData = {};
@@ -31,6 +56,8 @@ abstract class Static {
   static late Box _lottieBox;
 
   static const String API_BASE = "https://myster.freeddns.org:25566";
+
+  // static const String API_BASE = "http://192.168.1.249:25567";
   static final dio = Dio(
     BaseOptions(
       connectTimeout: const Duration(seconds: 120),
@@ -88,14 +115,15 @@ abstract class Static {
   static Uint8List? lottieNext;
   static Uint8List? lottieArrival;
   static Uint8List? lottieSlogan;
+  static List<FontItem> fontList = [];
+  static String selectedFontId = "";
+  static String lottieOverflowMode = "none";
 
   static void log(String message) =>
       print("[${DateTime.now().toIso8601String()}] $message");
 
-  static bool isCityLoaded(String key) {
-    if (key == 'Custom') return true;
-    return _cityBox.containsKey(key);
-  }
+  static bool isCityLoaded(String key) =>
+      key == 'Custom' ? true : _cityBox.containsKey(key);
 
   static Future<void> init() async {
     await Hive.initFlutter();
@@ -222,6 +250,16 @@ abstract class Static {
     lottieNext = _lottieBox.get('next');
     lottieArrival = _lottieBox.get('arrival');
     lottieSlogan = _lottieBox.get('slogan');
+    lottieOverflowMode = _box.get('lottieOverflowMode', defaultValue: 'none');
+    selectedFontId = _box.get('selectedFontId', defaultValue: '');
+    if (_box.containsKey('fontListMetadata')) {
+      List metadata = jsonDecode(_box.get('fontListMetadata'));
+      fontList = metadata
+          .map(
+            (m) => FontItem.fromJson(m, _lottieBox.get('font_data_${m['id']}')),
+          )
+          .toList();
+    }
   }
 
   static Future<void> saveSettings() async {
@@ -261,6 +299,15 @@ abstract class Static {
     await _lottieBox.put('next', lottieNext);
     await _lottieBox.put('arrival', lottieArrival);
     await _lottieBox.put('slogan', lottieSlogan);
+    await _box.put('lottieOverflowMode', lottieOverflowMode);
+    await _box.put('selectedFontId', selectedFontId);
+    await _box.put(
+      'fontListMetadata',
+      jsonEncode(fontList.map((e) => e.toJson()).toList()),
+    );
+    for (var f in fontList) {
+      if (f.type == 'custom') await _lottieBox.put('font_data_${f.id}', f.data);
+    }
     settingsNotifier.notifyListeners();
   }
 
@@ -270,15 +317,13 @@ abstract class Static {
       if (routeData.containsKey('Custom'))
         routeData['Custom']!.removeWhere((r) => r.id == oldId);
     }
-    final String key = "route_${route.id}";
-    await _customBox.put(key, jsonEncode(route.toJson()));
+    await _customBox.put("route_${route.id}", jsonEncode(route.toJson()));
     if (routeData['Custom'] == null) routeData['Custom'] = [];
-    int index = routeData['Custom']!.indexWhere((r) => r.id == route.id);
-    if (index != -1) {
-      routeData['Custom']![index] = route;
-    } else {
+    int idx = routeData['Custom']!.indexWhere((r) => r.id == route.id);
+    if (idx != -1)
+      routeData['Custom']![idx] = route;
+    else
       routeData['Custom']!.add(route);
-    }
     settingsNotifier.notifyListeners();
   }
 
@@ -312,4 +357,25 @@ abstract class Static {
             (m) => LatLng(double.parse(m.group(2)!), double.parse(m.group(1)!)),
           )
           .toList();
+
+  static TextStyle getAppFont(String fontFamily, double fontSize, Color color) {
+    try {
+      return GoogleFonts.getFont(fontFamily, fontSize: fontSize, color: color);
+    } catch (e) {
+      final customFont = fontList.firstWhere(
+        (f) => f.name.split('.').first == fontFamily || f.id == fontFamily,
+        orElse: () => FontItem(id: '', name: '', type: 'none'),
+      );
+
+      if (customFont.type == 'custom') {
+        return TextStyle(
+          fontFamily: customFont.id,
+          fontSize: fontSize,
+          color: color,
+        );
+      }
+    }
+
+    return GoogleFonts.notoSansTc(fontSize: fontSize, color: color);
+  }
 }

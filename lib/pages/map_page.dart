@@ -155,7 +155,7 @@ class _MapPageState extends State<MapPage> {
     if (!widget.isVisible) return const SizedBox.shrink();
 
     final mainPage = context.findAncestorWidgetOfExactType<MainPage>();
-    final double bottomPadding = (mainPage?.showBottomInfo ?? true) ? 45 : 15;
+    final double bottomPadding = 15;
     return RepaintBoundary(
       child: Stack(
         children: [

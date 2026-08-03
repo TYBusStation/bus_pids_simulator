@@ -119,6 +119,7 @@ class _AudioPackPageState extends State<AudioPackPage> {
       children: [
         Scaffold(
           floatingActionButton: FloatingActionButton(
+            mini: true,
             onPressed: _loading ? null : _importLocalZip,
             child: const Icon(Icons.add_to_photos),
           ),

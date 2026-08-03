@@ -205,22 +205,31 @@ class MapViewSection extends StatelessWidget {
   List<Marker> _getSortedRouteMarkers() {
     final activeList = isEditingGo ? goStations : backStations;
     final inactiveList = isEditingGo ? backStations : goStations;
-    final activeKeys = activeList.map((s) => "${s.lat}_${s.lon}").toSet();
-    final inactiveKeys = inactiveList.map((s) => "${s.lat}_${s.lon}").toSet();
-    final List<Marker> markers = [];
-    final Set<String> processed = {};
+
+    final markers = <Marker>[];
+    final processed = <int>{};
+    int getCoordHash(double lat, double lon) =>
+        (lat * 1000000).toInt() ^ (lon * 1000000).toInt();
+
+    final activeHashes = activeList
+        .map((s) => getCoordHash(s.lat, s.lon))
+        .toSet();
+    final inactiveHashes = inactiveList
+        .map((s) => getCoordHash(s.lat, s.lon))
+        .toSet();
 
     for (var s in inactiveList) {
-      final key = "${s.lat}_${s.lon}";
-      if (activeKeys.contains(key)) continue;
-      if (!processed.add(key)) continue;
+      final h = getCoordHash(s.lat, s.lon);
+      if (activeHashes.contains(h)) continue;
+      if (!processed.add(h)) continue;
       markers.add(_buildMarker(s, Colors.blue));
     }
+
     for (var i = 0; i < activeList.length; i++) {
       final s = activeList[i];
-      final key = "${s.lat}_${s.lon}";
-      if (!processed.add(key)) continue;
-      bool overlap = inactiveKeys.contains(key);
+      final h = getCoordHash(s.lat, s.lon);
+      if (!processed.add(h)) continue;
+      bool overlap = inactiveHashes.contains(h);
       markers.add(
         _buildMarker(
           s,

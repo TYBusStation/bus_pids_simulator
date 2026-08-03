@@ -16,7 +16,7 @@ class _LottieSettingsTabState extends State<LottieSettingsTab> {
   Future<void> _handleUpload(String type) async {
     FilePickerResult? result = await FilePicker.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['json', 'lottie'],
+      allowedExtensions: type == 'font' ? ['ttf', 'otf'] : ['json', 'lottie'],
       withData: true,
     );
     if (result != null && result.files.first.bytes != null) {
@@ -25,13 +25,20 @@ class _LottieSettingsTabState extends State<LottieSettingsTab> {
           Static.lottieNext = result.files.first.bytes;
         else if (type == 'arrival')
           Static.lottieArrival = result.files.first.bytes;
-        else
+        else if (type == 'slogan')
           Static.lottieSlogan = result.files.first.bytes;
+        else if (type == 'font') {
+          Static.fontList.add(
+            FontItem(
+              id: 'custom_${DateTime.now().millisecondsSinceEpoch}',
+              name: result.files.first.name,
+              type: 'custom',
+              data: result.files.first.bytes,
+            ),
+          );
+        }
       });
       await Static.saveSettings();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("儲存成功")));
     }
   }
 
@@ -40,26 +47,97 @@ class _LottieSettingsTabState extends State<LottieSettingsTab> {
     return ListView(
       padding: const EdgeInsets.all(12),
       children: [
-        _buildTile("下一站", Static.lottieNext, () => _handleUpload('next')),
-        _buildTile("到站", Static.lottieArrival, () => _handleUpload('arrival')),
-        _buildTile("行進間", Static.lottieSlogan, () => _handleUpload('slogan')),
+        _buildFileTile(
+          "下一站 Lottie",
+          Static.lottieNext,
+          (v) => Static.lottieNext = v,
+          () => _handleUpload('next'),
+        ),
+        _buildFileTile(
+          "到站 Lottie",
+          Static.lottieArrival,
+          (v) => Static.lottieArrival = v,
+          () => _handleUpload('arrival'),
+        ),
+        _buildFileTile(
+          "行進間 Lottie",
+          Static.lottieSlogan,
+          (v) => Static.lottieSlogan = v,
+          () => _handleUpload('slogan'),
+        ),
+        const Divider(),
+        ListTile(
+          title: const Text("超長文字溢位處理模式"),
+          subtitle: const Text("跑馬燈模式若文字換行後仍超出高度，將強制單行顯示並捲動"),
+          trailing: DropdownButton<String>(
+            value: Static.lottieOverflowMode,
+            items: const [
+              DropdownMenuItem(value: "none", child: Text("不處理")),
+              DropdownMenuItem(value: "shrink", child: Text("自動縮小")),
+              DropdownMenuItem(value: "scroll", child: Text("水平跑馬燈")),
+            ],
+            onChanged: (v) {
+              if (v != null) setState(() => Static.lottieOverflowMode = v);
+              Static.saveSettings();
+            },
+          ),
+        ),
+        const Divider(),
+        const Padding(
+          padding: EdgeInsets.all(8),
+          child: Text("自定義字體檔案", style: TextStyle(fontWeight: FontWeight.bold)),
+        ),
+        ...Static.fontList
+            .where((f) => f.type == 'custom')
+            .map(
+              (f) => ListTile(
+                leading: const Icon(Icons.font_download),
+                title: Text(f.name),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.red),
+                  onPressed: () {
+                    setState(() => Static.fontList.remove(f));
+                    Static.saveSettings();
+                  },
+                ),
+              ),
+            ),
+        ElevatedButton.icon(
+          onPressed: () => _handleUpload('font'),
+          icon: const Icon(Icons.upload),
+          label: const Text("上傳字體檔案 (TTF/OTF)"),
+        ),
       ],
     );
   }
 
-  Widget _buildTile(String title, Uint8List? data, VoidCallback onTap) {
+  Widget _buildFileTile(
+    String title,
+    Uint8List? data,
+    Function(Uint8List?) onRemove,
+    VoidCallback onUpload,
+  ) {
     return ListTile(
       leading: Icon(
-        Icons.file_present,
+        Icons.movie,
         color: data != null ? Colors.green : Colors.grey,
       ),
       title: Text(title),
-      subtitle: Text(
-        data != null
-            ? "已上傳 (${(data.length / 1024).toStringAsFixed(1)} KB)"
-            : "未上傳",
+      subtitle: Text(data != null ? "已上傳" : "未上傳"),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (data != null)
+            IconButton(
+              icon: const Icon(Icons.delete, color: Colors.red),
+              onPressed: () {
+                setState(() => onRemove(null));
+                Static.saveSettings();
+              },
+            ),
+          ElevatedButton(onPressed: onUpload, child: const Text("選擇")),
+        ],
       ),
-      trailing: ElevatedButton(onPressed: onTap, child: const Text("選擇檔案")),
     );
   }
 }

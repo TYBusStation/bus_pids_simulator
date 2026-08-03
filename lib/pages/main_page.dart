@@ -18,14 +18,7 @@ import 'lottie_page.dart';
 import 'map_page.dart';
 
 class MainPage extends StatefulWidget {
-  final bool showBottomInfo;
-  final VoidCallback onToggleBottomInfo;
-
-  const MainPage({
-    super.key,
-    this.showBottomInfo = true,
-    required this.onToggleBottomInfo,
-  });
+  const MainPage({super.key});
 
   @override
   State<MainPage> createState() => _MainPageState();
@@ -35,6 +28,10 @@ class _MainPageState extends State<MainPage> {
   int selectedIndex = 0;
   StreamSubscription? _eventSubscription;
   final GlobalKey<MapBottomPanelState> _bottomPanelKey = GlobalKey();
+
+  bool showAppBar = true;
+  bool showNavRail = true;
+  bool showBottomPanel = true;
 
   static final List<NavigationDestination> _allDestinations = const [
     NavigationDestination(
@@ -78,8 +75,9 @@ class _MainPageState extends State<MainPage> {
           .eventStream
           .listen((event) {
             if (event == "SPEED_WARNING" &&
-                (selectedIndex == 0 || selectedIndex == 1))
+                (selectedIndex == 0 || selectedIndex == 1)) {
               _showSpeedWarningDialog();
+            }
           });
     });
   }
@@ -153,13 +151,13 @@ class _MainPageState extends State<MainPage> {
           children: [
             Scaffold(
               resizeToAvoidBottomInset: false,
-              appBar: widget.showBottomInfo
+              appBar: showAppBar
                   ? AppBar(
                       toolbarHeight: 32,
                       titleSpacing: 0,
                       title: Row(
                         children: [
-                          const SizedBox(width: 30),
+                          const SizedBox(width: 40),
                           InkWell(
                             onTap: () =>
                                 _editValue("設定車牌", Static.licensePlate, (v) {
@@ -222,7 +220,7 @@ class _MainPageState extends State<MainPage> {
               body: SafeArea(
                 child: Row(
                   children: [
-                    if (widget.showBottomInfo)
+                    if (showNavRail)
                       SizedBox(
                         width: 50,
                         child: NavigationRail(
@@ -245,7 +243,7 @@ class _MainPageState extends State<MainPage> {
                               .toList(),
                         ),
                       ),
-                    if (widget.showBottomInfo)
+                    if (showNavRail)
                       const VerticalDivider(thickness: 1, width: 1),
                     Expanded(
                       child: Stack(
@@ -265,7 +263,7 @@ class _MainPageState extends State<MainPage> {
                               const ContactPage(),
                             ],
                           ),
-                          if (widget.showBottomInfo)
+                          if (showBottomPanel)
                             Positioned(
                               bottom: 0,
                               left: 0,
@@ -287,35 +285,41 @@ class _MainPageState extends State<MainPage> {
                                     },
                                   ),
                             ),
-                          Positioned(
-                            bottom: widget.showBottomInfo ? 35 : 0,
-                            left: 20,
-                            child: GestureDetector(
-                              onTap: widget.onToggleBottomInfo,
-                              child: Container(
-                                width: 48,
-                                height: 32,
-                                decoration: const BoxDecoration(
-                                  color: Colors.black54,
-                                  borderRadius: BorderRadius.vertical(
-                                    top: Radius.circular(6),
-                                  ),
-                                ),
-                                child: Icon(
-                                  widget.showBottomInfo
-                                      ? Icons.keyboard_arrow_down
-                                      : Icons.keyboard_arrow_up,
-                                  color: Colors.white,
-                                  size: 32,
-                                ),
-                              ),
-                            ),
-                          ),
                         ],
                       ),
                     ),
                   ],
                 ),
+              ),
+            ),
+            Positioned(
+              top: showAppBar ? 32 : 0,
+              left: 0,
+              child: _CornerToggle(
+                icon: showAppBar
+                    ? Icons.keyboard_arrow_up
+                    : Icons.keyboard_arrow_down,
+                onTap: () => setState(() => showAppBar = !showAppBar),
+              ),
+            ),
+            Positioned(
+              bottom: showBottomPanel ? 35 : 0,
+              left: showNavRail ? 50 : 0,
+              child: _CornerToggle(
+                icon: showNavRail
+                    ? Icons.keyboard_arrow_left
+                    : Icons.keyboard_arrow_right,
+                onTap: () => setState(() => showNavRail = !showNavRail),
+              ),
+            ),
+            Positioned(
+              bottom: showBottomPanel ? 35 : 0,
+              right: 0,
+              child: _CornerToggle(
+                icon: showBottomPanel
+                    ? Icons.keyboard_arrow_down
+                    : Icons.keyboard_arrow_up,
+                onTap: () => setState(() => showBottomPanel = !showBottomPanel),
               ),
             ),
             if (!landscape)
@@ -348,6 +352,29 @@ class _MainPageState extends State<MainPage> {
           ],
         );
       },
+    );
+  }
+}
+
+class _CornerToggle extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _CornerToggle({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: Colors.black54,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Icon(icon, color: Colors.white, size: 24),
+      ),
     );
   }
 }

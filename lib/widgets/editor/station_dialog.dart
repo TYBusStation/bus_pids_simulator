@@ -120,9 +120,17 @@ class _StationDialogState extends State<StationDialog> {
     _useGlobalArrival = widget.existing?.useGlobalArrival ?? true;
   }
 
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _nameEnCtrl.dispose();
+    _orderCtrl.dispose();
+    super.dispose();
+  }
+
   Future<String?> _showTextDialog(String initial) async {
     final c = TextEditingController(text: initial);
-    return await showDialog<String>(
+    final result = await showDialog<String>(
       context: context,
       builder: (v) => AlertDialog(
         contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -152,6 +160,8 @@ class _StationDialogState extends State<StationDialog> {
         ],
       ),
     );
+    c.dispose();
+    return result;
   }
 
   InputDecoration _compactInp(String label) => InputDecoration(
@@ -341,9 +351,16 @@ class _EditStationNameDialogState extends State<EditStationNameDialog> {
     _useGlobalArrival = widget.station.useGlobalArrival;
   }
 
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _nameEnCtrl.dispose();
+    super.dispose();
+  }
+
   Future<String?> _showTextDialog(String initial) async {
     final c = TextEditingController(text: initial);
-    return await showDialog<String>(
+    final result = await showDialog<String>(
       context: context,
       builder: (v) => AlertDialog(
         contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -373,6 +390,8 @@ class _EditStationNameDialogState extends State<EditStationNameDialog> {
         ],
       ),
     );
+    c.dispose();
+    return result;
   }
 
   InputDecoration _compactInp(String label) => InputDecoration(

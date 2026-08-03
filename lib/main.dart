@@ -171,11 +171,7 @@ class _AppContentState extends State<AppContent> {
 
     return Stack(
       children: [
-        MainPage(
-          showBottomInfo: _showBottomInfo,
-          onToggleBottomInfo: () =>
-              setState(() => _showBottomInfo = !_showBottomInfo),
-        ),
+        MainPage(),
         if (widget.updateInfo != null)
           UpdatePage(
             updateInfo: widget.updateInfo!,
