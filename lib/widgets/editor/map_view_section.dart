@@ -1,3 +1,4 @@
+import 'package:bus_pids_simulator/widgets/editor/route_editor_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -11,11 +12,13 @@ class MapViewSection extends StatelessWidget {
   final int? movingStationIndex, movingPathIndex;
   final LatLng? previewPoint;
   final double brightness;
+  final double currentZoom;
   final List<BusStation> nearbySourceStations, goStations, backStations;
   final Function(MapCamera) onPositionChanged;
   final Function(LatLng) onMapTap;
   final Function(LatLng, BusStation) onMarkerTap;
   final Function(int) onPathPointTap;
+  final PathAddMode pathAddMode;
 
   const MapViewSection({
     super.key,
@@ -24,6 +27,7 @@ class MapViewSection extends StatelessWidget {
     required this.backPath,
     required this.isEditingGo,
     required this.brightness,
+    required this.currentZoom,
     required this.nearbySourceStations,
     required this.goStations,
     required this.backStations,
@@ -33,6 +37,7 @@ class MapViewSection extends StatelessWidget {
     required this.isPathEditing,
     required this.onPathPointTap,
     required this.isMapTapMode,
+    required this.pathAddMode,
     this.movingStationIndex,
     this.movingPathIndex,
     this.previewPoint,
@@ -52,6 +57,9 @@ class MapViewSection extends StatelessWidget {
             initialZoom: 16,
             onPositionChanged: (p, g) => onPositionChanged(p),
             onTap: (p, point) => onMapTap(point),
+            interactionOptions: const InteractionOptions(
+              flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+            ),
           ),
           children: [
             ColorFiltered(
@@ -109,7 +117,8 @@ class MapViewSection extends StatelessWidget {
                     strokeWidth: 6,
                   ),
                 if (isPathEditing &&
-                    isMapTapMode &&
+                    !isMoving &&
+                    pathAddMode == PathAddMode.end &&
                     activePath.isNotEmpty &&
                     previewPoint != null)
                   Polyline(
@@ -122,7 +131,13 @@ class MapViewSection extends StatelessWidget {
             MarkerLayer(
               markers: [
                 ...nearbySourceStations.map(
-                  (s) => _buildMarker(s, Colors.green),
+                  (s) => _buildMarker(
+                    s.name,
+                    s.position,
+                    Colors.green,
+                    true,
+                    refStation: s,
+                  ),
                 ),
                 ..._getSortedRouteMarkers(),
                 if (isPathEditing)
@@ -181,7 +196,9 @@ class MapViewSection extends StatelessWidget {
     width: 20,
     height: 20,
     child: GestureDetector(
-      onTap: () => onPathPointTap(index),
+      onTap: (pathAddMode == PathAddMode.none && movingPathIndex == null)
+          ? () => onPathPointTap(index)
+          : null,
       child: Container(
         decoration: BoxDecoration(
           color: movingPathIndex == index ? Colors.blue : Colors.white,
@@ -205,51 +222,69 @@ class MapViewSection extends StatelessWidget {
   List<Marker> _getSortedRouteMarkers() {
     final activeList = isEditingGo ? goStations : backStations;
     final inactiveList = isEditingGo ? backStations : goStations;
-
     final markers = <Marker>[];
-    final processed = <int>{};
-    int getCoordHash(double lat, double lon) =>
-        (lat * 1000000).toInt() ^ (lon * 1000000).toInt();
-
-    final activeHashes = activeList
-        .map((s) => getCoordHash(s.lat, s.lon))
-        .toSet();
-    final inactiveHashes = inactiveList
-        .map((s) => getCoordHash(s.lat, s.lon))
-        .toSet();
+    final processed = <LatLng>{};
+    final activePos = activeList.map((s) => LatLng(s.lat, s.lon)).toSet();
+    final inactivePos = inactiveList.map((s) => LatLng(s.lat, s.lon)).toSet();
 
     for (var s in inactiveList) {
-      final h = getCoordHash(s.lat, s.lon);
-      if (activeHashes.contains(h)) continue;
-      if (!processed.add(h)) continue;
-      markers.add(_buildMarker(s, Colors.blue));
+      final p = LatLng(s.lat, s.lon);
+      if (activePos.contains(p)) continue;
+      if (!processed.add(p)) continue;
+      markers.add(
+        _buildMarker(s.name, s.position, Colors.blue.withOpacity(0.7), true),
+      );
     }
 
     for (var i = 0; i < activeList.length; i++) {
       final s = activeList[i];
-      final h = getCoordHash(s.lat, s.lon);
-      if (!processed.add(h)) continue;
-      bool overlap = inactiveHashes.contains(h);
+      final p = LatLng(s.lat, s.lon);
+      final bool overlap = inactivePos.contains(p);
       markers.add(
         _buildMarker(
-          s,
+          "${i + 1}. ${s.name}",
+          s.position,
           movingStationIndex == i
               ? Colors.blue
               : (overlap ? Colors.red : Colors.orange),
+          true,
+          refStation: s,
         ),
       );
+      processed.add(p);
     }
     return markers;
   }
 
-  Marker _buildMarker(BusStation s, Color color) => Marker(
-    point: s.position,
+  Marker _buildMarker(
+    String label,
+    LatLng point,
+    Color color,
+    bool canTap, {
+    BusStation? refStation,
+  }) => Marker(
+    point: point,
     width: 120,
     height: 60,
     rotate: true,
     alignment: Alignment.topCenter,
     child: GestureDetector(
-      onTap: isPathEditing ? null : () => onMarkerTap(s.position, s),
+      onTap:
+          (canTap &&
+              !isPathEditing &&
+              pathAddMode == PathAddMode.none &&
+              movingStationIndex == null)
+          ? () => onMarkerTap(
+              point,
+              refStation ??
+                  BusStation(
+                    order: 0,
+                    name: label,
+                    lat: point.latitude,
+                    lon: point.longitude,
+                  ),
+            )
+          : null,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
@@ -260,7 +295,7 @@ class MapViewSection extends StatelessWidget {
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(
-              s.name,
+              label,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 10,
