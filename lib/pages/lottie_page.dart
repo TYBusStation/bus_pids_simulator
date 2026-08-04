@@ -19,7 +19,6 @@ class LottiePage extends StatefulWidget {
 
 class _LottiePageState extends State<LottiePage> with TickerProviderStateMixin {
   late final AnimationController _controller;
-  late final AnimationController _marqueeController;
   DateTime? _lastEventTime;
   bool _isPriorityMode = false;
   LedBroadcastType _activeType = LedBroadcastType.slogan;
@@ -33,10 +32,6 @@ class _LottiePageState extends State<LottiePage> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _controller = AnimationController(vsync: this);
-    _marqueeController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 10),
-    )..repeat();
     _controller.addStatusListener((status) {
       if (status == AnimationStatus.completed) _handleAnimationComplete();
     });
@@ -47,7 +42,6 @@ class _LottiePageState extends State<LottiePage> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    _marqueeController.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -173,147 +167,71 @@ class _LottiePageState extends State<LottiePage> with TickerProviderStateMixin {
 
     return Scaffold(
       backgroundColor: Colors.black,
-      body: AnimatedBuilder(
-        animation: _marqueeController,
-        builder: (context, child) {
-          return Center(
-            child: Lottie.memory(
-              activeLottie,
-              controller: _controller,
-              key: ValueKey("${displayType}_$_lastEventTime"),
-              onLoaded: (comp) {
-                _parseLottieStructure(activeLottie);
-                _controller.duration = comp.duration;
-                _controller.forward(from: 0);
-              },
-              delegates: LottieDelegates(
-                textStyle: (font) {
-                  double size = 24.0;
-                  for (var entry in _originalFontSizes.entries) {
-                    if (font.fontFamily.contains(entry.key) ||
-                        entry.key.contains(font.fontFamily)) {
-                      size = entry.value;
-                      break;
-                    }
-                  }
-                  return Static.getAppFont(font.fontFamily, size, Colors.white);
-                },
-                text: (initialText) {
-                  String res = _getProcessedText(initialText, textMap);
-                  if (Static.lottieOverflowMode == "scroll") {
-                    String layerName = "";
-                    _layerInitialText.forEach((k, v) {
-                      if (v == initialText) layerName = k;
-                    });
-                    if (layerName.isNotEmpty &&
-                        _boundingBoxes.containsKey(layerName)) {
-                      Size box = _boundingBoxes[layerName]!;
-                      double fontSize = _originalFontSizes[layerName] ?? 24.0;
-                      String fontName = _layerFonts[layerName] ?? "";
-                      final tp = TextPainter(
-                        text: TextSpan(
-                          text: res,
-                          style: Static.getAppFont(
-                            fontName,
-                            fontSize,
-                            Colors.white,
-                          ),
+      body: Center(
+        child: Lottie.memory(
+          activeLottie,
+          controller: _controller,
+          key: ValueKey("${displayType}_$_lastEventTime"),
+          onLoaded: (comp) {
+            _parseLottieStructure(activeLottie);
+            _controller.duration = comp.duration;
+            _controller.forward(from: 0);
+          },
+          delegates: LottieDelegates(
+            textStyle: (font) {
+              double size = 24.0;
+              for (var entry in _originalFontSizes.entries) {
+                if (font.fontFamily.contains(entry.key) ||
+                    entry.key.contains(font.fontFamily)) {
+                  size = entry.value;
+                  break;
+                }
+              }
+              return Static.getAppFont(font.fontFamily, size, Colors.white);
+            },
+            text: (initialText) {
+              return _getProcessedText(
+                initialText,
+                textMap,
+              ).replaceAll(RegExp(r'[\r\n]+'), ' ');
+            },
+            values: [
+              ..._boundingBoxes.keys.map((layerName) {
+                return ValueDelegate.textSize(
+                  [layerName, '**'],
+                  callback: (frameInfo) {
+                    double origSize = _originalFontSizes[layerName] ?? 24.0;
+                    Size? box = _boundingBoxes[layerName];
+                    if (box == null) return origSize;
+
+                    String fontName = _layerFonts[layerName] ?? "";
+                    String processed = _getProcessedText(
+                      _layerInitialText[layerName] ?? "",
+                      textMap,
+                    ).replaceAll(RegExp(r'[\r\n]+'), ' ');
+
+                    final tp = TextPainter(
+                      text: TextSpan(
+                        text: processed,
+                        style: Static.getAppFont(
+                          fontName,
+                          origSize,
+                          Colors.white,
                         ),
-                        textDirection: TextDirection.ltr,
-                      )..layout(maxWidth: box.width);
-                      if (tp.height > box.height)
-                        return res.replaceAll(RegExp(r'[\r\n]+'), ' ');
-                    }
-                  }
-                  return res;
-                },
-                values: [
-                  ..._boundingBoxes.keys.map((layerName) {
-                    return ValueDelegate.position(
-                      [layerName, '**'],
-                      callback: (frameInfo) {
-                        Offset origPos = frameInfo.startValue ?? Offset.zero;
-                        if (Static.lottieOverflowMode != "scroll")
-                          return origPos;
-                        Size box = _boundingBoxes[layerName]!;
-                        double fontSize = _originalFontSizes[layerName] ?? 24.0;
-                        String fontName = _layerFonts[layerName] ?? "";
-                        String rawText = _layerInitialText[layerName] ?? "";
-                        String processed = _getProcessedText(rawText, textMap);
+                      ),
+                      textDirection: TextDirection.ltr,
+                      maxLines: 1,
+                    )..layout();
 
-                        final tpWrap = TextPainter(
-                          text: TextSpan(
-                            text: processed,
-                            style: Static.getAppFont(
-                              fontName,
-                              fontSize,
-                              Colors.white,
-                            ),
-                          ),
-                          textDirection: TextDirection.ltr,
-                        )..layout(maxWidth: box.width);
-
-                        String finalScrollText = (tpWrap.height > box.height)
-                            ? processed.replaceAll(RegExp(r'[\r\n]+'), ' ')
-                            : processed;
-                        final tpFull = TextPainter(
-                          text: TextSpan(
-                            text: finalScrollText,
-                            style: Static.getAppFont(
-                              fontName,
-                              fontSize,
-                              Colors.white,
-                            ),
-                          ),
-                          textDirection: TextDirection.ltr,
-                        )..layout();
-
-                        if (tpFull.width > box.width) {
-                          double overflow = tpFull.width - box.width + 100;
-                          return Offset(
-                            origPos.dx - (_marqueeController.value * overflow),
-                            origPos.dy,
-                          );
-                        }
-                        return origPos;
-                      },
-                    );
-                  }),
-                  ..._boundingBoxes.keys.map((layerName) {
-                    return ValueDelegate.textSize(
-                      [layerName, '**'],
-                      callback: (frameInfo) {
-                        double origSize = _originalFontSizes[layerName] ?? 24.0;
-                        if (Static.lottieOverflowMode != "shrink")
-                          return origSize;
-                        Size box = _boundingBoxes[layerName]!;
-                        String fontName = _layerFonts[layerName] ?? "";
-                        String processed = _getProcessedText(
-                          _layerInitialText[layerName] ?? "",
-                          textMap,
-                        );
-                        final tp = TextPainter(
-                          text: TextSpan(
-                            text: processed,
-                            style: Static.getAppFont(
-                              fontName,
-                              origSize,
-                              Colors.white,
-                            ),
-                          ),
-                          textDirection: TextDirection.ltr,
-                        )..layout(maxWidth: box.width);
-                        return (tp.height > box.height)
-                            ? origSize * (box.height / tp.height)
-                            : origSize;
-                      },
-                    );
-                  }),
-                ],
-              ),
-            ),
-          );
-        },
+                    return (tp.width > box.width)
+                        ? origSize * (box.width / tp.width)
+                        : origSize;
+                  },
+                );
+              }),
+            ],
+          ),
+        ),
       ),
     );
   }

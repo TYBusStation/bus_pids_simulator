@@ -66,21 +66,9 @@ class _LottieSettingsTabState extends State<LottieSettingsTab> {
           () => _handleUpload('slogan'),
         ),
         const Divider(),
-        ListTile(
-          title: const Text("超長文字溢位處理模式"),
-          subtitle: const Text("跑馬燈模式若文字換行後仍超出高度，將強制單行顯示並捲動"),
-          trailing: DropdownButton<String>(
-            value: Static.lottieOverflowMode,
-            items: const [
-              DropdownMenuItem(value: "none", child: Text("不處理")),
-              DropdownMenuItem(value: "shrink", child: Text("自動縮小")),
-              DropdownMenuItem(value: "scroll", child: Text("水平跑馬燈")),
-            ],
-            onChanged: (v) {
-              if (v != null) setState(() => Static.lottieOverflowMode = v);
-              Static.saveSettings();
-            },
-          ),
+        const ListTile(
+          title: Text("文字溢位處理"),
+          subtitle: Text("目前固定為：自動縮小以符合顯示區域"),
         ),
         const Divider(),
         const Padding(

@@ -40,6 +40,30 @@ class BusStation {
     this.arrivalTemplate,
   });
 
+  BusStation copyWith({
+    int? order,
+    String? name,
+    String? nameEn,
+    double? lat,
+    double? lon,
+    bool? useGlobalNext,
+    bool? useGlobalArrival,
+    List<String>? nextTemplate,
+    List<String>? arrivalTemplate,
+  }) {
+    return BusStation(
+      order: order ?? this.order,
+      name: name ?? this.name,
+      nameEn: nameEn ?? this.nameEn,
+      lat: lat ?? this.lat,
+      lon: lon ?? this.lon,
+      useGlobalNext: useGlobalNext ?? this.useGlobalNext,
+      useGlobalArrival: useGlobalArrival ?? this.useGlobalArrival,
+      nextTemplate: nextTemplate ?? this.nextTemplate,
+      arrivalTemplate: arrivalTemplate ?? this.arrivalTemplate,
+    );
+  }
+
   LatLng get position => LatLng(lat, lon);
 
   factory BusStation.fromJson(Map<String, dynamic> json) =>

@@ -114,11 +114,8 @@ class _StationDialogState extends State<StationDialog> {
     _nameCtrl = TextEditingController(text: widget.existing?.name ?? "");
     _nameEnCtrl = TextEditingController(text: widget.existing?.nameEn ?? "");
 
-    int initialOrder = widget.currentList.length + 1;
-    if (widget.existing != null) {
-      int idx = widget.currentList.indexOf(widget.existing!);
-      if (idx != -1) initialOrder = idx + 1;
-    }
+    int initialOrder =
+        widget.existing?.order ?? (widget.currentList.length + 1);
     _orderCtrl = TextEditingController(text: initialOrder.toString());
 
     _nextTpl = List.from(widget.existing?.nextTemplate ?? ["下一站", "{name}"]);
@@ -318,7 +315,7 @@ class _StationDialogState extends State<StationDialog> {
         ElevatedButton(
           onPressed: () {
             final s = BusStation(
-              order: 0,
+              order: int.tryParse(_orderCtrl.text) ?? 1,
               name: _nameCtrl.text,
               nameEn: _nameEnCtrl.text,
               lat: widget.point.latitude,

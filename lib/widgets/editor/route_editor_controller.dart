@@ -84,6 +84,15 @@ class RouteEditorController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void syncStationOrders() {
+    for (int i = 0; i < goStations.length; i++) {
+      goStations[i] = goStations[i].copyWith(order: i + 1);
+    }
+    for (int i = 0; i < backStations.length; i++) {
+      backStations[i] = backStations[i].copyWith(order: i + 1);
+    }
+  }
+
   void syncPaths() {
     goPath = Static.wktPrase(wktGoCtrl.text);
     backPath = Static.wktPrase(wktBackCtrl.text);
@@ -165,16 +174,9 @@ class RouteEditorController extends ChangeNotifier {
     if (movingStationIndex != null) {
       final list = isEditingGo ? goStations : backStations;
       final s = list[movingStationIndex!];
-      list[movingStationIndex!] = BusStation(
-        order: s.order,
-        name: s.name,
-        nameEn: s.nameEn,
+      list[movingStationIndex!] = s.copyWith(
         lat: camera.center.latitude,
         lon: camera.center.longitude,
-        useGlobalNext: s.useGlobalNext,
-        useGlobalArrival: s.useGlobalArrival,
-        nextTemplate: s.nextTemplate,
-        arrivalTemplate: s.arrivalTemplate,
       );
     } else if (movingPathIndex != null) {
       final p = List<LatLng>.from(isEditingGo ? goPath : backPath);
@@ -221,13 +223,16 @@ class RouteEditorController extends ChangeNotifier {
     return insertIdx;
   }
 
-  BusRoute prepareRouteData() => BusRoute(
-    id: idCtrl.text.trim(),
-    name: nameCtrl.text.trim(),
-    description: descCtrl.text.trim(),
-    departure: depCtrl.text.trim(),
-    destination: destCtrl.text.trim(),
-    path: RoutePath(go: wktGoCtrl.text, back: wktBackCtrl.text),
-    stations: RouteStations(go: goStations, back: backStations),
-  );
+  BusRoute prepareRouteData() {
+    syncStationOrders();
+    return BusRoute(
+      id: idCtrl.text.trim(),
+      name: nameCtrl.text.trim(),
+      description: descCtrl.text.trim(),
+      departure: depCtrl.text.trim(),
+      destination: destCtrl.text.trim(),
+      path: RoutePath(go: wktGoCtrl.text, back: wktBackCtrl.text),
+      stations: RouteStations(go: goStations, back: backStations),
+    );
+  }
 }
