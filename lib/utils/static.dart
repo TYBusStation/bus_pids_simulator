@@ -56,8 +56,6 @@ abstract class Static {
   static late Box _lottieBox;
 
   static const String API_BASE = "https://myster.freeddns.org:25566";
-
-  // static const String API_BASE = "http://192.168.1.249:25567";
   static final dio = Dio(
     BaseOptions(
       connectTimeout: const Duration(seconds: 120),
@@ -118,6 +116,8 @@ abstract class Static {
   static List<FontItem> fontList = [];
   static String selectedFontId = "";
   static String lottieOverflowMode = "none";
+
+  static Map<String, String> customVariables = {};
 
   static void log(String message) =>
       print("[${DateTime.now().toIso8601String()}] $message");
@@ -260,6 +260,11 @@ abstract class Static {
           )
           .toList();
     }
+    if (_box.containsKey('customVariables')) {
+      customVariables = Map<String, String>.from(
+        jsonDecode(_box.get('customVariables')),
+      );
+    }
   }
 
   static Future<void> saveSettings() async {
@@ -308,6 +313,7 @@ abstract class Static {
     for (var f in fontList) {
       if (f.type == 'custom') await _lottieBox.put('font_data_${f.id}', f.data);
     }
+    await _box.put('customVariables', jsonEncode(customVariables));
     settingsNotifier.notifyListeners();
   }
 
@@ -366,7 +372,6 @@ abstract class Static {
         (f) => f.name.split('.').first == fontFamily || f.id == fontFamily,
         orElse: () => FontItem(id: '', name: '', type: 'none'),
       );
-
       if (customFont.type == 'custom') {
         return TextStyle(
           fontFamily: customFont.id,
@@ -375,7 +380,6 @@ abstract class Static {
         );
       }
     }
-
     return GoogleFonts.notoSansTc(fontSize: fontSize, color: color);
   }
 }

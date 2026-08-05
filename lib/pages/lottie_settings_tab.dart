@@ -66,11 +66,6 @@ class _LottieSettingsTabState extends State<LottieSettingsTab> {
           () => _handleUpload('slogan'),
         ),
         const Divider(),
-        const ListTile(
-          title: Text("文字溢位處理"),
-          subtitle: Text("目前固定為：自動縮小以符合顯示區域"),
-        ),
-        const Divider(),
         const Padding(
           padding: EdgeInsets.all(8),
           child: Text("自定義字體檔案", style: TextStyle(fontWeight: FontWeight.bold)),

@@ -1,6 +1,7 @@
 import 'package:bus_pids_simulator/pages/audio_pack_page.dart';
 import 'package:bus_pids_simulator/pages/gps_control_page.dart';
 import 'package:bus_pids_simulator/pages/remote_audio_page.dart';
+import 'package:bus_pids_simulator/pages/variable_setting_tab.dart';
 import 'package:flutter/material.dart';
 
 import 'audio_page.dart';
@@ -19,7 +20,7 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 7,
+      length: 8,
       child: Scaffold(
         appBar: PreferredSize(
           preferredSize: const Size.fromHeight(40),
@@ -43,6 +44,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   Tab(height: 38, text: "報站規則"),
                   Tab(height: 38, text: "字幕設定"),
                   Tab(height: 38, text: "Lottie設定"),
+                  Tab(height: 38, text: "自訂顯示變數"),
                   Tab(height: 38, text: "單獨語音"),
                   Tab(height: 38, text: "語音包"),
                   Tab(height: 38, text: "遠端語音"),
@@ -57,6 +59,7 @@ class _SettingsPageState extends State<SettingsPage> {
             RulesTab(),
             LedSettingsTab(),
             LottieSettingsTab(),
+            VariableSettingTab(),
             AudioPage(),
             AudioPackPage(),
             RemoteAudioPage(),
