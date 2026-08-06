@@ -17,10 +17,10 @@ class _RulesTabState extends State<RulesTab> {
       children: [
         SwitchListTile(
           title: const Text("啟用到站報站語音", style: TextStyle(fontSize: 14)),
-          value: Static.enableArrivalBroadcast,
+          value: Static.settings.enableArrivalBroadcast,
           onChanged: (v) {
             setState(() {
-              Static.enableArrivalBroadcast = v;
+              Static.settings.enableArrivalBroadcast = v;
             });
             Static.saveSettings();
           },
@@ -28,24 +28,24 @@ class _RulesTabState extends State<RulesTab> {
         const Divider(),
         _dTile(
           "到站報站觸發距離 (公尺)",
-          Static.arrivalDistance,
-          (v) => Static.arrivalDistance = v,
+          Static.settings.arrivalDistance,
+          (v) => Static.settings.arrivalDistance = v,
         ),
         _dTile(
           "下站報站觸發距離 (公尺)",
-          Static.nextStationDistance,
-          (v) => Static.nextStationDistance = v,
+          Static.settings.nextStationDistance,
+          (v) => Static.settings.nextStationDistance = v,
         ),
         _dTile(
           "下站離開上站觸發距離 (公尺)",
-          Static.nextStationDepartureDistance,
-          (v) => Static.nextStationDepartureDistance = v,
+          Static.settings.nextStationDepartureDistance,
+          (v) => Static.settings.nextStationDepartureDistance = v,
         ),
         const Divider(height: 32),
         SequenceManagerWidget<String>(
           title: "{name}",
           subtitle: "中文：{name_zh}，閩語：{name_ho}，客語：{name_hk}，英語：{name_en}",
-          items: Static.stationVoiceSequence,
+          items: Static.settings.stationVoiceSequence,
           onAdd: () => "{name_zh}",
           onEdit: (val) async => await _showTextDialog(val),
         ),
@@ -53,7 +53,7 @@ class _RulesTabState extends State<RulesTab> {
           title: "下站報站語音序列",
           subtitle:
               "{name}，中文：{name_zh}，閩語：{name_ho}，客語：{name_hk}，英語：{name_en}，終點站：{terminal}",
-          items: Static.nextStationTemplate,
+          items: Static.settings.nextStationTemplate,
           onAdd: () => "下一站",
           onEdit: (val) async => await _showTextDialog(val),
         ),
@@ -61,7 +61,7 @@ class _RulesTabState extends State<RulesTab> {
           title: "到站報站語音序列",
           subtitle:
               "{name}，中文：{name_zh}，閩語：{name_ho}，客語：{name_hk}，英語：{name_en}，終點站：{terminal}",
-          items: Static.arrivalTemplate,
+          items: Static.settings.arrivalTemplate,
           onAdd: () => "到了",
           onEdit: (val) async => await _showTextDialog(val),
         ),

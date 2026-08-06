@@ -1,8 +1,8 @@
+import 'package:bus_pids_simulator/utils/static.dart';
 import 'package:flutter/material.dart';
 import 'package:marquee/marquee.dart';
 
 import '../utils/audio_manager.dart';
-import '../utils/static.dart';
 import '../utils/utils_helper.dart';
 
 class AudioPackDetailPage extends StatefulWidget {

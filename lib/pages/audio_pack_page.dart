@@ -1,10 +1,10 @@
 import 'dart:ui';
 
 import 'package:bus_pids_simulator/utils/formatter_utils.dart';
+import 'package:bus_pids_simulator/utils/static.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
-import '../utils/static.dart';
 import 'audio_detail_page.dart';
 
 class AudioPackPage extends StatefulWidget {

@@ -1,345 +1,170 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:bus_pids_simulator/utils/setting_utils.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:hive/hive.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../data/bus_route.dart';
-import '../data/led_sequence.dart';
 import '../data/status.dart';
 import 'audio_manager.dart';
 import 'tts_helper.dart';
 
-class FontItem {
-  String id;
-  String name;
-  String type;
-  Uint8List? data;
-
-  FontItem({
-    required this.id,
-    required this.name,
-    required this.type,
-    this.data,
-  });
-
-  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'type': type};
-
-  factory FontItem.fromJson(Map<String, dynamic> json, Uint8List? data) =>
-      FontItem(
-        id: json['id'],
-        name: json['name'],
-        type: json['type'],
-        data: data,
-      );
-}
-
 abstract class Static {
+  static const String API_BASE = "https://myster.freeddns.org:25566";
+
+  // static const String API_BASE = "http://192.168.1.249:25567";
+  static final Dio dio = Dio(
+    BaseOptions(connectTimeout: const Duration(seconds: 120)),
+  );
+  static final SettingsService settings = SettingsService();
+  static final audioManager = AudioManager();
+  static final TTS = getTTS();
+
+  static Status currentStatus = Status.unknown;
   static Map<String, List<BusRoute>> routeData = {};
   static List<String> availableCities = ['Custom'];
   static List<String> _serverCitiesCache = [];
-  static Status currentStatus = Status.unknown;
-  static final TTS = getTTS();
-  static final audioManager = AudioManager();
-  static const String _settingsBoxName = "settings_box";
-  static const String _customRoutesBoxName = "custom_routes_box";
-  static const String _cityDataBoxName = "city_data_box";
-  static const String _lottieBoxName = "lottie_data_box";
-  static late Box _box;
-  static late Box _customBox;
-  static late Box _cityBox;
-  static late Box _lottieBox;
-
-  static const String API_BASE = "https://myster.freeddns.org:25566";
-  static final dio = Dio(
-    BaseOptions(
-      connectTimeout: const Duration(seconds: 120),
-      receiveTimeout: const Duration(seconds: 120),
-    ),
-  );
-  static final ChangeNotifier settingsNotifier = ChangeNotifier();
-  static String licensePlate = "KKA-0000";
-  static String driverId = "000000";
-  static double globalVolume = 0.7;
-  static double globalSpeed = 1.0;
-  static double arrivalDistance = 100.0;
-  static double nextStationDistance = 250.0;
-  static double nextStationDepartureDistance = 50.0;
-  static bool enableArrivalBroadcast = true;
-  static List<String> stationVoiceSequence = [
-    "{name_zh}",
-    "{name_ho}",
-    "{name_hk}",
-    "{name_en}",
-  ];
-  static List<String> arrivalTemplate = ["{terminal}", "{name}", "到了"];
-  static List<String> nextStationTemplate = ["下一站", "{terminal}", "{name}"];
-  static List<LedSequence> sloganList = [
-    LedSequence(template: "搭車請招手、上車請刷卡、下車請按鈴"),
-    LedSequence(template: "TPASS 2.0 常客優惠，月月領優惠回饋金"),
-    LedSequence(
-      template: "歡迎搭乘 {route_name} {route_desc} 往 {route_dest} {hh}:{mm}:{ss}",
-    ),
-  ];
-  static bool showStationListSlogan = false;
-  static double ledScrollSpeed = 400.0;
-  static int ledColor = 0xFFFF0000;
-  static double ledHeight = 150.0;
-  static List<String> nextStationListSequence = [
-    "即將接近：",
-    "{next_stations}",
-    "...下車乘客請準備",
-  ];
-  static List<String> nextStationSubSequence = ["{name}"];
-  static int nextStationCount = 5;
-  static String nextStationSeparator = ">";
-  static List<LedSequence> ledNextStationSeq = [
-    LedSequence(template: "下一站"),
-    LedSequence(template: "{terminal}"),
-    LedSequence(template: "{name}"),
-    LedSequence(template: "{nameEn}"),
-  ];
-  static List<LedSequence> ledArrivalSeq = [
-    LedSequence(template: "{name}"),
-    LedSequence(template: "{nameEn}"),
-    LedSequence(template: "到了"),
-  ];
-
-  static Uint8List? lottieNext;
-  static Uint8List? lottieArrival;
-  static Uint8List? lottieSlogan;
-  static List<FontItem> fontList = [];
-  static String selectedFontId = "";
-  static String lottieOverflowMode = "none";
-
-  static Map<String, String> customVariables = {};
-
-  static void log(String message) =>
-      print("[${DateTime.now().toIso8601String()}] $message");
-
-  static bool isCityLoaded(String key) =>
-      key == 'Custom' ? true : _cityBox.containsKey(key);
 
   static Future<void> init() async {
-    await Hive.initFlutter();
-    _box = await Hive.openBox(_settingsBoxName);
-    _customBox = await Hive.openBox(_customRoutesBoxName);
-    _cityBox = await Hive.openBox(_cityDataBoxName);
-    _lottieBox = await Hive.openBox(_lottieBoxName);
-    await _loadSettings();
-    await audioManager.init();
-    await _loadCustomRoutes();
-    _updateAvailableCitiesList([]);
-    await TTS.init();
-    await requestLocationPermission();
+    try {
+      debugPrint("開始初始化 Settings...");
+      await settings.init();
+
+      debugPrint("開始初始化 AudioManager...");
+      await audioManager.init();
+
+      debugPrint("開始初始化 TTS...");
+      await TTS.init();
+
+      await _loadCustomRoutes();
+      await requestLocationPermission();
+    } catch (e, stack) {
+      debugPrint("❌ 初始化階段崩潰!");
+      debugPrint("錯誤訊息: $e");
+      debugPrint("堆疊追蹤: $stack");
+      rethrow;
+    }
   }
 
-  static void _updateAvailableCitiesList(List<String> serverCities) {
-    if (serverCities.isNotEmpty) _serverCitiesCache = serverCities;
-    final cachedCities = _cityBox.keys.map((e) => e.toString()).toList();
-    availableCities = {
-      'Custom',
-      ..._serverCitiesCache,
-      ...cachedCities,
-    }.toList();
-  }
+  static Future<void> _loadCustomRoutes() async {
+    try {
+      final box = await Hive.openBox("custom_routes_box");
+      List<BusRoute> list = [];
 
-  static Future<void> saveCityData(String city, dynamic data) async {
-    String jsonRaw = data is String ? data : jsonEncode(data);
-    await _cityBox.put(city, {
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
-      'data': jsonRaw,
-    });
-    _updateAvailableCitiesList(_serverCitiesCache);
-  }
+      for (var k in box.keys) {
+        final raw = box.get(k);
+        if (raw == null) continue;
 
-  static Map<String, dynamic>? getCityCache(String city) {
-    final entry = _cityBox.get(city);
-    if (entry == null) return null;
-    return Map<String, dynamic>.from(entry);
+        try {
+          String jsonStr;
+          if (raw is Uint8List ||
+              raw.runtimeType.toString().contains('Uint8List')) {
+            jsonStr = utf8.decode(raw as Uint8List);
+          } else {
+            jsonStr = raw.toString();
+          }
+
+          final Map<String, dynamic> jsonData = jsonDecode(jsonStr);
+          list.add(BusRoute.fromJson(jsonData));
+        } catch (e) {
+          debugPrint("解析自定義路線失敗 (Key: $k): $e, 資料型態: ${raw.runtimeType}");
+        }
+      }
+      routeData['Custom'] = list;
+      settings.notifyListeners();
+    } catch (e) {
+      debugPrint("載入自定義路線箱子失敗: $e");
+    }
   }
 
   static Future<void> fetchAvailableCities() async {
     try {
       final res = await dio.get("$API_BASE/simulator_cities");
       if (res.statusCode == 200) {
-        List<String> cities = List<String>.from(res.data);
-        _updateAvailableCitiesList(cities);
+        _serverCitiesCache = List<String>.from(res.data);
+        final cityBox = await Hive.openBox("city_data_box");
+        availableCities = {
+          'Custom',
+          ..._serverCitiesCache,
+          ...cityBox.keys.map((e) => e.toString()),
+        }.toList();
+        settings.notifyListeners();
       }
-    } catch (e) {}
+    } catch (_) {}
   }
 
-  static Future<void> _loadCustomRoutes() async {
-    List<BusRoute> customList = [];
-    for (var key in _customBox.keys) {
-      final rawJson = _customBox.get(key);
-      if (rawJson != null)
-        customList.add(BusRoute.fromJson(jsonDecode(rawJson)));
-    }
-    routeData['Custom'] = customList;
-    settingsNotifier.notifyListeners();
+  static Future<void> saveCityData(String city, dynamic data) async {
+    final cityBox = await Hive.openBox("city_data_box");
+    String jsonRaw = data is String ? data : jsonEncode(data);
+    await cityBox.put(city, {
+      'timestamp': DateTime.now().millisecondsSinceEpoch,
+      'data': jsonRaw,
+    });
+    await fetchAvailableCities();
   }
 
-  static Future<void> _loadSettings() async {
-    licensePlate = _box.get('licensePlate', defaultValue: licensePlate);
-    driverId = _box.get('driverId', defaultValue: driverId);
-    globalVolume = _box.get('globalVolume', defaultValue: globalVolume);
-    globalSpeed = _box.get('globalSpeed', defaultValue: globalSpeed);
-    arrivalDistance = _box.get(
-      'arrivalDistance',
-      defaultValue: arrivalDistance,
-    );
-    nextStationDistance = _box.get(
-      'nextStationDistance',
-      defaultValue: nextStationDistance,
-    );
-    nextStationDepartureDistance = _box.get(
-      'nextStationDepartureDistance',
-      defaultValue: nextStationDepartureDistance,
-    );
-    enableArrivalBroadcast = _box.get(
-      'enableArrivalBroadcast',
-      defaultValue: enableArrivalBroadcast,
-    );
-    stationVoiceSequence = List<String>.from(
-      _box.get('stationVoiceSequence', defaultValue: stationVoiceSequence),
-    );
-    arrivalTemplate = List<String>.from(
-      _box.get('arrivalTemplate', defaultValue: arrivalTemplate),
-    );
-    nextStationTemplate = List<String>.from(
-      _box.get('nextStationTemplate', defaultValue: nextStationTemplate),
-    );
-    if (_box.containsKey('sloganList')) {
-      sloganList = (jsonDecode(_box.get('sloganList')) as List)
-          .map((e) => LedSequence.fromJson(e))
-          .toList();
-    }
-    showStationListSlogan = _box.get(
-      'showStationListSlogan',
-      defaultValue: showStationListSlogan,
-    );
-    ledScrollSpeed = _box.get('ledScrollSpeed', defaultValue: 400.0);
-    ledHeight = _box.get('ledHeight', defaultValue: 150.0);
-    nextStationListSequence = List<String>.from(
-      _box.get(
-        'nextStationListSequence',
-        defaultValue: nextStationListSequence,
-      ),
-    );
-    nextStationSubSequence = List<String>.from(
-      _box.get('nextStationSubSequence', defaultValue: nextStationSubSequence),
-    );
-    nextStationCount = _box.get('nextStationCount', defaultValue: 5);
-    nextStationSeparator = _box.get('nextStationSeparator', defaultValue: ">");
-    if (_box.containsKey('ledNextStationSeq')) {
-      ledNextStationSeq = (jsonDecode(_box.get('ledNextStationSeq')) as List)
-          .map((e) => LedSequence.fromJson(e))
-          .toList();
-    }
-    if (_box.containsKey('ledArrivalSeq')) {
-      ledArrivalSeq = (jsonDecode(_box.get('ledArrivalSeq')) as List)
-          .map((e) => LedSequence.fromJson(e))
-          .toList();
-    }
-    lottieNext = _lottieBox.get('next');
-    lottieArrival = _lottieBox.get('arrival');
-    lottieSlogan = _lottieBox.get('slogan');
-    lottieOverflowMode = _box.get('lottieOverflowMode', defaultValue: 'none');
-    selectedFontId = _box.get('selectedFontId', defaultValue: '');
-    if (_box.containsKey('fontListMetadata')) {
-      List metadata = jsonDecode(_box.get('fontListMetadata'));
-      fontList = metadata
-          .map(
-            (m) => FontItem.fromJson(m, _lottieBox.get('font_data_${m['id']}')),
-          )
-          .toList();
-    }
-    if (_box.containsKey('customVariables')) {
-      customVariables = Map<String, String>.from(
-        jsonDecode(_box.get('customVariables')),
-      );
-    }
-  }
+  static Map<String, dynamic>? getCityCache(String city) {
+    try {
+      if (!Hive.isBoxOpen("city_data_box")) return null;
+      final cityBox = Hive.box("city_data_box");
+      final entry = cityBox.get(city);
 
-  static Future<void> saveSettings() async {
-    await _box.put('licensePlate', licensePlate);
-    await _box.put('driverId', driverId);
-    await _box.put('globalVolume', globalVolume);
-    await _box.put('globalSpeed', globalSpeed);
-    await _box.put('arrivalDistance', arrivalDistance);
-    await _box.put('nextStationDistance', nextStationDistance);
-    await _box.put(
-      'nextStationDepartureDistance',
-      nextStationDepartureDistance,
-    );
-    await _box.put('enableArrivalBroadcast', enableArrivalBroadcast);
-    await _box.put('stationVoiceSequence', stationVoiceSequence);
-    await _box.put('arrivalTemplate', arrivalTemplate);
-    await _box.put('nextStationTemplate', nextStationTemplate);
-    await _box.put(
-      'sloganList',
-      jsonEncode(sloganList.map((e) => e.toJson()).toList()),
-    );
-    await _box.put('showStationListSlogan', showStationListSlogan);
-    await _box.put('ledScrollSpeed', ledScrollSpeed);
-    await _box.put('ledHeight', ledHeight);
-    await _box.put('nextStationListSequence', nextStationListSequence);
-    await _box.put('nextStationSubSequence', nextStationSubSequence);
-    await _box.put('nextStationCount', nextStationCount);
-    await _box.put('nextStationSeparator', nextStationSeparator);
-    await _box.put(
-      'ledNextStationSeq',
-      jsonEncode(ledNextStationSeq.map((e) => e.toJson()).toList()),
-    );
-    await _box.put(
-      'ledArrivalSeq',
-      jsonEncode(ledArrivalSeq.map((e) => e.toJson()).toList()),
-    );
-    await _lottieBox.put('next', lottieNext);
-    await _lottieBox.put('arrival', lottieArrival);
-    await _lottieBox.put('slogan', lottieSlogan);
-    await _box.put('lottieOverflowMode', lottieOverflowMode);
-    await _box.put('selectedFontId', selectedFontId);
-    await _box.put(
-      'fontListMetadata',
-      jsonEncode(fontList.map((e) => e.toJson()).toList()),
-    );
-    for (var f in fontList) {
-      if (f.type == 'custom') await _lottieBox.put('font_data_${f.id}', f.data);
+      if (entry == null) return null;
+
+      if (entry is Uint8List ||
+          entry.runtimeType.toString().contains('Uint8List')) {
+        try {
+          final decoded = jsonDecode(utf8.decode(entry as Uint8List));
+          if (decoded is Map) {
+            return Map<String, dynamic>.from(decoded);
+          } else {
+            debugPrint(
+              "CityCache $city 錯誤: 解碼後是 ${decoded.runtimeType} 而非 Map",
+            );
+            return null;
+          }
+        } catch (e) {
+          debugPrint("CityCache $city 解碼失敗: $e");
+          return null;
+        }
+      }
+
+      if (entry is Map) {
+        return Map<String, dynamic>.from(entry);
+      }
+
+      debugPrint("CityCache $city 讀取失敗: 預期為 Map, 但實際拿到 ${entry.runtimeType}");
+      return null;
+    } catch (e) {
+      debugPrint("getCityCache (City: $city) 發生嚴重錯誤: $e");
+      return null;
     }
-    await _box.put('customVariables', jsonEncode(customVariables));
-    settingsNotifier.notifyListeners();
   }
 
   static Future<void> saveCustomRoute(BusRoute route, {String? oldId}) async {
-    if (oldId != null && oldId != route.id) {
-      await _customBox.delete("route_$oldId");
-      if (routeData.containsKey('Custom'))
-        routeData['Custom']!.removeWhere((r) => r.id == oldId);
-    }
-    await _customBox.put("route_${route.id}", jsonEncode(route.toJson()));
-    if (routeData['Custom'] == null) routeData['Custom'] = [];
-    int idx = routeData['Custom']!.indexWhere((r) => r.id == route.id);
-    if (idx != -1)
-      routeData['Custom']![idx] = route;
-    else
-      routeData['Custom']!.add(route);
-    settingsNotifier.notifyListeners();
+    final box = Hive.box("custom_routes_box");
+    if (oldId != null && oldId != route.id) await box.delete("route_$oldId");
+    await box.put("route_${route.id}", jsonEncode(route.toJson()));
+    await _loadCustomRoutes();
   }
 
-  static Future<void> requestLocationPermission() async {
+  static Future<void> deleteCustomRoute(String id) async {
+    final box = Hive.box("custom_routes_box");
+    await box.delete("route_$id");
+    await _loadCustomRoutes();
+  }
+
+  static bool isCityLoaded(String key) {
+    if (key == 'Custom') return true;
     try {
-      if (!await Geolocator.isLocationServiceEnabled()) return;
-      LocationPermission p = await Geolocator.checkPermission();
-      if (p == LocationPermission.denied)
-        p = await Geolocator.requestPermission();
-    } catch (e) {}
+      return Hive.box("city_data_box").containsKey(key);
+    } catch (_) {
+      return false;
+    }
   }
 
   static Future<void> refreshRoutes() async {
@@ -347,14 +172,9 @@ abstract class Static {
     await _loadCustomRoutes();
   }
 
-  static Future<void> deleteCustomRoute(String id) async {
-    if (routeData.containsKey('Custom')) {
-      final String key = "route_$id";
-      await _customBox.delete(key);
-      routeData['Custom']!.removeWhere((r) => r.id == id);
-      settingsNotifier.notifyListeners();
-    }
-  }
+  static Future<void> saveSettings() => settings.save();
+
+  static ChangeNotifier get settingsNotifier => settings;
 
   static List<LatLng> wktPrase(String wkt) =>
       RegExp(r"(-?\d+\.?\d*)\s+(-?\d+\.?\d*)")
@@ -364,22 +184,9 @@ abstract class Static {
           )
           .toList();
 
-  static TextStyle getAppFont(String fontFamily, double fontSize, Color color) {
-    try {
-      return GoogleFonts.getFont(fontFamily, fontSize: fontSize, color: color);
-    } catch (e) {
-      final customFont = fontList.firstWhere(
-        (f) => f.name.split('.').first == fontFamily || f.id == fontFamily,
-        orElse: () => FontItem(id: '', name: '', type: 'none'),
-      );
-      if (customFont.type == 'custom') {
-        return TextStyle(
-          fontFamily: customFont.id,
-          fontSize: fontSize,
-          color: color,
-        );
-      }
-    }
-    return GoogleFonts.notoSansTc(fontSize: fontSize, color: color);
+  static Future<void> requestLocationPermission() async {
+    if (!await Geolocator.isLocationServiceEnabled()) return;
+    LocationPermission p = await Geolocator.checkPermission();
+    if (p == LocationPermission.denied) await Geolocator.requestPermission();
   }
 }

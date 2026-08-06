@@ -28,10 +28,10 @@ class _InfoPageState extends State<InfoPage>
   void initState() {
     super.initState();
     _volController = TextEditingController(
-      text: (Static.globalVolume * 50).toStringAsFixed(0),
+      text: (Static.settings.globalVolume * 50).toStringAsFixed(0),
     );
     _speedController = TextEditingController(
-      text: Static.globalSpeed.toStringAsFixed(2),
+      text: Static.settings.globalSpeed.toStringAsFixed(2),
     );
     _flashController = AnimationController(
       duration: const Duration(milliseconds: 2000),
@@ -49,16 +49,18 @@ class _InfoPageState extends State<InfoPage>
 
   void _updateVolume(double v) {
     setState(() {
-      Static.globalVolume = v.clamp(0.0, 1.0);
-      _volController.text = (Static.globalVolume * 50).toStringAsFixed(0);
+      Static.settings.globalVolume = v.clamp(0.0, 1.0);
+      _volController.text = (Static.settings.globalVolume * 50).toStringAsFixed(
+        0,
+      );
     });
     Static.audioManager.playAssetAndWait("notice.mp3");
   }
 
   void _updateSpeed(double v) {
     setState(() {
-      Static.globalSpeed = v.clamp(0.5, 2.0);
-      _speedController.text = Static.globalSpeed.toStringAsFixed(2);
+      Static.settings.globalSpeed = v.clamp(0.5, 2.0);
+      _speedController.text = Static.settings.globalSpeed.toStringAsFixed(2);
     });
   }
 
@@ -87,10 +89,11 @@ class _InfoPageState extends State<InfoPage>
           final double distPrev = analysis.distToPrevStation ?? 0;
           final double distNext = analysis.distToNextStation ?? double.infinity;
 
-          bool isDeparted = distPrev > Static.nextStationDepartureDistance;
+          bool isDeparted =
+              distPrev > Static.settings.nextStationDepartureDistance;
           bool isEnteringNext =
-              Static.nextStationDistance >= 0 &&
-              distNext < Static.nextStationDistance;
+              Static.settings.nextStationDistance >= 0 &&
+              distNext < Static.settings.nextStationDistance;
 
           if (isDeparted ||
               isEnteringNext ||
@@ -280,7 +283,7 @@ class _InfoPageState extends State<InfoPage>
           const Spacer(),
           _buildControlRow(
             Icons.volume_up,
-            Static.globalVolume,
+            Static.settings.globalVolume,
             0.0,
             1.0,
             _updateVolume,
@@ -289,7 +292,7 @@ class _InfoPageState extends State<InfoPage>
           const SizedBox(height: 4),
           _buildControlRow(
             Icons.speed,
-            Static.globalSpeed,
+            Static.settings.globalSpeed,
             0.5,
             2.0,
             _updateSpeed,

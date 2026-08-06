@@ -94,7 +94,7 @@ class GpsControlProvider extends ChangeNotifier {
       }
     }
 
-    double remainingOffset = Static.nextStationDepartureDistance + 5.0;
+    double remainingOffset = Static.settings.nextStationDepartureDistance + 5.0;
     int currentIndex = bestSegmentIndex;
     double currentT = bestT;
     while (remainingOffset > 0 && currentIndex < points.length - 1) {

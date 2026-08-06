@@ -13,13 +13,14 @@ class _VariableSettingTabState extends State<VariableSettingTab> {
   final List<String> _builtinBasics = [
     "{name} - 當前站名",
     "{nameEn} - 當前站名英文",
-    "{CurrMin} - 當前站預估分鐘",
-    "{CurrTimeHH} - 當前站預估時間時",
-    "{CurrTimeMM} - 當前站預估時間分",
+    "{currMin} - 當前站預估分鐘",
+    "{currTimeHH} - 當前站預估時間時",
+    "{currTimeMM} - 當前站預估時間分",
     "{terminal} - 終點站時為\"終點站\"，否則為(空白)",
     "{route_name} - 當前路線名稱",
     "{route_desc} - 當前路線描述",
     "{route_dest} - 當前路線目的地",
+    "{route_dep} - 當前路線起點",
     "{hh} - 當前時間小時",
     "{mm} - 當前時間分鐘",
     "{ss} - 當前時間秒數",
@@ -69,7 +70,7 @@ class _VariableSettingTabState extends State<VariableSettingTab> {
           TextButton(
             onPressed: () {
               if (key.isNotEmpty) {
-                Static.customVariables[key] = val;
+                Static.settings.customVariables[key] = val;
                 Static.saveSettings();
                 setState(() {});
               }
@@ -123,6 +124,8 @@ class _VariableSettingTabState extends State<VariableSettingTab> {
               .toList(),
         ),
         const Divider(height: 40),
+        const Text("可於遠端語音頁面下載範例並匯入"),
+        const Divider(height: 40),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -138,14 +141,14 @@ class _VariableSettingTabState extends State<VariableSettingTab> {
           ],
         ),
         const SizedBox(height: 8),
-        if (Static.customVariables.isEmpty)
+        if (Static.settings.customVariables.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 20),
             child: Center(
               child: Text("尚未新增自定義變數", style: TextStyle(color: Colors.grey)),
             ),
           ),
-        ...Static.customVariables.entries.map(
+        ...Static.settings.customVariables.entries.map(
           (e) => Card(
             margin: const EdgeInsets.only(bottom: 8),
             child: ListTile(
@@ -168,7 +171,9 @@ class _VariableSettingTabState extends State<VariableSettingTab> {
                   IconButton(
                     icon: const Icon(Icons.delete, color: Colors.red),
                     onPressed: () {
-                      setState(() => Static.customVariables.remove(e.key));
+                      setState(
+                        () => Static.settings.customVariables.remove(e.key),
+                      );
                       Static.saveSettings();
                     },
                   ),

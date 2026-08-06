@@ -1,9 +1,8 @@
 import 'dart:typed_data';
 
+import 'package:bus_pids_simulator/utils/static.dart';
 import 'package:flutter/material.dart';
 import 'package:marquee/marquee.dart';
-
-import '../utils/static.dart';
 
 class AudioPage extends StatefulWidget {
   const AudioPage({super.key});

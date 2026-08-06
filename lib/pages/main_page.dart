@@ -159,17 +159,22 @@ class _MainPageState extends State<MainPage> {
                         children: [
                           const SizedBox(width: 40),
                           InkWell(
-                            onTap: () =>
-                                _editValue("設定車牌", Static.licensePlate, (v) {
-                                  setState(() => Static.licensePlate = v);
-                                  Static.saveSettings();
-                                }),
+                            onTap: () => _editValue(
+                              "設定車牌",
+                              Static.settings.licensePlate,
+                              (v) {
+                                setState(
+                                  () => Static.settings.licensePlate = v,
+                                );
+                                Static.saveSettings();
+                              },
+                            ),
                             child: Row(
                               children: [
                                 const Icon(Icons.directions_bus, size: 14),
                                 const SizedBox(width: 4),
                                 Text(
-                                  Static.licensePlate,
+                                  Static.settings.licensePlate,
                                   style: const TextStyle(fontSize: 12),
                                 ),
                               ],
@@ -177,17 +182,20 @@ class _MainPageState extends State<MainPage> {
                           ),
                           const SizedBox(width: 20),
                           InkWell(
-                            onTap: () =>
-                                _editValue("設定駕駛編號", Static.driverId, (v) {
-                                  setState(() => Static.driverId = v);
-                                  Static.saveSettings();
-                                }),
+                            onTap: () => _editValue(
+                              "設定駕駛編號",
+                              Static.settings.driverId,
+                              (v) {
+                                setState(() => Static.settings.driverId = v);
+                                Static.saveSettings();
+                              },
+                            ),
                             child: Row(
                               children: [
                                 const Icon(Icons.person, size: 14),
                                 const SizedBox(width: 4),
                                 Text(
-                                  Static.driverId,
+                                  Static.settings.driverId,
                                   style: const TextStyle(fontSize: 12),
                                 ),
                               ],

@@ -444,7 +444,7 @@ class _RemoteAudioPageState extends State<RemoteAudioPage> {
           label: const Text("下載"),
           style: style,
         ),
-        if (ext != 'zip')
+        if (ext == 'wav' || ext == 'mp3')
           FilledButton.icon(
             onPressed: () => _importAction(relPath, name, false),
             icon: const Icon(Icons.add, size: 10),

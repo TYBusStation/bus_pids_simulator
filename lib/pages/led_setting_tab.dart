@@ -24,13 +24,13 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
             child: TextField(
               textAlign: TextAlign.end,
               controller: TextEditingController(
-                text: Static.ledScrollSpeed.toStringAsFixed(0),
+                text: Static.settings.ledScrollSpeed.toStringAsFixed(0),
               ),
               keyboardType: TextInputType.number,
               onSubmitted: (s) {
                 final n = double.tryParse(s);
                 if (n != null) {
-                  Static.ledScrollSpeed = n;
+                  Static.settings.ledScrollSpeed = n;
                   Static.saveSettings();
                   setState(() {});
                 }
@@ -49,12 +49,12 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
             child: TextField(
               textAlign: TextAlign.end,
               controller: TextEditingController(
-                text: Static.ledColor.toRadixString(16).toUpperCase(),
+                text: Static.settings.ledColor.toRadixString(16).toUpperCase(),
               ),
               onSubmitted: (s) {
                 final n = int.tryParse(s, radix: 16);
                 if (n != null) {
-                  Static.ledColor = n;
+                  Static.settings.ledColor = n;
                   Static.saveSettings();
                   setState(() {});
                 }
@@ -69,13 +69,13 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
             child: TextField(
               textAlign: TextAlign.end,
               controller: TextEditingController(
-                text: Static.ledHeight.toStringAsFixed(0),
+                text: Static.settings.ledHeight.toStringAsFixed(0),
               ),
               keyboardType: TextInputType.number,
               onSubmitted: (s) {
                 final n = double.tryParse(s);
                 if (n != null) {
-                  Static.ledHeight = n;
+                  Static.settings.ledHeight = n;
                   Static.saveSettings();
                   setState(() {});
                 }
@@ -91,9 +91,9 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
           children: [
             SwitchListTile(
               title: const Text("顯示即將接近字幕", style: TextStyle(fontSize: 14)),
-              value: Static.showStationListSlogan,
+              value: Static.settings.showStationListSlogan,
               onChanged: (v) {
-                Static.showStationListSlogan = v;
+                Static.settings.showStationListSlogan = v;
                 Static.saveSettings();
                 setState(() {});
               },
@@ -101,7 +101,7 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
             SequenceManagerWidget<String>(
               title: "即將接近字幕序列",
               subtitle: "站名串接列表：{next_stations}",
-              items: Static.nextStationListSequence,
+              items: Static.settings.nextStationListSequence,
               onAdd: () => "{next_stations}",
               onEdit: (val) async => await _showTextDialog(val),
             ),
@@ -114,7 +114,7 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
                 SequenceManagerWidget<String>(
                   title: "單站顯示",
                   subtitle: "中文：{name}，英文：{nameEn}",
-                  items: Static.nextStationSubSequence,
+                  items: Static.settings.nextStationSubSequence,
                   onAdd: () => "{name}",
                   onEdit: (val) async => await _showTextDialog(val),
                 ),
@@ -132,10 +132,11 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
                           textAlign: TextAlign.center,
                           keyboardType: TextInputType.number,
                           controller: TextEditingController(
-                            text: Static.nextStationCount.toString(),
+                            text: Static.settings.nextStationCount.toString(),
                           ),
                           onSubmitted: (v) {
-                            Static.nextStationCount = int.tryParse(v) ?? 5;
+                            Static.settings.nextStationCount =
+                                int.tryParse(v) ?? 5;
                             Static.saveSettings();
                             setState(() {});
                           },
@@ -147,10 +148,10 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
                         child: TextField(
                           textAlign: TextAlign.center,
                           controller: TextEditingController(
-                            text: Static.nextStationSeparator,
+                            text: Static.settings.nextStationSeparator,
                           ),
                           onSubmitted: (v) {
-                            Static.nextStationSeparator = v;
+                            Static.settings.nextStationSeparator = v;
                             Static.saveSettings();
                           },
                         ),
@@ -165,21 +166,21 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
         SequenceManagerWidget<LedSequence>(
           title: "字幕輪播標語設定",
           subtitle: "",
-          items: Static.sloganList,
+          items: Static.settings.sloganList,
           onAdd: () => LedSequence(template: "歡迎搭乘"),
           onEdit: (val) async => await _showLedDialog(val, "編輯輪播標語"),
         ),
         SequenceManagerWidget<LedSequence>(
           title: "下站字幕顯示序列",
           subtitle: "中文：{name}，英文：{nameEn}，終點站：{terminal}",
-          items: Static.ledNextStationSeq,
+          items: Static.settings.ledNextStationSeq,
           onAdd: () => LedSequence(template: "下一站"),
           onEdit: (val) async => await _showLedDialog(val, "編輯下站序列"),
         ),
         SequenceManagerWidget<LedSequence>(
           title: "到站字幕顯示序列",
           subtitle: "中文：{name}，英文：{nameEn}，終點站：{terminal}",
-          items: Static.ledArrivalSeq,
+          items: Static.settings.ledArrivalSeq,
           onAdd: () => LedSequence(template: "到了"),
           onEdit: (val) async => await _showLedDialog(val, "編輯到站序列"),
         ),

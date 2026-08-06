@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../utils/setting_utils.dart';
 import '../utils/static.dart';
 
 class LottieSettingsTab extends StatefulWidget {
@@ -22,13 +23,13 @@ class _LottieSettingsTabState extends State<LottieSettingsTab> {
     if (result != null && result.files.first.bytes != null) {
       setState(() {
         if (type == 'next')
-          Static.lottieNext = result.files.first.bytes;
+          Static.settings.lottieNext = result.files.first.bytes;
         else if (type == 'arrival')
-          Static.lottieArrival = result.files.first.bytes;
+          Static.settings.lottieArrival = result.files.first.bytes;
         else if (type == 'slogan')
-          Static.lottieSlogan = result.files.first.bytes;
+          Static.settings.lottieSlogan = result.files.first.bytes;
         else if (type == 'font') {
-          Static.fontList.add(
+          Static.settings.fontList.add(
             FontItem(
               id: 'custom_${DateTime.now().millisecondsSinceEpoch}',
               name: result.files.first.name,
@@ -49,20 +50,20 @@ class _LottieSettingsTabState extends State<LottieSettingsTab> {
       children: [
         _buildFileTile(
           "下一站 Lottie",
-          Static.lottieNext,
-          (v) => Static.lottieNext = v,
+          Static.settings.lottieNext,
+          (v) => Static.settings.lottieNext = v,
           () => _handleUpload('next'),
         ),
         _buildFileTile(
           "到站 Lottie",
-          Static.lottieArrival,
-          (v) => Static.lottieArrival = v,
+          Static.settings.lottieArrival,
+          (v) => Static.settings.lottieArrival = v,
           () => _handleUpload('arrival'),
         ),
         _buildFileTile(
           "行進間 Lottie",
-          Static.lottieSlogan,
-          (v) => Static.lottieSlogan = v,
+          Static.settings.lottieSlogan,
+          (v) => Static.settings.lottieSlogan = v,
           () => _handleUpload('slogan'),
         ),
         const Divider(),
@@ -70,7 +71,7 @@ class _LottieSettingsTabState extends State<LottieSettingsTab> {
           padding: EdgeInsets.all(8),
           child: Text("自定義字體檔案", style: TextStyle(fontWeight: FontWeight.bold)),
         ),
-        ...Static.fontList
+        ...Static.settings.fontList
             .where((f) => f.type == 'custom')
             .map(
               (f) => ListTile(
@@ -79,7 +80,7 @@ class _LottieSettingsTabState extends State<LottieSettingsTab> {
                 trailing: IconButton(
                   icon: const Icon(Icons.delete, color: Colors.red),
                   onPressed: () {
-                    setState(() => Static.fontList.remove(f));
+                    setState(() => Static.settings.fontList.remove(f));
                     Static.saveSettings();
                   },
                 ),

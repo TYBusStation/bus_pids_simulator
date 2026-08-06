@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:archive/archive.dart';
@@ -34,7 +35,7 @@ class AudioManager {
   static const String _packDataBoxName = "voice_packs_data";
 
   late LazyBox<Uint8List> _audioBox;
-  late Box<Map> _packMetaBox;
+  late Box _packMetaBox;
   late LazyBox<Uint8List> _packDataBox;
 
   final AudioPlayer _player = AudioPlayer();
@@ -44,27 +45,45 @@ class AudioManager {
   Future<void> init() async {
     await Hive.initFlutter();
     _audioBox = await Hive.openLazyBox<Uint8List>(_boxName);
-    _packMetaBox = await Hive.openBox<Map>(_packMetaBoxName);
+    _packMetaBox = await Hive.openBox(_packMetaBoxName);
     _packDataBox = await Hive.openLazyBox<Uint8List>(_packDataBoxName);
     await _loadStoredPacks();
   }
 
+  Map? _getSafeMeta(String name) {
+    final raw = _packMetaBox.get(name);
+    if (raw == null) return null;
+    if (raw is Map) return Map.from(raw);
+    try {
+      if (raw is Uint8List ||
+          raw.runtimeType.toString().contains('Uint8List')) {
+        final decoded = jsonDecode(utf8.decode(raw as Uint8List));
+        if (decoded is Map) return decoded;
+      }
+    } catch (_) {}
+    return null;
+  }
+
   Future<void> _loadStoredPacks() async {
     voicePacks.clear();
-    final List<Map> metaList = _packMetaBox.values.cast<Map>().toList();
-    metaList.sort((a, b) => (a['priority'] ?? 0).compareTo(b['priority'] ?? 0));
+    final List<VoicePack> loaded = [];
 
-    for (var data in metaList) {
-      voicePacks.add(
-        VoicePack(
-          name: data['name'],
-          timestamp: data['timestamp'] ?? 0,
-          fileNames: List<String>.from(data['fileNames'] ?? []),
-          isEnabled: data['isEnabled'] ?? true,
-          priority: data['priority'] ?? 0,
-        ),
-      );
+    for (var key in _packMetaBox.keys) {
+      final data = _getSafeMeta(key.toString());
+      if (data != null) {
+        loaded.add(
+          VoicePack(
+            name: data['name']?.toString() ?? key.toString(),
+            timestamp: data['timestamp'] ?? 0,
+            fileNames: List<String>.from(data['fileNames'] ?? []),
+            isEnabled: data['isEnabled'] ?? true,
+            priority: data['priority'] ?? 0,
+          ),
+        );
+      }
     }
+    loaded.sort((a, b) => a.priority.compareTo(b.priority));
+    voicePacks.addAll(loaded);
   }
 
   Future<void> reorderPack(int oldIndex, int newIndex) async {
@@ -74,10 +93,11 @@ class AudioManager {
 
     for (int i = 0; i < voicePacks.length; i++) {
       voicePacks[i].priority = i;
-      final data = _packMetaBox.get(voicePacks[i].name);
+      final data = _getSafeMeta(voicePacks[i].name);
       if (data != null) {
-        data['priority'] = i;
-        await _packMetaBox.put(voicePacks[i].name, data);
+        final Map<String, dynamic> updated = Map<String, dynamic>.from(data);
+        updated['priority'] = i;
+        await _packMetaBox.put(voicePacks[i].name, updated);
       }
     }
   }
@@ -97,13 +117,14 @@ class AudioManager {
       }
       if (fileNames.isEmpty) return false;
 
-      await _packMetaBox.put(name, {
+      final meta = {
         'name': name,
         'timestamp': DateTime.now().millisecondsSinceEpoch,
         'fileNames': fileNames,
         'isEnabled': true,
         'priority': voicePacks.length,
-      });
+      };
+      await _packMetaBox.put(name, meta);
       await _loadStoredPacks();
       return true;
     } catch (e) {
@@ -114,10 +135,11 @@ class AudioManager {
   Future<void> togglePackStatus(int index, bool enabled) async {
     final pack = voicePacks[index];
     pack.isEnabled = enabled;
-    final data = _packMetaBox.get(pack.name);
+    final data = _getSafeMeta(pack.name);
     if (data != null) {
-      data['isEnabled'] = enabled;
-      await _packMetaBox.put(pack.name, data);
+      final Map<String, dynamic> updated = Map<String, dynamic>.from(data);
+      updated['isEnabled'] = enabled;
+      await _packMetaBox.put(pack.name, updated);
     }
   }
 
@@ -128,10 +150,11 @@ class AudioManager {
 
     bool ok = await importZipAsPack(packName, zipBytes);
     if (ok) {
-      final data = _packMetaBox.get(packName);
+      final data = _getSafeMeta(packName);
       if (data != null) {
-        data['priority'] = oldPriority;
-        await _packMetaBox.put(packName, data);
+        final Map<String, dynamic> updated = Map<String, dynamic>.from(data);
+        updated['priority'] = oldPriority;
+        await _packMetaBox.put(packName, updated);
         await _loadStoredPacks();
       }
     }
@@ -146,10 +169,11 @@ class AudioManager {
     await _packMetaBox.delete(pack.name);
     voicePacks.removeAt(index);
     for (int i = 0; i < voicePacks.length; i++) {
-      final data = _packMetaBox.get(voicePacks[i].name);
+      final data = _getSafeMeta(voicePacks[i].name);
       if (data != null) {
-        data['priority'] = i;
-        await _packMetaBox.put(voicePacks[i].name, data);
+        final Map<String, dynamic> updated = Map<String, dynamic>.from(data);
+        updated['priority'] = i;
+        await _packMetaBox.put(voicePacks[i].name, updated);
       }
     }
   }
@@ -206,9 +230,9 @@ class AudioManager {
   }
 
   Future<void> _applySettings(double localSpeed) async {
-    await _player.setVolume(Static.globalVolume.clamp(0.0, 1.0));
+    await _player.setVolume(Static.settings.globalVolume.clamp(0.0, 1.0));
     await _player.setPlaybackRate(
-      (Static.globalSpeed * localSpeed).clamp(0.5, 2.0),
+      (Static.settings.globalSpeed * localSpeed).clamp(0.5, 2.0),
     );
   }
 
@@ -225,8 +249,8 @@ class AudioManager {
   Future<void> playRawBytes(Uint8List bytes) async {
     await _player.stop();
     await _player.setSource(BytesSource(bytes));
-    await _player.setVolume(Static.globalVolume.clamp(0.0, 1.0));
-    await _player.setPlaybackRate(Static.globalSpeed.clamp(0.5, 2.0));
+    await _player.setVolume(Static.settings.globalVolume.clamp(0.0, 1.0));
+    await _player.setPlaybackRate(Static.settings.globalSpeed.clamp(0.5, 2.0));
     await _player.resume();
   }
 
@@ -253,7 +277,7 @@ class AudioManager {
       await _player.stop();
       if (kIsWeb) await _player.release();
       await _player.setSource(AssetSource(path));
-      await _player.setVolume(Static.globalVolume.clamp(0.0, 1.0));
+      await _player.setVolume(Static.settings.globalVolume.clamp(0.0, 1.0));
       final completer = Completer<void>();
       StreamSubscription? sub;
       sub = _player.onPlayerComplete.listen((_) {
@@ -262,7 +286,7 @@ class AudioManager {
       });
       await _player.resume();
       await _player.setPlaybackRate(
-        (Static.globalSpeed * localSpeed).clamp(0.5, 2.0),
+        (Static.settings.globalSpeed * localSpeed).clamp(0.5, 2.0),
       );
       await completer.future;
     } catch (e) {

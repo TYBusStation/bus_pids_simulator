@@ -44,7 +44,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   Tab(height: 38, text: "報站規則"),
                   Tab(height: 38, text: "字幕設定"),
                   Tab(height: 38, text: "Lottie設定"),
-                  Tab(height: 38, text: "自訂顯示變數"),
+                  Tab(height: 38, text: "顯示變數"),
                   Tab(height: 38, text: "單獨語音"),
                   Tab(height: 38, text: "語音包"),
                   Tab(height: 38, text: "遠端語音"),

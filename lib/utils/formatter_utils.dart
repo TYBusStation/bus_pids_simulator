@@ -11,18 +11,16 @@ abstract class FormatterUtils {
   );
   static final DateFormat displayTimeFormat = DateFormat('yyyy-MM-dd HH:mm:ss');
   static final DateFormat displayDateFormat = DateFormat('yyyy/MM/dd');
-
   static final RegExp letterNumber = RegExp(r"[^a-zA-Z0-9]");
 
   static Map<String, dynamic> _parseRoute(String route) {
     String type = 'UNKNOWN';
     int? baseNum;
     String? baseStr;
-    String suffixAlpha = '';
-    String suffixNumeric = '';
-    String suffixSpecial = '';
-    String suffixParenthesis = '';
-
+    String suffixAlpha = '',
+        suffixNumeric = '',
+        suffixSpecial = '',
+        suffixParenthesis = '';
     String mainPart = route;
     if (route.contains('(')) {
       final match = RegExp(r'^(.*?)\((.*)\)$').firstMatch(route);
@@ -31,7 +29,6 @@ abstract class FormatterUtils {
         suffixParenthesis = '(${match.group(2)!})';
       }
     }
-
     RegExpMatch? specialPrefixMatch = RegExp(
       r'^(\d+)([東西南北])$',
     ).firstMatch(mainPart);
@@ -55,7 +52,6 @@ abstract class FormatterUtils {
       if (match != null) {
         baseNum = int.tryParse(match.group(1)!);
         String remaining = match.group(2) ?? '';
-
         RegExpMatch? suffixMatch = RegExp(
           r'^([A-Z]*)(.*)',
         ).firstMatch(remaining);
@@ -78,7 +74,6 @@ abstract class FormatterUtils {
         baseStr = mainPart;
       }
     }
-
     return {
       'original': route,
       'type': type,
@@ -95,7 +90,6 @@ abstract class FormatterUtils {
     if (a == b) return 0;
     var pa = _parseRoute(a);
     var pb = _parseRoute(b);
-
     int typeOrder(String type) {
       if (type == 'SPECIAL_PREFIX') return 0;
       if (type == 'NUMERIC') return 1;
@@ -106,7 +100,6 @@ abstract class FormatterUtils {
 
     int typeComparison = typeOrder(pa['type']).compareTo(typeOrder(pb['type']));
     if (typeComparison != 0) return typeComparison;
-
     if (pa['baseNum'] != null && pb['baseNum'] != null) {
       int baseNumComparison = pa['baseNum'].compareTo(pb['baseNum']);
       if (baseNumComparison != 0) return baseNumComparison;
@@ -116,7 +109,6 @@ abstract class FormatterUtils {
       );
       if (baseStrComparison != 0) return baseStrComparison;
     }
-
     int getSpecialSuffixOrder(String suffix) {
       if (suffix.isEmpty) return 0;
       if (suffix == '區') return 1;
@@ -130,47 +122,40 @@ abstract class FormatterUtils {
       return 99;
     }
 
-    int suffixAlphaComparison = (pa['suffixAlpha'] as String).compareTo(
-      pb['suffixAlpha'] as String,
-    );
-    if (suffixAlphaComparison != 0) return suffixAlphaComparison;
-
+    if ((pa['suffixAlpha'] as String).compareTo(pb['suffixAlpha'] as String) !=
+        0)
+      return (pa['suffixAlpha'] as String).compareTo(
+        pb['suffixAlpha'] as String,
+      );
     int specialSuffixComparison = getSpecialSuffixOrder(
       pa['suffixSpecial'] as String,
     ).compareTo(getSpecialSuffixOrder(pb['suffixSpecial'] as String));
     if (specialSuffixComparison != 0) return specialSuffixComparison;
-
-    int rawSpecialSuffixComparison = (pa['suffixSpecial'] as String).compareTo(
-      pb['suffixSpecial'] as String,
-    );
-    if (rawSpecialSuffixComparison != 0) return rawSpecialSuffixComparison;
-
+    if ((pa['suffixSpecial'] as String).compareTo(
+          pb['suffixSpecial'] as String,
+        ) !=
+        0)
+      return (pa['suffixSpecial'] as String).compareTo(
+        pb['suffixSpecial'] as String,
+      );
     int paSuffixNumVal = (pa['suffixNumeric'] as String).isEmpty
         ? 0
         : int.parse(pa['suffixNumeric'] as String);
     int pbSuffixNumVal = (pb['suffixNumeric'] as String).isEmpty
         ? 0
         : int.parse(pb['suffixNumeric'] as String);
-    int suffixNumComparison = paSuffixNumVal.compareTo(pbSuffixNumVal);
-    if (suffixNumComparison != 0) return suffixNumComparison;
-
+    if (paSuffixNumVal.compareTo(pbSuffixNumVal) != 0)
+      return paSuffixNumVal.compareTo(pbSuffixNumVal);
     return (pa['suffixParenthesis'] as String).compareTo(
       pb['suffixParenthesis'] as String,
     );
   }
 
   static String getBusDirectionName(BusRoute route, int goBack) {
-    if (route.destination.isEmpty && route.departure.isEmpty) {
-      return '未知';
-    }
-    switch (goBack) {
-      case 1:
-        return route.destination;
-      case 2:
-        return route.departure;
-      default:
-        return '未知';
-    }
+    if (route.destination.isEmpty && route.departure.isEmpty) return '未知';
+    return goBack == 1
+        ? route.destination
+        : (goBack == 2 ? route.departure : '未知');
   }
 
   static void showSnackbar(
