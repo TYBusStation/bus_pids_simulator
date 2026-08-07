@@ -271,7 +271,8 @@ class _MainPageState extends State<MainPage> {
                               const ContactPage(),
                             ],
                           ),
-                          if (showBottomPanel)
+                          if (showBottomPanel &&
+                              (selectedIndex == 1 || selectedIndex == 2))
                             Positioned(
                               bottom: 0,
                               left: 0,
@@ -311,7 +312,11 @@ class _MainPageState extends State<MainPage> {
               ),
             ),
             Positioned(
-              bottom: showBottomPanel ? 35 : 0,
+              bottom:
+                  (showBottomPanel &&
+                      (selectedIndex == 1 || selectedIndex == 2))
+                  ? 35
+                  : 0,
               left: showNavRail ? 50 : 0,
               child: _CornerToggle(
                 icon: showNavRail
@@ -320,16 +325,18 @@ class _MainPageState extends State<MainPage> {
                 onTap: () => setState(() => showNavRail = !showNavRail),
               ),
             ),
-            Positioned(
-              bottom: showBottomPanel ? 35 : 0,
-              right: 0,
-              child: _CornerToggle(
-                icon: showBottomPanel
-                    ? Icons.keyboard_arrow_down
-                    : Icons.keyboard_arrow_up,
-                onTap: () => setState(() => showBottomPanel = !showBottomPanel),
+            if (selectedIndex == 1 || selectedIndex == 2)
+              Positioned(
+                bottom: showBottomPanel ? 35 : 0,
+                right: 0,
+                child: _CornerToggle(
+                  icon: showBottomPanel
+                      ? Icons.keyboard_arrow_down
+                      : Icons.keyboard_arrow_up,
+                  onTap: () =>
+                      setState(() => showBottomPanel = !showBottomPanel),
+                ),
               ),
-            ),
             if (!landscape)
               Positioned.fill(
                 child: Scaffold(

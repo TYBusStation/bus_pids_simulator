@@ -75,11 +75,13 @@ class RouteAnalysisProvider extends ChangeNotifier {
     double speed,
     Status status, {
     double accuracy = 0,
+    double? heading,
   }) {
     if (accuracy > 50) return;
     final now = DateTime.now();
     _speedHistory.add(MapEntry(now, speed));
     _speedHistory.removeWhere((e) => now.difference(e.key).inMinutes > 3);
+
     if (status.dutyStatus == DutyStatus.offDuty && speed >= 10) {
       if (!_isOffDutyAlert) {
         _isOffDutyAlert = true;
@@ -92,31 +94,38 @@ class RouteAnalysisProvider extends ChangeNotifier {
       Static.audioManager.stop();
       notifyListeners();
     }
+
     if (status.dutyStatus != DutyStatus.onDuty) {
       if (_lastDutyStatus == DutyStatus.onDuty) resetAnalysis();
       _currentAnalysis = null;
       _lastDutyStatus = DutyStatus.offDuty;
       return;
     }
+
     final stations = status.direction == Direction.go
         ? status.route.stations.go
         : status.route.stations.back;
+
     if (_lastDutyStatus != DutyStatus.onDuty) {
       _lastDutyStatus = DutyStatus.onDuty;
       _lastSpokenStationOrder = null;
       _lastArrivedStationOrder = null;
     }
+
     final points = status.direction == Direction.go
         ? status.route.path.goPoints
         : status.route.path.backPoints;
+
     _currentAnalysis =
         (location != null && points.isNotEmpty && stations.isNotEmpty)
         ? RouteEngine.analyze(
             currentPos: location,
             routePoints: points,
             stations: stations,
+            heading: heading,
           )
         : null;
+
     if (_currentAnalysis != null) {
       _handleLogic(_currentAnalysis!, status, stations);
       _checkSpeeding(_currentAnalysis!, speed);
@@ -124,18 +133,24 @@ class RouteAnalysisProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  double _getAverageSpeed() {
-    if (_speedHistory.isEmpty) return 0;
+  double getEffectiveSpeedMs() {
+    if (_speedHistory.isEmpty) return 20.0 / 3.6;
     List<double> speeds = _speedHistory.map((e) => e.value).toList()..sort();
     int n = speeds.length, skip = (n * 0.125).floor(), take = n - (2 * skip);
-    if (take <= 0) return speeds.reduce((a, b) => a + b) / n;
-    List<double> filtered = speeds.skip(skip).take(take).toList();
-    return filtered.reduce((a, b) => a + b) / filtered.length;
+    double avgKmh;
+    if (take <= 0) {
+      avgKmh = speeds.reduce((a, b) => a + b) / n;
+    } else {
+      List<double> filtered = speeds.skip(skip).take(take).toList();
+      avgKmh = filtered.reduce((a, b) => a + b) / filtered.length;
+    }
+    if (avgKmh < 5.0) return 20.0 / 3.6;
+    return avgKmh / 3.6;
   }
 
   Map<String, String> getFormattedVariables(LedEvent event, Status status) {
     final now = DateTime.now();
-    final avgSpeedMs = _getAverageSpeed() / 3.6;
+    final double avgSpeedMs = getEffectiveSpeedMs();
     String dest = status.direction == Direction.go
         ? status.route.destination
         : status.route.departure;
@@ -145,6 +160,7 @@ class RouteAnalysisProvider extends ChangeNotifier {
     final stations = status.direction == Direction.go
         ? status.route.stations.go
         : status.route.stations.back;
+
     int idx = (_currentAnalysis?.nextStation != null)
         ? stations.indexWhere(
             (s) => s.order == _currentAnalysis!.nextStation!.order,
@@ -164,29 +180,24 @@ class RouteAnalysisProvider extends ChangeNotifier {
       'ss': now.second.toString().padLeft(2, '0'),
     };
 
-    double distToNext = _currentAnalysis?.distToNextStation ?? 0;
-    if (idx != -1 && avgSpeedMs > 0) {
-      int currSec = (distToNext / avgSpeedMs).round();
-      DateTime currEst = now.add(Duration(seconds: currSec));
-      map['currMin'] = (currSec / 60).ceil().toString();
-      map['currTimeHH'] = currEst.hour.toString().padLeft(2, '0');
-      map['currTimeMM'] = currEst.minute.toString().padLeft(2, '0');
-    } else {
-      map['currMin'] = "0";
-      map['currTimeHH'] = "0";
-      map['currTimeMM'] = "0";
-    }
+    if (idx != -1 && _currentAnalysis != null) {
+      double distToNext = _currentAnalysis!.distToNextStation ?? 0;
+      double secondsToNext = distToNext / avgSpeedMs;
+      DateTime nextEst = now.add(Duration(seconds: secondsToNext.round()));
 
-    double cumulativeDist = distToNext;
-    for (int i = 1; i <= 15; i++) {
-      String pN = "",
-          pE = "",
-          nN = "",
-          nE = "",
-          nMin = "0",
-          nHH = "0",
-          nMM = "0";
-      if (idx != -1) {
+      map['currMin'] = (secondsToNext / 60).ceil().toString();
+      map['currTimeHH'] = nextEst.hour.toString().padLeft(2, '0');
+      map['currTimeMM'] = nextEst.minute.toString().padLeft(2, '0');
+
+      double cumulativeSeconds = secondsToNext;
+      for (int i = 1; i <= 15; i++) {
+        String pN = "",
+            pE = "",
+            nN = "",
+            nE = "",
+            nMin = "0",
+            nHH = "0",
+            nMM = "0";
         if (idx - i >= 0) {
           pN = stations[idx - i].name;
           pE = stations[idx - i].nameEn;
@@ -195,27 +206,41 @@ class RouteAnalysisProvider extends ChangeNotifier {
           final targetIdx = idx + i;
           nN = stations[targetIdx].name;
           nE = stations[targetIdx].nameEn;
-          cumulativeDist += const Distance().as(
-            LengthUnit.Meter,
-            LatLng(stations[targetIdx - 1].lat, stations[targetIdx - 1].lon),
-            LatLng(stations[targetIdx].lat, stations[targetIdx].lon),
-          );
-          if (avgSpeedMs > 0) {
-            int totalSec = (cumulativeDist / avgSpeedMs).round();
-            DateTime est = now.add(Duration(seconds: totalSec));
-            nMin = (totalSec / 60).ceil().toString();
-            nHH = est.hour.toString().padLeft(2, '0');
-            nMM = est.minute.toString().padLeft(2, '0');
-          }
+          double posCurrent =
+              _currentAnalysis!.stationPositions[stations[targetIdx - 1]
+                  .order] ??
+              0;
+          double posNext =
+              _currentAnalysis!.stationPositions[stations[targetIdx].order] ??
+              0;
+          double segmentDist = (posNext - posCurrent).abs() * 1000;
+          cumulativeSeconds += (segmentDist / avgSpeedMs) + 50;
+          DateTime est = now.add(Duration(seconds: cumulativeSeconds.round()));
+          nMin = (cumulativeSeconds / 60).ceil().toString();
+          nHH = est.hour.toString().padLeft(2, '0');
+          nMM = est.minute.toString().padLeft(2, '0');
         }
+        map['PrevName$i'] = pN;
+        map['PrevNameEn$i'] = pE;
+        map['NextName$i'] = nN;
+        map['NextNameEn$i'] = nE;
+        map['NextMin$i'] = nMin;
+        map['NextTimeHH$i'] = nHH;
+        map['NextTimeMM$i'] = nMM;
       }
-      map['PrevName$i'] = pN;
-      map['PrevNameEn$i'] = pE;
-      map['NextName$i'] = nN;
-      map['NextNameEn$i'] = nE;
-      map['NextMin$i'] = nMin;
-      map['NextTimeHH$i'] = nHH;
-      map['NextTimeMM$i'] = nMM;
+    } else {
+      map['currMin'] = "0";
+      map['currTimeHH'] = "0";
+      map['currTimeMM'] = "0";
+      for (int i = 1; i <= 15; i++) {
+        map['PrevName$i'] = "";
+        map['PrevNameEn$i'] = "";
+        map['NextName$i'] = "";
+        map['NextNameEn$i'] = "";
+        map['NextMin$i'] = "0";
+        map['NextTimeHH$i'] = "0";
+        map['NextTimeMM$i'] = "0";
+      }
     }
 
     final keys = map.keys.toList()

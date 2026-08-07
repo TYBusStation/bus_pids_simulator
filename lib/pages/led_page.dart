@@ -96,8 +96,10 @@ class _LedPageState extends State<LedPage> {
   void _nextSlogan() {
     if (_isPriorityMode) return;
     final status = context.read<StatusChangeNotifier>().currentStatus;
-    final analysis = context.read<RouteAnalysisProvider>().currentAnalysis;
+    final provider = context.read<RouteAnalysisProvider>();
+    final analysis = provider.currentAnalysis;
     List<LedSequence> slogans = List.from(Static.settings.sloganList);
+
     if (Static.settings.showStationListSlogan &&
         status.dutyStatus == DutyStatus.onDuty) {
       final stations = status.direction == Direction.go
@@ -108,32 +110,62 @@ class _LedPageState extends State<LedPage> {
           (s) => s.order == analysis!.nextStation!.order,
         );
         if (idx != -1) {
-          final sub = stations
-              .skip(idx)
-              .take(Static.settings.nextStationCount)
-              .map(
-                (s) => Static.settings.nextStationSubSequence
-                    .join("")
-                    .replaceAll('{name}', s.name)
-                    .replaceAll('{nameEn}', s.nameEn),
-              )
-              .join(Static.settings.nextStationSeparator);
+          final now = DateTime.now();
+          final double avgSpeedMs = provider.getEffectiveSpeedMs();
+          double cumulativeSeconds =
+              (analysis!.distToNextStation ?? 0) / avgSpeedMs;
+          List<String> subItems = [];
+
+          for (int i = 0; i < Static.settings.nextStationCount; i++) {
+            int targetIdx = idx + i;
+            if (targetIdx >= stations.length) break;
+
+            final s = stations[targetIdx];
+            if (i > 0) {
+              double posPrev =
+                  analysis.stationPositions[stations[targetIdx - 1].order] ?? 0;
+              double posCurr = analysis.stationPositions[s.order] ?? 0;
+              double segmentDist = (posCurr - posPrev).abs() * 1000;
+              cumulativeSeconds += (segmentDist / avgSpeedMs) + 50;
+            }
+
+            DateTime est = now.add(
+              Duration(seconds: cumulativeSeconds.round()),
+            );
+            String minStr = (cumulativeSeconds / 60).ceil().toString();
+            String hhStr = est.hour.toString().padLeft(2, '0');
+            String mmStr = est.minute.toString().padLeft(2, '0');
+
+            String sub = Static.settings.nextStationSubSequence
+                .join("")
+                .replaceAll('{name}', s.name)
+                .replaceAll('{nameEn}', s.nameEn)
+                .replaceAll('{min}', minStr)
+                .replaceAll('{TimeHH}', hhStr)
+                .replaceAll('{TimeMM}', mmStr);
+            subItems.add(sub);
+          }
+
           slogans.add(
             LedSequence(
               template: Static.settings.nextStationListSequence
                   .join("")
-                  .replaceAll('{next_stations}', sub),
+                  .replaceAll(
+                    '{next_stations}',
+                    subItems.join(Static.settings.nextStationSeparator),
+                  ),
             ),
           );
         }
       }
     }
+
     if (slogans.isEmpty) {
       _currentText = "";
       _currentConfig = null;
     } else {
       final config = slogans[_sloganIndex % slogans.length];
-      _currentText = context.read<RouteAnalysisProvider>().formatTemplate(
+      _currentText = provider.formatTemplate(
         config.template,
         LedEvent(type: LedBroadcastType.slogan, name: "", nameEn: ""),
         status,
@@ -141,10 +173,11 @@ class _LedPageState extends State<LedPage> {
       _currentConfig = config;
       _sloganIndex++;
     }
-    if (mounted)
+    if (mounted) {
       setState(() {
         _isBlanking = false;
       });
+    }
   }
 
   @override

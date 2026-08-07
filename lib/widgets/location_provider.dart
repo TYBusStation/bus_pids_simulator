@@ -9,6 +9,7 @@ enum GpsMode { auto, manual, none }
 class LocationChangeNotifier extends ChangeNotifier {
   LatLng? _currentLocation;
   double _currentSpeed = 0;
+  double _currentHeading = 0;
   bool _serviceEnabled = false;
   LocationPermission _permission = LocationPermission.denied;
   StreamSubscription<Position>? _subscription;
@@ -19,6 +20,8 @@ class LocationChangeNotifier extends ChangeNotifier {
   LatLng? get currentLocation => _currentLocation;
 
   double get currentSpeed => _currentSpeed;
+
+  double get currentHeading => _currentHeading;
 
   GpsMode get gpsMode => _gpsMode;
 
@@ -62,16 +65,23 @@ class LocationChangeNotifier extends ChangeNotifier {
     } else {
       _currentLocation = null;
       _currentSpeed = 0;
+      _currentHeading = 0;
       _startListening();
       forceRefresh();
     }
     if (!_isDisposed) notifyListeners();
   }
 
-  void updateManualLocation(LatLng loc, double speed, {bool force = false}) {
+  void updateManualLocation(
+    LatLng loc,
+    double speed, {
+    double heading = 0,
+    bool force = false,
+  }) {
     if (_gpsMode == GpsMode.auto || _isDisposed) return;
     _currentLocation = loc;
     _currentSpeed = speed;
+    _currentHeading = heading;
     final now = DateTime.now().millisecondsSinceEpoch;
     if (force || (now - _lastNotifyTime) > 120) {
       _lastNotifyTime = now;
@@ -113,6 +123,7 @@ class LocationChangeNotifier extends ChangeNotifier {
             if (_isDisposed || _gpsMode != GpsMode.auto) return;
             _currentLocation = LatLng(position.latitude, position.longitude);
             _currentSpeed = position.speed > 0 ? position.speed * 3.6 : 0;
+            _currentHeading = position.heading;
             notifyListeners();
           },
           onError: (e) => debugPrint(e.toString()),
@@ -135,6 +146,7 @@ class LocationChangeNotifier extends ChangeNotifier {
         if (_gpsMode == GpsMode.auto) {
           _currentLocation = LatLng(pos.latitude, pos.longitude);
           _currentSpeed = pos.speed > 0 ? pos.speed * 3.6 : 0;
+          _currentHeading = pos.heading;
           if (!_isDisposed) notifyListeners();
         }
       }

@@ -113,9 +113,10 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
               children: [
                 SequenceManagerWidget<String>(
                   title: "單站顯示",
-                  subtitle: "中文：{name}，英文：{nameEn}",
+                  subtitle:
+                      "中文：{name}，英文：{nameEn}，預估分鐘：{Min}，預估時間時：{TimeHH}，預估時間分：{TimeMM}",
                   items: Static.settings.nextStationSubSequence,
-                  onAdd: () => "{name}",
+                  onAdd: () => "{TimeHH}:{TimeMM}{name}",
                   onEdit: (val) async => await _showTextDialog(val),
                 ),
                 ListTile(

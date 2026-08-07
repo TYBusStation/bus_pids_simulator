@@ -272,29 +272,33 @@ class AudioManager {
     }
   }
 
+  Completer<void>? _currentCompleter;
+
   Future<void> playAssetAndWait(String path, {double localSpeed = 1.0}) async {
-    try {
-      await _player.stop();
-      if (kIsWeb) await _player.release();
-      await _player.setSource(AssetSource(path));
-      await _player.setVolume(Static.settings.globalVolume.clamp(0.0, 1.0));
-      final completer = Completer<void>();
-      StreamSubscription? sub;
-      sub = _player.onPlayerComplete.listen((_) {
-        if (!completer.isCompleted) completer.complete();
-        sub?.cancel();
-      });
-      await _player.resume();
-      await _player.setPlaybackRate(
-        (Static.settings.globalSpeed * localSpeed).clamp(0.5, 2.0),
-      );
-      await completer.future;
-    } catch (e) {
-      debugPrint("Error: $e");
-    }
+    await stop();
+
+    _currentCompleter = Completer<void>();
+    StreamSubscription? sub;
+
+    sub = _player.onPlayerComplete.listen((_) {
+      if (_currentCompleter != null && !_currentCompleter!.isCompleted) {
+        _currentCompleter!.complete();
+      }
+      sub?.cancel();
+    });
+
+    await _player.setSource(AssetSource(path));
+    await _player.resume();
+
+    await _currentCompleter?.future;
   }
 
-  Future<void> stop() async => await _player.stop();
+  Future<void> stop() async {
+    await _player.stop();
+    if (_currentCompleter != null && !_currentCompleter!.isCompleted) {
+      _currentCompleter!.complete();
+    }
+  }
 
   List<String> get allAudioNames => _audioBox.keys.cast<String>().toList();
 

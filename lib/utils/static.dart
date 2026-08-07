@@ -41,6 +41,9 @@ abstract class Static {
       await TTS.init();
 
       await _loadCustomRoutes();
+
+      await fetchAvailableCities();
+
       await requestLocationPermission();
     } catch (e, stack) {
       debugPrint("❌ 初始化階段崩潰!");
@@ -83,18 +86,31 @@ abstract class Static {
 
   static Future<void> fetchAvailableCities() async {
     try {
+      final cityBox = await Hive.openBox("city_data_box");
+      final localCities = cityBox.keys.map((e) => e.toString()).toList();
+
+      availableCities = {
+        'Custom',
+        ..._serverCitiesCache,
+        ...localCities,
+      }.toList();
+
+      settings.notifyListeners();
+
       final res = await dio.get("$API_BASE/simulator_cities");
       if (res.statusCode == 200) {
         _serverCitiesCache = List<String>.from(res.data);
-        final cityBox = await Hive.openBox("city_data_box");
+
         availableCities = {
           'Custom',
           ..._serverCitiesCache,
-          ...cityBox.keys.map((e) => e.toString()),
+          ...localCities,
         }.toList();
         settings.notifyListeners();
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint("無法更新城市列表: $e");
+    }
   }
 
   static Future<void> saveCityData(String city, dynamic data) async {

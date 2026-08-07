@@ -6,7 +6,7 @@ import 'package:latlong2/latlong.dart';
 import '../data/bus_route.dart';
 import '../data/status.dart';
 import '../utils/static.dart';
-import '../widgets/location_provider.dart';
+import 'location_provider.dart';
 
 class GpsControlProvider extends ChangeNotifier {
   Timer? _simTimer;
@@ -17,6 +17,7 @@ class GpsControlProvider extends ChangeNotifier {
   Direction _simDirection = Direction.go;
   int _currentPathIndex = 0;
   double _segmentProgress = 0.0;
+  final Distance _distanceUtil = const Distance();
 
   bool get isSimulating => _isSimulating;
 
@@ -55,7 +56,15 @@ class GpsControlProvider extends ChangeNotifier {
     if (stationIndex == 0) {
       _currentPathIndex = 0;
       _segmentProgress = 0.0;
-      locNotifier.updateManualLocation(points[0], _simSpeedKmh, force: true);
+      double initialHeading = points.length > 1
+          ? _distanceUtil.bearing(points[0], points[1])
+          : 0;
+      locNotifier.updateManualLocation(
+        points[0],
+        _simSpeedKmh,
+        heading: (initialHeading + 360) % 360,
+        force: true,
+      );
       return;
     }
 
@@ -63,7 +72,6 @@ class GpsControlProvider extends ChangeNotifier {
       stations[stationIndex - 1].lat,
       stations[stationIndex - 1].lon,
     );
-    final distanceUtil = const Distance();
     int bestSegmentIndex = 0;
     double minDistance = double.infinity;
     double bestT = 0.0;
@@ -79,7 +87,7 @@ class GpsControlProvider extends ChangeNotifier {
               (sPos.latitude - p1.latitude) * dy) /
           (dx * dx + dy * dy);
       t = t.clamp(0.0, 1.0);
-      final double dist = distanceUtil.as(
+      final double dist = _distanceUtil.as(
         LengthUnit.Meter,
         sPos,
         LatLng(
@@ -98,7 +106,7 @@ class GpsControlProvider extends ChangeNotifier {
     int currentIndex = bestSegmentIndex;
     double currentT = bestT;
     while (remainingOffset > 0 && currentIndex < points.length - 1) {
-      final d = distanceUtil.as(
+      final d = _distanceUtil.as(
         LengthUnit.Meter,
         points[currentIndex],
         points[currentIndex + 1],
@@ -118,6 +126,8 @@ class GpsControlProvider extends ChangeNotifier {
     _segmentProgress = currentT.clamp(0.0, 1.0);
     final pStart = points[_currentPathIndex];
     final pEnd = points[_currentPathIndex + 1];
+    final double bearing = _distanceUtil.bearing(pStart, pEnd);
+
     locNotifier.updateManualLocation(
       LatLng(
         pStart.latitude + (pEnd.latitude - pStart.latitude) * _segmentProgress,
@@ -125,6 +135,7 @@ class GpsControlProvider extends ChangeNotifier {
             (pEnd.longitude - pStart.longitude) * _segmentProgress,
       ),
       _simSpeedKmh,
+      heading: (bearing + 360) % 360,
       force: true,
     );
   }
@@ -147,7 +158,6 @@ class GpsControlProvider extends ChangeNotifier {
 
   void _startSimLoop(LocationChangeNotifier locNotifier) {
     _simTimer?.cancel();
-    final distanceUtil = const Distance();
     _simTimer = Timer.periodic(Duration(milliseconds: _updateIntervalMs), (
       timer,
     ) {
@@ -169,7 +179,7 @@ class GpsControlProvider extends ChangeNotifier {
         }
         final p1 = points[_currentPathIndex];
         final p2 = points[_currentPathIndex + 1];
-        final dist = distanceUtil.as(LengthUnit.Meter, p1, p2);
+        final dist = _distanceUtil.as(LengthUnit.Meter, p1, p2);
         if (dist <= 0) {
           _currentPathIndex++;
           continue;
@@ -185,14 +195,18 @@ class GpsControlProvider extends ChangeNotifier {
         }
       }
       final idx = _currentPathIndex.clamp(0, points.length - 2);
-      final lat =
-          points[idx].latitude +
-          (points[idx + 1].latitude - points[idx].latitude) * _segmentProgress;
+      final p1 = points[idx];
+      final p2 = points[idx + 1];
+      final lat = p1.latitude + (p2.latitude - p1.latitude) * _segmentProgress;
       final lon =
-          points[idx].longitude +
-          (points[idx + 1].longitude - points[idx].longitude) *
-              _segmentProgress;
-      locNotifier.updateManualLocation(LatLng(lat, lon), _simSpeedKmh);
+          p1.longitude + (p2.longitude - p1.longitude) * _segmentProgress;
+      final double bearing = _distanceUtil.bearing(p1, p2);
+
+      locNotifier.updateManualLocation(
+        LatLng(lat, lon),
+        _simSpeedKmh,
+        heading: (bearing + 360) % 360,
+      );
     });
   }
 

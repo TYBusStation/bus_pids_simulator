@@ -282,7 +282,7 @@ class _InfoPageState extends State<InfoPage>
           ),
           const Spacer(),
           _buildControlRow(
-            Icons.volume_up,
+            "音量",
             Static.settings.globalVolume,
             0.0,
             1.0,
@@ -291,7 +291,7 @@ class _InfoPageState extends State<InfoPage>
           ),
           const SizedBox(height: 4),
           _buildControlRow(
-            Icons.speed,
+            "速度",
             Static.settings.globalSpeed,
             0.5,
             2.0,
@@ -323,7 +323,7 @@ class _InfoPageState extends State<InfoPage>
   );
 
   Widget _buildControlRow(
-    IconData icon,
+    String text,
     double value,
     double min,
     double max,
@@ -331,7 +331,7 @@ class _InfoPageState extends State<InfoPage>
     TextEditingController ctrl,
   ) => Row(
     children: [
-      Icon(icon, size: 16),
+      Text(text),
       Expanded(
         child: SliderTheme(
           data: SliderTheme.of(context).copyWith(
