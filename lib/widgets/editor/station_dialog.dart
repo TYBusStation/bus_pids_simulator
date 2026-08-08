@@ -114,8 +114,13 @@ class _StationDialogState extends State<StationDialog> {
     _nameCtrl = TextEditingController(text: widget.existing?.name ?? "");
     _nameEnCtrl = TextEditingController(text: widget.existing?.nameEn ?? "");
 
-    int initialOrder =
-        widget.existing?.order ?? (widget.currentList.length + 1);
+    bool isExistInRoute =
+        widget.existing != null && widget.currentList.contains(widget.existing);
+
+    int initialOrder = isExistInRoute
+        ? widget.existing!.order
+        : (widget.currentList.length + 1);
+
     _orderCtrl = TextEditingController(text: initialOrder.toString());
 
     _nextTpl = List.from(widget.existing?.nextTemplate ?? ["下一站", "{name}"]);
