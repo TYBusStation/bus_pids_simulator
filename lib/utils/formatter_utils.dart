@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../data/bus_route.dart';
@@ -174,5 +175,14 @@ abstract class FormatterUtils {
         backgroundColor: color ?? Theme.of(context).colorScheme.primary,
       ),
     );
+  }
+
+  static Future<void> registerCustomFont(
+    String familyName,
+    Uint8List bytes,
+  ) async {
+    final fontLoader = FontLoader(familyName);
+    fontLoader.addFont(Future.value(ByteData.view(bytes.buffer)));
+    await fontLoader.load();
   }
 }

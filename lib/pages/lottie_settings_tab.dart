@@ -1,10 +1,12 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
-import '../utils/setting_utils.dart';
-import '../utils/static.dart';
+import '../../utils/setting_utils.dart';
+import '../../utils/static.dart';
 
 class LottieSettingsTab extends StatefulWidget {
   const LottieSettingsTab({super.key});
@@ -14,6 +16,53 @@ class LottieSettingsTab extends StatefulWidget {
 }
 
 class _LottieSettingsTabState extends State<LottieSettingsTab> {
+  FontWeight _resolveFontWeight(String style, String weight) {
+    final String s = (style + weight).toLowerCase().trim();
+    if (s.contains('900') || s.contains('black')) return FontWeight.w900;
+    if (s.contains('800') || (s.contains('extra') && s.contains('bold')))
+      return FontWeight.w800;
+    if (s.contains('700') || s.contains('bold')) return FontWeight.w700;
+    if (s.contains('600') || s.contains('semi')) return FontWeight.w600;
+    if (s.contains('500') || s.contains('medium')) return FontWeight.w500;
+    if (s.contains('400') || s.contains('regular')) return FontWeight.w400;
+    if (s.contains('300') || s.contains('light')) return FontWeight.w300;
+    if (s.contains('100') || s.contains('thin')) return FontWeight.w100;
+    return FontWeight.normal;
+  }
+
+  Future<void> _preCacheLottieFonts(Uint8List data) async {
+    try {
+      final json = jsonDecode(utf8.decode(data));
+      if (json['fonts'] == null || json['fonts']['list'] == null) return;
+      final googleMap = GoogleFonts.asMap();
+      for (var f in (json['fonts']['list'] as List)) {
+        final family = (f['fFamily']?.toString() ?? "").trim();
+        final style = (f['fStyle']?.toString() ?? "").trim();
+        final weight = (f['fWeight']?.toString() ?? "").trim();
+        final normalized = family
+            .toLowerCase()
+            .replaceAll(' ', '')
+            .replaceAll('-', '');
+        String? matchKey;
+        for (var key in googleMap.keys) {
+          if (key.toLowerCase().replaceAll(' ', '').replaceAll('-', '') ==
+              normalized) {
+            matchKey = key;
+            break;
+          }
+        }
+        if (matchKey != null) {
+          await GoogleFonts.pendingFonts([
+            GoogleFonts.getFont(
+              matchKey,
+              fontWeight: _resolveFontWeight(style, weight),
+            ),
+          ]);
+        }
+      }
+    } catch (_) {}
+  }
+
   Future<void> _handleUpload(String type) async {
     FilePickerResult? result = await FilePicker.pickFiles(
       type: FileType.custom,
@@ -21,25 +70,31 @@ class _LottieSettingsTabState extends State<LottieSettingsTab> {
       withData: true,
     );
     if (result != null && result.files.first.bytes != null) {
-      setState(() {
-        if (type == 'next')
-          Static.settings.lottieNext = result.files.first.bytes;
-        else if (type == 'arrival')
-          Static.settings.lottieArrival = result.files.first.bytes;
-        else if (type == 'slogan')
-          Static.settings.lottieSlogan = result.files.first.bytes;
-        else if (type == 'font') {
-          Static.settings.fontList.add(
-            FontItem(
-              id: 'custom_${DateTime.now().millisecondsSinceEpoch}',
-              name: result.files.first.name,
-              type: 'custom',
-              data: result.files.first.bytes,
-            ),
-          );
-        }
-      });
+      final bytes = result.files.first.bytes!;
+      final fileName = result.files.first.name;
+      if (type == 'font') {
+        final fontName = fileName.contains('.')
+            ? fileName.substring(0, fileName.lastIndexOf('.'))
+            : fileName;
+        await Static.registerFont(fontName, bytes);
+        setState(
+          () => Static.settings.fontList.add(
+            FontItem(id: fontName, name: fontName, type: 'custom', data: bytes),
+          ),
+        );
+      } else {
+        await _preCacheLottieFonts(bytes);
+        setState(() {
+          if (type == 'next')
+            Static.settings.lottieNext = bytes;
+          else if (type == 'arrival')
+            Static.settings.lottieArrival = bytes;
+          else if (type == 'slogan')
+            Static.settings.lottieSlogan = bytes;
+        });
+      }
       await Static.saveSettings();
+      await Static.loadAllFonts();
     }
   }
 

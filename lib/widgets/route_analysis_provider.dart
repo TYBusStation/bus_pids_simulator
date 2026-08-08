@@ -161,10 +161,8 @@ class RouteAnalysisProvider extends ChangeNotifier {
         ? status.route.stations.go
         : status.route.stations.back;
 
-    int idx = (_currentAnalysis?.nextStation != null)
-        ? stations.indexWhere(
-            (s) => s.order == _currentAnalysis!.nextStation!.order,
-          )
+    int idx = (_displayStation != null)
+        ? stations.indexWhere((s) => s.order == _displayStation!.order)
         : -1;
 
     Map<String, String> map = {
