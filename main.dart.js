@@ -69091,10 +69091,12 @@ m.d=new A.cO(new A.c4(p,B.aL,B.ah),o)
 p=q?l:r.c
 if(p==null)p=""
 m.e=new A.cO(new A.c4(p,B.aL,B.ah),o)
-n=q?l:r.a
-s=B.k.k(n==null?s.e.length+1:n)
-m.f=new A.cO(new A.c4(s,B.aL,B.ah),o)
-s=q?l:r.w
+n=!q&&B.c.p(s.e,r)
+s=m.a
+r=B.k.k(n?s.d.a:s.e.length+1)
+m.f=new A.cO(new A.c4(r,B.aL,B.ah),o)
+s=s.d
+s=s==null?l:s.w
 if(s==null)s=["\u4e0b\u4e00\u7ad9","{name}"]
 r=t.N
 m.r=A.cX(s,!0,r)
