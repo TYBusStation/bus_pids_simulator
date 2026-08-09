@@ -28,12 +28,14 @@ void main() async {
           RouteAnalysisProvider
         >(
           create: (_) => RouteAnalysisProvider(),
-          update: (_, loc, status, analysis) => analysis!
-            ..update(
+          update: (_, loc, status, analysis) {
+            final result = analysis ?? RouteAnalysisProvider();
+            return result..update(
               loc.currentLocation,
               loc.currentSpeed,
               status.currentStatus,
-            ),
+            );
+          },
         ),
         ChangeNotifierProvider(create: (_) => GpsControlProvider()),
       ],

@@ -96,8 +96,10 @@ abstract class Static {
       }.toList();
       settings.notifyListeners();
       final res = await dio.get("$API_BASE/simulator_cities");
-      if (res.statusCode == 200) {
-        _serverCitiesCache = List<String>.from(res.data);
+      if (res.statusCode == 200 && res.data != null) {
+        if (res.data is List) {
+          _serverCitiesCache = List<String>.from(res.data);
+        }
         availableCities = {
           'Custom',
           ..._serverCitiesCache,

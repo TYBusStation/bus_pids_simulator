@@ -19,13 +19,11 @@ class VersionCheckService {
       final response = await Static.dio.get<String>(_versionInfoUrl);
       if (response.statusCode == 200 && response.data != null) {
         final doc = loadYaml(response.data!);
-        final version = (doc['version'] as String)
-            .split('+')
-            .first;
+        final version = (doc['version'] as String).split('+').first;
         return {
           'version': version,
           'url':
-          'https://github.com/$_repoSlug/releases/download/v$version/app-release.apk',
+              'https://github.com/$_repoSlug/releases/download/v$version/app-release.apk',
         };
       }
     } catch (_) {}
@@ -55,15 +53,18 @@ class VersionCheckService {
     return false;
   }
 
-  Future<void> downloadAndInstall(String url,
-      void Function(double) onProgress,) async {
-    if (await Permission.requestInstallPackages
-        .request()
-        .isDenied) {
+  Future<void> downloadAndInstall(
+    String url,
+    void Function(double) onProgress,
+  ) async {
+    if (await Permission.requestInstallPackages.request().isDenied) {
       throw Exception('缺少安裝權限');
     }
     final dir = await getExternalStorageDirectory();
-    final path = '${dir!.path}/update.apk';
+    if (dir == null) {
+      throw Exception('無法存取外部儲存空間');
+    }
+    final path = '${dir.path}/update.apk';
     await Static.dio.download(
       url,
       path,
