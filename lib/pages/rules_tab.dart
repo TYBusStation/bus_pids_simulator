@@ -41,6 +41,11 @@ class _RulesTabState extends State<RulesTab> {
           Static.settings.nextStationDepartureDistance,
           (v) => Static.settings.nextStationDepartureDistance = v,
         ),
+        _dTile(
+          "語音片段間隔 (毫秒)",
+          Static.settings.voiceSegmentDelay,
+          (v) => Static.settings.voiceSegmentDelay = v,
+        ),
         const Divider(height: 32),
         SequenceManagerWidget<String>(
           title: "{name}",

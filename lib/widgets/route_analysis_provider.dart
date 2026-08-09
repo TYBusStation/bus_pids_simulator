@@ -161,13 +161,20 @@ class RouteAnalysisProvider extends ChangeNotifier {
         ? status.route.stations.go
         : status.route.stations.back;
 
-    int idx = (_displayStation != null)
-        ? stations.indexWhere((s) => s.order == _displayStation!.order)
+    BusStation? targetStation = _displayStation;
+    if (targetStation == null && stations.isNotEmpty) {
+      targetStation = stations.first;
+    }
+
+    int idx = (targetStation != null)
+        ? stations.indexWhere((s) => s.order == targetStation!.order)
         : -1;
 
     Map<String, String> map = {
-      'name': event.name,
-      'nameEn': event.nameEn,
+      'name': event.name.isEmpty ? (targetStation?.name ?? "") : event.name,
+      'nameEn': event.nameEn.isEmpty
+          ? (targetStation?.nameEn ?? "")
+          : event.nameEn,
       'terminal': event.isTerminal ? "終點站" : "",
       'route_name': status.route.name,
       'route_desc': status.route.description,
@@ -292,7 +299,7 @@ class RouteAnalysisProvider extends ChangeNotifier {
     final int thisId = _activeSequenceId;
     await Static.TTS.stop();
     await Static.audioManager.stop();
-    await Future.delayed(const Duration(milliseconds: 100));
+    await Future.delayed(const Duration(milliseconds: 30));
     for (var part in sequence) {
       if (thisId != _activeSequenceId ||
           _isOffDutyAlert ||
@@ -313,7 +320,9 @@ class RouteAnalysisProvider extends ChangeNotifier {
           volume: Static.settings.globalVolume,
           locale: part['locale'] as String,
         );
-      await Future.delayed(const Duration(milliseconds: 150));
+      await Future.delayed(
+        Duration(milliseconds: Static.settings.voiceSegmentDelay.round()),
+      );
     }
   }
 
@@ -350,46 +359,53 @@ class RouteAnalysisProvider extends ChangeNotifier {
     List<BusStation> stations,
   ) {
     if (_isOffDutyAlert || _lastDutyStatus != DutyStatus.onDuty) return;
-    final next = result.nextStation;
+
+    BusStation? next = result.nextStation;
+    if ((next == null || result.isOffRoute) && stations.isNotEmpty) {
+      next = stations.first;
+    }
+    if (next == null) return;
+
     final int terminalOrder = stations.isNotEmpty ? stations.last.order : -1;
-    if (next != null) {
-      final double distNext = result.distToNextStation ?? 1000000,
-          distPrev = result.distToPrevStation ?? 0;
-      if (!result.isOffRoute &&
-              distPrev > 5 &&
-              (distPrev > Static.settings.nextStationDepartureDistance ||
-                  (Static.settings.nextStationDistance >= 0 &&
-                      distNext < Static.settings.nextStationDistance)) ||
-          _lastSpokenStationOrder == null)
-        _triggerNextStationBroadcast(next, terminalOrder, status);
-      if (Static.settings.arrivalDistance >= 0 &&
-          !result.isOffRoute &&
-          distNext < Static.settings.arrivalDistance &&
-          _lastArrivedStationOrder != next.order) {
-        _lastArrivedStationOrder = next.order;
-        _displayStation = next;
-        _currentLedEvent = LedEvent(
-          type: LedBroadcastType.arrival,
-          name: next.name,
-          nameEn: next.nameEn,
-          isTerminal: next.order == terminalOrder,
-        );
-        notifyListeners();
-        if (Static.settings.enableArrivalBroadcast) {
-          final template =
-              (next.useGlobalArrival || next.arrivalTemplate == null)
-              ? Static.settings.arrivalTemplate
-              : next.arrivalTemplate!;
-          if (template.isNotEmpty)
-            _executeVoice(
-              _buildSeq(
-                template,
-                next.name,
-                next.nameEn,
-                next.order == terminalOrder,
-              ),
-            );
-        }
+    final double distNext = result.distToNextStation ?? 1000000;
+    final double distPrev = result.distToPrevStation ?? 0;
+
+    if ((!result.isOffRoute &&
+            (distPrev > 5 &&
+                (distPrev > Static.settings.nextStationDepartureDistance ||
+                    (Static.settings.nextStationDistance >= 0 &&
+                        distNext < Static.settings.nextStationDistance)))) ||
+        _lastSpokenStationOrder == null) {
+      _triggerNextStationBroadcast(next, terminalOrder, status);
+    }
+
+    if (!result.isOffRoute &&
+        result.distToNextStation != null &&
+        Static.settings.arrivalDistance >= 0 &&
+        distNext < Static.settings.arrivalDistance &&
+        _lastArrivedStationOrder != next.order) {
+      _lastArrivedStationOrder = next.order;
+      _displayStation = next;
+      _currentLedEvent = LedEvent(
+        type: LedBroadcastType.arrival,
+        name: next.name,
+        nameEn: next.nameEn,
+        isTerminal: next.order == terminalOrder,
+      );
+      notifyListeners();
+      if (Static.settings.enableArrivalBroadcast) {
+        final template = (next.useGlobalArrival || next.arrivalTemplate == null)
+            ? Static.settings.arrivalTemplate
+            : next.arrivalTemplate!;
+        if (template.isNotEmpty)
+          _executeVoice(
+            _buildSeq(
+              template,
+              next.name,
+              next.nameEn,
+              next.order == terminalOrder,
+            ),
+          );
       }
     }
   }

@@ -42,7 +42,8 @@ class SettingsService extends ChangeNotifier {
       globalSpeed = 1.0,
       arrivalDistance = 100.0,
       nextStationDistance = 250.0,
-      nextStationDepartureDistance = 50.0;
+      nextStationDepartureDistance = 50.0,
+      voiceSegmentDelay = 150.0;
   bool enableArrivalBroadcast = true, showStationListSlogan = false;
   List<String> stationVoiceSequence = [
         "{name_zh}",
@@ -127,6 +128,7 @@ class SettingsService extends ChangeNotifier {
     nextStationDepartureDistance =
         _box.get('nextStationDepartureDistance') ??
         nextStationDepartureDistance;
+    voiceSegmentDelay = _box.get('voiceSegmentDelay') ?? voiceSegmentDelay;
     enableArrivalBroadcast =
         _box.get('enableArrivalBroadcast') ?? enableArrivalBroadcast;
     showStationListSlogan =
@@ -214,6 +216,7 @@ class SettingsService extends ChangeNotifier {
       'nextStationDepartureDistance',
       nextStationDepartureDistance,
     );
+    await _box.put('voiceSegmentDelay', voiceSegmentDelay);
     await _box.put('enableArrivalBroadcast', enableArrivalBroadcast);
     await _box.put('stationVoiceSequence', stationVoiceSequence);
     await _box.put('arrivalTemplate', arrivalTemplate);
