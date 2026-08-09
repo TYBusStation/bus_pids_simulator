@@ -70,17 +70,19 @@ class RouteAnalysisProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void update(
-    LatLng? location,
-    double speed,
-    Status status, {
-    double accuracy = 0,
-    double? heading,
-  }) {
+  void update(LatLng? location,
+      double speed,
+      Status status, {
+        double accuracy = 0,
+        double? heading,
+      }) {
     if (accuracy > 50) return;
     final now = DateTime.now();
     _speedHistory.add(MapEntry(now, speed));
-    _speedHistory.removeWhere((e) => now.difference(e.key).inMinutes > 3);
+    _speedHistory.removeWhere((e) =>
+    now
+        .difference(e.key)
+        .inMinutes > 3);
 
     if (status.dutyStatus == DutyStatus.offDuty && speed >= 10) {
       if (!_isOffDutyAlert) {
@@ -121,13 +123,13 @@ class RouteAnalysisProvider extends ChangeNotifier {
         : status.route.path.backPoints;
 
     _currentAnalysis =
-        (location != null && points.isNotEmpty && stations.isNotEmpty)
+    (location != null && points.isNotEmpty && stations.isNotEmpty)
         ? RouteEngine.analyze(
-            currentPos: location,
-            routePoints: points,
-            stations: stations,
-            heading: heading,
-          )
+      currentPos: location,
+      routePoints: points,
+      stations: stations,
+      heading: heading,
+    )
         : null;
 
     if (_currentAnalysis != null) {
@@ -139,8 +141,11 @@ class RouteAnalysisProvider extends ChangeNotifier {
 
   double getEffectiveSpeedMs() {
     if (_speedHistory.isEmpty) return 20.0 / 3.6;
-    List<double> speeds = _speedHistory.map((e) => e.value).toList()..sort();
-    int n = speeds.length, skip = (n * 0.125).floor(), take = n - (2 * skip);
+    List<double> speeds = _speedHistory.map((e) => e.value).toList()
+      ..sort();
+    int n = speeds.length,
+        skip = (n * 0.125).floor(),
+        take = n - (2 * skip);
     double avgKmh;
     if (take <= 0) {
       avgKmh = speeds.reduce((a, b) => a + b) / n;
@@ -218,10 +223,10 @@ class RouteAnalysisProvider extends ChangeNotifier {
           double posCurrent =
               _currentAnalysis!.stationPositions[stations[targetIdx - 1]
                   .order] ??
-              0;
+                  0;
           double posNext =
               _currentAnalysis!.stationPositions[stations[targetIdx].order] ??
-              0;
+                  0;
           double segmentDist = (posNext - posCurrent).abs() * 1000;
           cumulativeSeconds += (segmentDist / avgSpeedMs) + 50;
           DateTime est = now.add(Duration(seconds: cumulativeSeconds.round()));
@@ -303,6 +308,7 @@ class RouteAnalysisProvider extends ChangeNotifier {
     final int thisId = _activeSequenceId;
     await Static.TTS.stop();
     await Static.audioManager.stop();
+    await Future.delayed(const Duration(milliseconds: 50));
     for (var part in sequence) {
       if (thisId != _activeSequenceId ||
           _isOffDutyAlert ||
@@ -329,11 +335,9 @@ class RouteAnalysisProvider extends ChangeNotifier {
     }
   }
 
-  void _triggerNextStationBroadcast(
-    BusStation station,
-    int terminalOrder,
-    Status status,
-  ) {
+  void _triggerNextStationBroadcast(BusStation station,
+      int terminalOrder,
+      Status status,) {
     if (_lastDutyStatus != DutyStatus.onDuty ||
         _lastSpokenStationOrder == station.order)
       return;
@@ -356,11 +360,9 @@ class RouteAnalysisProvider extends ChangeNotifier {
       );
   }
 
-  void _handleLogic(
-    RouteAnalysisResult result,
-    Status status,
-    List<BusStation> stations,
-  ) {
+  void _handleLogic(RouteAnalysisResult result,
+      Status status,
+      List<BusStation> stations,) {
     if (_isOffDutyAlert || _lastDutyStatus != DutyStatus.onDuty) return;
 
     BusStation? next = result.nextStation;
@@ -374,10 +376,10 @@ class RouteAnalysisProvider extends ChangeNotifier {
     final double distPrev = result.distToPrevStation ?? 0;
 
     if ((!result.isOffRoute &&
-            (distPrev > 5 &&
-                (distPrev > Static.settings.nextStationDepartureDistance ||
-                    (Static.settings.nextStationDistance >= 0 &&
-                        distNext < Static.settings.nextStationDistance)))) ||
+        (distPrev > 5 &&
+            (distPrev > Static.settings.nextStationDepartureDistance ||
+                (Static.settings.nextStationDistance >= 0 &&
+                    distNext < Static.settings.nextStationDistance)))) ||
         _lastSpokenStationOrder == null) {
       _triggerNextStationBroadcast(next, terminalOrder, status);
     }
@@ -413,12 +415,10 @@ class RouteAnalysisProvider extends ChangeNotifier {
     }
   }
 
-  List<Map<String, dynamic>> _buildSeq(
-    List<String> template,
-    String name,
-    String nameEn,
-    bool isTerminal,
-  ) {
+  List<Map<String, dynamic>> _buildSeq(List<String> template,
+      String name,
+      String nameEn,
+      bool isTerminal,) {
     bool hasFullAudio = Static.audioManager.hasAudio(name);
     List<String> expanded = [];
     for (var item in template) {
@@ -432,47 +432,53 @@ class RouteAnalysisProvider extends ChangeNotifier {
     }
     return expanded
         .map<Map<String, dynamic>>((item) {
-          String ak = "", tx = "", lo = "zh-TW";
-          if (item == "{name_full}") {
-            ak = name;
-            tx = name;
-          } else if (item == "{name_zh}") {
-            ak = "${name}_國";
-            tx = name;
-          } else if (item == "{name_en}") {
-            ak = "${name}_英";
-            tx = nameEn;
-            lo = "en-US";
-          } else if (item == "{name_ho}") {
-            ak = "${name}_閩";
-            tx = "";
-          } else if (item == "{name_hk}") {
-            ak = "${name}_客";
-            tx = "";
-          } else {
-            tx = item
-                .replaceAll('{terminal}', isTerminal ? "終點站" : "")
-                .replaceAll('{name_zh}', name)
-                .replaceAll('{name_ho}', "")
-                .replaceAll('{name_hk}', "")
-                .replaceAll('{name_en}', nameEn)
-                .replaceAll('{name}', name);
-            ak = tx;
-          }
-          return {
-            'text': tx,
-            'audioKey': ak,
-            'locale': lo,
-            'speed': (tx == "到了" || tx == "終點站") ? 0.9 : 1.0,
-          };
-        })
+      String ak = "",
+          tx = "",
+          lo = "zh-TW";
+      if (item == "{name_full}") {
+        ak = name;
+        tx = name;
+      } else if (item == "{name_zh}") {
+        ak = "${name}_國";
+        tx = name;
+      } else if (item == "{name_en}") {
+        ak = "${name}_英";
+        tx = nameEn;
+        lo = "en-US";
+      } else if (item == "{name_ho}") {
+        ak = "${name}_閩";
+        tx = "";
+      } else if (item == "{name_hk}") {
+        ak = "${name}_客";
+        tx = "";
+      } else {
+        tx = item
+            .replaceAll('{terminal}', isTerminal ? "終點站" : "")
+            .replaceAll('{name_zh}', name)
+            .replaceAll('{name_ho}', "")
+            .replaceAll('{name_hk}', "")
+            .replaceAll('{name_en}', nameEn)
+            .replaceAll('{name}', name);
+        ak = tx;
+      }
+      return {
+        'text': tx,
+        'audioKey': ak,
+        'locale': lo,
+        'speed': (tx == "到了" || tx == "終點站") ? 0.9 : 1.0,
+      };
+    })
         .where((m) {
-          final String ak = m['audioKey'] as String;
-          if (ak.endsWith("_閩") || ak.endsWith("_客"))
-            return Static.audioManager.hasAudio(ak);
-          return ak.trim().isNotEmpty ||
-              (m['text'] as String).trim().isNotEmpty;
-        })
+      final String ak = m['audioKey'] as String;
+      if (ak.endsWith("_閩") || ak.endsWith("_客"))
+        return Static.audioManager.hasAudio(ak);
+      return ak
+          .trim()
+          .isNotEmpty ||
+          (m['text'] as String)
+              .trim()
+              .isNotEmpty;
+    })
         .toList();
   }
 
