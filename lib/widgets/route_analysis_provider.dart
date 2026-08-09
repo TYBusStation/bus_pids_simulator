@@ -110,6 +110,10 @@ class RouteAnalysisProvider extends ChangeNotifier {
       _lastDutyStatus = DutyStatus.onDuty;
       _lastSpokenStationOrder = null;
       _lastArrivedStationOrder = null;
+
+      Static.audioManager.preloadRouteStations(
+        stations.map((s) => s.name).toList(),
+      );
     }
 
     final points = status.direction == Direction.go
@@ -299,7 +303,6 @@ class RouteAnalysisProvider extends ChangeNotifier {
     final int thisId = _activeSequenceId;
     await Static.TTS.stop();
     await Static.audioManager.stop();
-    await Future.delayed(const Duration(milliseconds: 30));
     for (var part in sequence) {
       if (thisId != _activeSequenceId ||
           _isOffDutyAlert ||

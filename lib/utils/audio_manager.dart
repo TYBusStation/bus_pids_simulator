@@ -42,12 +42,76 @@ class AudioManager {
   final Random _random = Random();
   final List<VoicePack> voicePacks = [];
 
+  final Map<String, Uint8List> _memoryCache = {};
+  final Set<String> _currentRouteKeys = {};
+
   Future<void> init() async {
     await Hive.initFlutter();
     _audioBox = await Hive.openLazyBox<Uint8List>(_boxName);
     _packMetaBox = await Hive.openBox(_packMetaBoxName);
     _packDataBox = await Hive.openLazyBox<Uint8List>(_packDataBoxName);
     await _loadStoredPacks();
+    await preloadCommonAudios();
+  }
+
+  Future<void> preloadCommonAudios() async {
+    final List<String> templates = [];
+    templates.addAll(Static.settings.arrivalTemplate);
+    templates.addAll(Static.settings.nextStationTemplate);
+    templates.addAll(Static.settings.stationVoiceSequence);
+    templates.addAll(Static.settings.nextStationListSequence);
+    templates.addAll(Static.settings.nextStationSubSequence);
+
+    for (var item in templates) {
+      if (!item.contains("{") && !item.contains("}")) {
+        await _ensureInCache(item);
+      }
+    }
+  }
+
+  Future<void> preloadRouteStations(List<String> names) async {
+    for (var key in _currentRouteKeys) {
+      _memoryCache.remove(key);
+    }
+    _currentRouteKeys.clear();
+
+    for (var name in names) {
+      final variants = [
+        name,
+        "${name}_國",
+        "${name}_英",
+        "${name}_閩",
+        "${name}_客",
+      ];
+      for (var v in variants) {
+        if (await _ensureInCache(v)) {
+          _currentRouteKeys.add(v);
+        }
+      }
+    }
+  }
+
+  Future<bool> _ensureInCache(String key) async {
+    if (_memoryCache.containsKey(key)) return true;
+    final bytes = await _findBytesInStorage(key);
+    if (bytes != null) {
+      _memoryCache[key] = bytes;
+      return true;
+    }
+    return false;
+  }
+
+  Future<Uint8List?> _findBytesInStorage(String baseName) async {
+    if (_audioBox.containsKey(baseName)) {
+      return await _audioBox.get(baseName);
+    }
+    for (var pack in voicePacks) {
+      if (!pack.isEnabled) continue;
+      if (pack.fileNames.contains(baseName)) {
+        return await _packDataBox.get("${pack.name}:$baseName");
+      }
+    }
+    return null;
   }
 
   Map? _getSafeMeta(String name) {
@@ -67,7 +131,6 @@ class AudioManager {
   Future<void> _loadStoredPacks() async {
     voicePacks.clear();
     final List<VoicePack> loaded = [];
-
     for (var key in _packMetaBox.keys) {
       final data = _getSafeMeta(key.toString());
       if (data != null) {
@@ -188,6 +251,14 @@ class AudioManager {
   }
 
   Future<Uint8List?> _getRandomBytes(String baseName) async {
+    List<String> cacheMatches = _memoryCache.keys
+        .where((key) => key == baseName || key.startsWith("${baseName}_["))
+        .toList();
+
+    if (cacheMatches.isNotEmpty) {
+      return _memoryCache[cacheMatches[_random.nextInt(cacheMatches.length)]];
+    }
+
     List<String> audioBoxKeys = _audioBox.keys.cast<String>().toList();
     List<String> audioBoxMatches = audioBoxKeys
         .where((key) => key == baseName || key.startsWith("${baseName}_["))
@@ -196,30 +267,38 @@ class AudioManager {
     if (audioBoxMatches.isNotEmpty) {
       final selectedKey =
           audioBoxMatches[_random.nextInt(audioBoxMatches.length)];
-      return await _audioBox.get(selectedKey);
+      final b = await _audioBox.get(selectedKey);
+      if (b != null) {
+        _memoryCache[selectedKey] = b;
+        return b;
+      }
     }
 
     for (var pack in voicePacks) {
       if (!pack.isEnabled) continue;
-
       List<String> packMatches = pack.fileNames
           .where((fn) => fn == baseName || fn.startsWith("${baseName}_["))
           .toList();
-
       if (packMatches.isNotEmpty) {
         final selectedFileName =
             packMatches[_random.nextInt(packMatches.length)];
-        return await _packDataBox.get("${pack.name}:$selectedFileName");
+        final cacheKey = "${pack.name}:$selectedFileName";
+        final b = await _packDataBox.get(cacheKey);
+        if (b != null) {
+          _memoryCache[cacheKey] = b;
+          return b;
+        }
       }
     }
     return null;
   }
 
   bool hasAudio(String name) {
+    if (_memoryCache.containsKey(name)) return true;
+    if (_memoryCache.keys.any((k) => k.startsWith("${name}_["))) return true;
     if (_audioBox.containsKey(name)) return true;
     if (_audioBox.keys.any((k) => k.toString().startsWith("${name}_[")))
       return true;
-
     for (var pack in voicePacks) {
       if (pack.isEnabled &&
           pack.fileNames.any((k) => k == name || k.startsWith("${name}_["))) {
@@ -276,20 +355,16 @@ class AudioManager {
 
   Future<void> playAssetAndWait(String path, {double localSpeed = 1.0}) async {
     await stop();
-
     _currentCompleter = Completer<void>();
     StreamSubscription? sub;
-
     sub = _player.onPlayerComplete.listen((_) {
       if (_currentCompleter != null && !_currentCompleter!.isCompleted) {
         _currentCompleter!.complete();
       }
       sub?.cancel();
     });
-
     await _player.setSource(AssetSource(path));
     await _player.resume();
-
     await _currentCompleter?.future;
   }
 
@@ -304,7 +379,9 @@ class AudioManager {
 
   Future<bool> saveAudio(String n, Uint8List b) async {
     try {
-      await _audioBox.put(_stripExtension(n), b);
+      final stripped = _stripExtension(n);
+      await _audioBox.put(stripped, b);
+      _memoryCache[stripped] = b;
       return true;
     } catch (e) {
       return false;
@@ -329,10 +406,15 @@ class AudioManager {
     if (b != null) {
       await _audioBox.put(n, b);
       await _audioBox.delete(o);
+      _memoryCache.remove(o);
+      _memoryCache[n] = b;
     }
   }
 
-  Future<void> deleteAudio(String n) async => await _audioBox.delete(n);
+  Future<void> deleteAudio(String n) async {
+    await _audioBox.delete(n);
+    _memoryCache.remove(n);
+  }
 
   Future<void> exportSingle(String n) async {
     final b = await _audioBox.get(n);
