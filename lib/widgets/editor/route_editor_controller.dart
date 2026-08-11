@@ -24,6 +24,9 @@ class SourceStationGroup {
     required this.routeNames,
   });
 
+  String get fullId =>
+      "${source}_${station.name}_${station.nameEn}_${station.lat.toStringAsFixed(6)}_${station.lon.toStringAsFixed(6)}";
+
   String get locationKey =>
       "${station.lat.toStringAsFixed(6)}_${station.lon.toStringAsFixed(6)}";
 }
@@ -112,8 +115,10 @@ class RouteEditorController extends ChangeNotifier {
 
   void loadSourceStations({bool initial = false}) {
     final Map<String, SourceStationGroup> groupMap = {};
+
     for (var src in selectedSources) {
       if (src == 'Custom') continue;
+
       if (Static.routeData[src] == null || Static.routeData[src]!.isEmpty) {
         final cache = Static.getCityCache(src);
         if (cache != null) {
@@ -126,29 +131,38 @@ class RouteEditorController extends ChangeNotifier {
               .toList();
         }
       }
+
       final routes = Static.routeData[src];
       if (routes == null) continue;
+
       for (var r in routes) {
         for (var s in [...r.stations.go, ...r.stations.back]) {
           final key =
-              "${src}_${s.lat.toStringAsFixed(6)}_${s.lon.toStringAsFixed(6)}";
+              "${src}_${s.name}_${s.nameEn}_${s.lat.toStringAsFixed(6)}_${s.lon.toStringAsFixed(6)}";
+
           if (!groupMap.containsKey(key)) {
             groupMap[key] = SourceStationGroup(
               station: s,
               source: src,
               routeNames: [r.name],
             );
-          } else if (!groupMap[key]!.routeNames.contains(r.name)) {
-            groupMap[key]!.routeNames.add(r.name);
+          } else {
+            if (!groupMap[key]!.routeNames.contains(r.name)) {
+              groupMap[key]!.routeNames.add(r.name);
+            }
           }
         }
       }
     }
-    for (var group in groupMap.values) {
+
+    allSourceGroups = groupMap.values.toList();
+    for (var group in allSourceGroups) {
       group.routeNames.sort((a, b) => FormatterUtils.compareRoutes(a, b));
     }
-    allSourceGroups = groupMap.values.toList();
-    if (!initial) filterNearbyStations(mapController.camera.center);
+
+    if (!initial) {
+      filterNearbyStations(mapController.camera.center);
+    }
     notifyListeners();
   }
 
