@@ -70,40 +70,38 @@ class RouteAnalysisProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void update(LatLng? location,
-      double speed,
-      Status status, {
-        double accuracy = 0,
-        double? heading,
-      }) {
+  void update(
+    LatLng? location,
+    double speed,
+    Status status, {
+    double accuracy = 0,
+    double? heading,
+  }) {
     if (accuracy > 50) return;
     final now = DateTime.now();
     _speedHistory.add(MapEntry(now, speed));
-    _speedHistory.removeWhere((e) =>
-    now
-        .difference(e.key)
-        .inMinutes > 3);
+    _speedHistory.removeWhere((e) => now.difference(e.key).inMinutes > 3);
 
-    if (status.dutyStatus == DutyStatus.offDuty && speed >= 10) {
-      if (!_isOffDutyAlert) {
+    // 1. OffDuty 處理 (保持您的邏輯)
+    if (status.dutyStatus == DutyStatus.offDuty) {
+      if (speed >= 10 && !_isOffDutyAlert) {
         _isOffDutyAlert = true;
         Static.TTS.speak(" ");
         _startOffDutyLoop();
         notifyListeners();
+      } else if (speed < 10 && _isOffDutyAlert) {
+        _isOffDutyAlert = false;
+        Static.audioManager.stop();
+        notifyListeners();
       }
-    } else if (_isOffDutyAlert) {
-      _isOffDutyAlert = false;
-      Static.audioManager.stop();
-      notifyListeners();
-    }
 
-    if (status.dutyStatus != DutyStatus.onDuty) {
       if (_lastDutyStatus == DutyStatus.onDuty) resetAnalysis();
       _currentAnalysis = null;
       _lastDutyStatus = DutyStatus.offDuty;
       return;
     }
 
+    // 2. OnDuty 初始化
     final stations = status.direction == Direction.go
         ? status.route.stations.go
         : status.route.stations.back;
@@ -112,7 +110,6 @@ class RouteAnalysisProvider extends ChangeNotifier {
       _lastDutyStatus = DutyStatus.onDuty;
       _lastSpokenStationOrder = null;
       _lastArrivedStationOrder = null;
-
       Static.audioManager.preloadRouteStations(
         stations.map((s) => s.name).toList(),
       );
@@ -122,30 +119,30 @@ class RouteAnalysisProvider extends ChangeNotifier {
         ? status.route.path.goPoints
         : status.route.path.backPoints;
 
-    _currentAnalysis =
-    (location != null && points.isNotEmpty && stations.isNotEmpty)
-        ? RouteEngine.analyze(
-      currentPos: location,
-      routePoints: points,
-      stations: stations,
-      heading: heading,
-    )
-        : null;
+    if (location == null || stations.isEmpty || points.isEmpty) {
+      _currentAnalysis = null;
+    } else {
+      _currentAnalysis = RouteEngine.analyze(
+        currentPos: location,
+        routePoints: points,
+        stations: stations,
+        heading: heading,
+      );
+    }
+
+    _handleLogic(_currentAnalysis, status, stations);
 
     if (_currentAnalysis != null) {
-      _handleLogic(_currentAnalysis!, status, stations);
       _checkSpeeding(_currentAnalysis!, speed);
     }
+
     notifyListeners();
   }
 
   double getEffectiveSpeedMs() {
     if (_speedHistory.isEmpty) return 20.0 / 3.6;
-    List<double> speeds = _speedHistory.map((e) => e.value).toList()
-      ..sort();
-    int n = speeds.length,
-        skip = (n * 0.125).floor(),
-        take = n - (2 * skip);
+    List<double> speeds = _speedHistory.map((e) => e.value).toList()..sort();
+    int n = speeds.length, skip = (n * 0.125).floor(), take = n - (2 * skip);
     double avgKmh;
     if (take <= 0) {
       avgKmh = speeds.reduce((a, b) => a + b) / n;
@@ -223,10 +220,10 @@ class RouteAnalysisProvider extends ChangeNotifier {
           double posCurrent =
               _currentAnalysis!.stationPositions[stations[targetIdx - 1]
                   .order] ??
-                  0;
+              0;
           double posNext =
               _currentAnalysis!.stationPositions[stations[targetIdx].order] ??
-                  0;
+              0;
           double segmentDist = (posNext - posCurrent).abs() * 1000;
           cumulativeSeconds += (segmentDist / avgSpeedMs) + 50;
           DateTime est = now.add(Duration(seconds: cumulativeSeconds.round()));
@@ -335,9 +332,11 @@ class RouteAnalysisProvider extends ChangeNotifier {
     }
   }
 
-  void _triggerNextStationBroadcast(BusStation station,
-      int terminalOrder,
-      Status status,) {
+  void _triggerNextStationBroadcast(
+    BusStation station,
+    int terminalOrder,
+    Status status,
+  ) {
     if (_lastDutyStatus != DutyStatus.onDuty ||
         _lastSpokenStationOrder == station.order)
       return;
@@ -360,65 +359,82 @@ class RouteAnalysisProvider extends ChangeNotifier {
       );
   }
 
-  void _handleLogic(RouteAnalysisResult result,
-      Status status,
-      List<BusStation> stations,) {
+  void _handleLogic(
+    RouteAnalysisResult? result,
+    Status status,
+    List<BusStation> stations,
+  ) {
     if (_isOffDutyAlert || _lastDutyStatus != DutyStatus.onDuty) return;
 
-    BusStation? next = result.nextStation;
-    if ((next == null || result.isOffRoute) && stations.isNotEmpty) {
-      next = stations.first;
+    BusStation? next;
+    bool isOffRoute = result?.isOffRoute ?? true;
+
+    if (result == null || isOffRoute) {
+      next = stations.isNotEmpty ? stations.first : BusStation(order: 0);
+    } else {
+      next = result.nextStation;
     }
+
     if (next == null) return;
 
     final int terminalOrder = stations.isNotEmpty ? stations.last.order : -1;
-    final double distNext = result.distToNextStation ?? 1000000;
-    final double distPrev = result.distToPrevStation ?? 0;
 
-    if ((!result.isOffRoute &&
-        (distPrev > 5 &&
-            (distPrev > Static.settings.nextStationDepartureDistance ||
-                (Static.settings.nextStationDistance >= 0 &&
-                    distNext < Static.settings.nextStationDistance)))) ||
-        _lastSpokenStationOrder == null) {
+    bool shouldSpeakNext = false;
+    if (_lastSpokenStationOrder == null) {
+      shouldSpeakNext = true;
+    } else if (result != null && !isOffRoute) {
+      final double distNext = result.distToNextStation ?? 1000000;
+      final double distPrev = result.distToPrevStation ?? 0;
+      if (distPrev > 5 &&
+          (distPrev > Static.settings.nextStationDepartureDistance ||
+              (Static.settings.nextStationDistance >= 0 &&
+                  distNext < Static.settings.nextStationDistance))) {
+        shouldSpeakNext = true;
+      }
+    }
+
+    if (shouldSpeakNext) {
       _triggerNextStationBroadcast(next, terminalOrder, status);
     }
 
-    if (!result.isOffRoute &&
-        result.distToNextStation != null &&
-        Static.settings.arrivalDistance >= 0 &&
-        distNext < Static.settings.arrivalDistance &&
-        _lastArrivedStationOrder != next.order) {
-      _lastArrivedStationOrder = next.order;
-      _displayStation = next;
-      _currentLedEvent = LedEvent(
-        type: LedBroadcastType.arrival,
-        name: next.name,
-        nameEn: next.nameEn,
-        isTerminal: next.order == terminalOrder,
-      );
-      notifyListeners();
-      if (Static.settings.enableArrivalBroadcast) {
-        final template = (next.useGlobalArrival || next.arrivalTemplate == null)
-            ? Static.settings.arrivalTemplate
-            : next.arrivalTemplate!;
-        if (template.isNotEmpty)
-          _executeVoice(
-            _buildSeq(
-              template,
-              next.name,
-              next.nameEn,
-              next.order == terminalOrder,
-            ),
-          );
+    if (result != null && !isOffRoute) {
+      final double distNext = result.distToNextStation ?? 1000000;
+      if (Static.settings.arrivalDistance >= 0 &&
+          distNext < Static.settings.arrivalDistance &&
+          _lastArrivedStationOrder != next.order) {
+        _lastArrivedStationOrder = next.order;
+        _displayStation = next;
+        _currentLedEvent = LedEvent(
+          type: LedBroadcastType.arrival,
+          name: next.name,
+          nameEn: next.nameEn,
+          isTerminal: next.order == terminalOrder,
+        );
+        if (Static.settings.enableArrivalBroadcast) {
+          final template =
+              (next.useGlobalArrival || next.arrivalTemplate == null)
+              ? Static.settings.arrivalTemplate
+              : next.arrivalTemplate!;
+          if (template.isNotEmpty)
+            _executeVoice(
+              _buildSeq(
+                template,
+                next.name,
+                next.nameEn,
+                next.order == terminalOrder,
+              ),
+            );
+        }
       }
     }
   }
 
-  List<Map<String, dynamic>> _buildSeq(List<String> template,
-      String name,
-      String nameEn,
-      bool isTerminal,) {
+  List<Map<String, dynamic>> _buildSeq(
+    List<String> template,
+    String name,
+    String nameEn,
+    bool isTerminal,
+  ) {
     bool hasFullAudio = Static.audioManager.hasAudio(name);
     List<String> expanded = [];
     for (var item in template) {
@@ -432,53 +448,51 @@ class RouteAnalysisProvider extends ChangeNotifier {
     }
     return expanded
         .map<Map<String, dynamic>>((item) {
-      String ak = "",
-          tx = "",
-          lo = "zh-TW";
-      if (item == "{name_full}") {
-        ak = name;
-        tx = name;
-      } else if (item == "{name_zh}") {
-        ak = "${name}_國";
-        tx = name;
-      } else if (item == "{name_en}") {
-        ak = "${name}_英";
-        tx = nameEn;
-        lo = "en-US";
-      } else if (item == "{name_ho}") {
-        ak = "${name}_閩";
-        tx = "";
-      } else if (item == "{name_hk}") {
-        ak = "${name}_客";
-        tx = "";
-      } else {
-        tx = item
-            .replaceAll('{terminal}', isTerminal ? "終點站" : "")
-            .replaceAll('{name_zh}', name)
-            .replaceAll('{name_ho}', "")
-            .replaceAll('{name_hk}', "")
-            .replaceAll('{name_en}', nameEn)
-            .replaceAll('{name}', name);
-        ak = tx;
-      }
-      return {
-        'text': tx,
-        'audioKey': ak,
-        'locale': lo,
-        'speed': (tx == "到了" || tx == "終點站") ? 0.9 : 1.0,
-      };
-    })
+          String ak = "", tx = "", lo = "zh-TW";
+          if (item == "{name_full}") {
+            ak = name;
+            tx = name;
+          } else if (item == "{name_zh}") {
+            ak = "${name}_國";
+            tx = name;
+          } else if (item == "{name_en}") {
+            if (Static.audioManager.hasAudio(nameEn)) {
+              ak = nameEn;
+            } else {
+              ak = "${name}_英";
+            }
+            tx = nameEn;
+            lo = "en-US";
+          } else if (item == "{name_ho}") {
+            ak = "${name}_閩";
+            tx = "";
+          } else if (item == "{name_hk}") {
+            ak = "${name}_客";
+            tx = "";
+          } else {
+            tx = item
+                .replaceAll('{terminal}', isTerminal ? "終點站" : "")
+                .replaceAll('{name_zh}', name)
+                .replaceAll('{name_ho}', "")
+                .replaceAll('{name_hk}', "")
+                .replaceAll('{name_en}', nameEn)
+                .replaceAll('{name}', name);
+            ak = tx;
+          }
+          return {
+            'text': tx,
+            'audioKey': ak,
+            'locale': lo,
+            'speed': (tx == "到了" || tx == "終點站") ? 0.9 : 1.0,
+          };
+        })
         .where((m) {
-      final String ak = m['audioKey'] as String;
-      if (ak.endsWith("_閩") || ak.endsWith("_客"))
-        return Static.audioManager.hasAudio(ak);
-      return ak
-          .trim()
-          .isNotEmpty ||
-          (m['text'] as String)
-              .trim()
-              .isNotEmpty;
-    })
+          final String ak = m['audioKey'] as String;
+          if (ak.endsWith("_閩") || ak.endsWith("_客"))
+            return Static.audioManager.hasAudio(ak);
+          return ak.trim().isNotEmpty ||
+              (m['text'] as String).trim().isNotEmpty;
+        })
         .toList();
   }
 

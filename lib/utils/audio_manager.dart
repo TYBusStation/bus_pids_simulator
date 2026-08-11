@@ -69,7 +69,10 @@ class AudioManager {
     }
   }
 
-  Future<void> preloadRouteStations(List<String> names) async {
+  Future<void> preloadRouteStations(
+    List<String> names, {
+    List<String>? enNames,
+  }) async {
     for (var key in _currentRouteKeys) {
       _memoryCache.remove(key);
     }
@@ -86,6 +89,16 @@ class AudioManager {
       for (var v in variants) {
         if (await _ensureInCache(v)) {
           _currentRouteKeys.add(v);
+        }
+      }
+    }
+
+    if (enNames != null) {
+      for (var enName in enNames) {
+        if (enName.isNotEmpty) {
+          if (await _ensureInCache(enName)) {
+            _currentRouteKeys.add(enName);
+          }
         }
       }
     }
