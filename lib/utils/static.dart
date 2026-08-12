@@ -16,6 +16,8 @@ import 'tts_helper.dart';
 
 abstract class Static {
   static const String API_BASE = "https://myster.freeddns.org:25566";
+
+  // static const String API_BASE = "http://192.168.1.249:25567";
   static final Dio dio = Dio(
     BaseOptions(connectTimeout: const Duration(seconds: 120)),
   );

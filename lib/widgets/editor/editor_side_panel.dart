@@ -6,9 +6,13 @@ import '../../data/bus_station.dart';
 class EditorSidePanel extends StatelessWidget {
   final TextEditingController idCtrl,
       nameCtrl,
+      nameEnCtrl,
       descCtrl,
+      descEnCtrl,
       depCtrl,
+      depEnCtrl,
       destCtrl,
+      destEnCtrl,
       wktCtrl;
   final bool isEditingGo, autoWkt, isPathEditing;
   final List<BusStation> stations;
@@ -24,9 +28,13 @@ class EditorSidePanel extends StatelessWidget {
     super.key,
     required this.idCtrl,
     required this.nameCtrl,
+    required this.nameEnCtrl,
     required this.descCtrl,
+    required this.descEnCtrl,
     required this.depCtrl,
+    required this.depEnCtrl,
     required this.destCtrl,
+    required this.destEnCtrl,
     required this.wktCtrl,
     required this.isEditingGo,
     required this.autoWkt,
@@ -72,32 +80,53 @@ class EditorSidePanel extends StatelessWidget {
       child: Column(
         children: [
           if (!isPathEditing) ...[
+            TextField(
+              controller: idCtrl,
+              enabled: !isPathEditing,
+              style: const TextStyle(fontSize: 11),
+              decoration: _denseInp("ID"),
+            ),
             Row(
               children: [
                 Expanded(
                   child: TextField(
-                    controller: idCtrl,
+                    controller: nameCtrl,
                     enabled: !isPathEditing,
-                    style: const TextStyle(fontSize: 11),
-                    decoration: _denseInp("ID"),
+                    style: const TextStyle(fontSize: 10),
+                    decoration: _denseInp("名稱"),
                   ),
                 ),
                 const SizedBox(width: 4),
                 Expanded(
                   child: TextField(
-                    controller: nameCtrl,
+                    controller: nameEnCtrl,
                     enabled: !isPathEditing,
-                    style: const TextStyle(fontSize: 11),
-                    decoration: _denseInp("名稱"),
+                    style: const TextStyle(fontSize: 10),
+                    decoration: _denseInp("名稱英文"),
                   ),
                 ),
               ],
             ),
-            TextField(
-              controller: descCtrl,
-              enabled: !isPathEditing,
-              style: const TextStyle(fontSize: 10),
-              decoration: _denseInp("描述"),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: descCtrl,
+                    enabled: !isPathEditing,
+                    style: const TextStyle(fontSize: 10),
+                    decoration: _denseInp("描述"),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: TextField(
+                    controller: descEnCtrl,
+                    enabled: !isPathEditing,
+                    style: const TextStyle(fontSize: 10),
+                    decoration: _denseInp("描述英文"),
+                  ),
+                ),
+              ],
             ),
             Row(
               children: [
@@ -116,6 +145,27 @@ class EditorSidePanel extends StatelessWidget {
                     enabled: !isPathEditing,
                     style: const TextStyle(fontSize: 10),
                     decoration: _denseInp("終點"),
+                  ),
+                ),
+              ],
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: depEnCtrl,
+                    enabled: !isPathEditing,
+                    style: const TextStyle(fontSize: 10),
+                    decoration: _denseInp("起點英文"),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: TextField(
+                    controller: destEnCtrl,
+                    enabled: !isPathEditing,
+                    style: const TextStyle(fontSize: 10),
+                    decoration: _denseInp("終點英文"),
                   ),
                 ),
               ],
@@ -268,12 +318,6 @@ class EditorSidePanel extends StatelessWidget {
               ],
             ),
           ),
-        ),
-        IconButton(
-          constraints: const BoxConstraints(minHeight: 24, minWidth: 24),
-          padding: EdgeInsets.zero,
-          icon: const Icon(Icons.close, size: 12),
-          onPressed: () => onStationRemove(i),
         ),
       ],
     ),

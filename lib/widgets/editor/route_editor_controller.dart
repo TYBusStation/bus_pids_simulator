@@ -38,9 +38,13 @@ class RouteEditorController extends ChangeNotifier {
 
   final idCtrl = TextEditingController(),
       nameCtrl = TextEditingController(),
+      nameEnCtrl = TextEditingController(),
       descCtrl = TextEditingController(),
+      descEnCtrl = TextEditingController(),
       depCtrl = TextEditingController(),
+      depEnCtrl = TextEditingController(),
       destCtrl = TextEditingController(),
+      destEnCtrl = TextEditingController(),
       wktGoCtrl = TextEditingController(),
       wktBackCtrl = TextEditingController(),
       jsonCtrl = TextEditingController();
@@ -70,9 +74,13 @@ class RouteEditorController extends ChangeNotifier {
       final r = initialRoute!;
       idCtrl.text = r.id;
       nameCtrl.text = r.name;
+      nameEnCtrl.text = r.nameEn;
       descCtrl.text = r.description;
+      descEnCtrl.text = r.descriptionEn;
       depCtrl.text = r.departure;
+      depEnCtrl.text = r.departureEn;
       destCtrl.text = r.destination;
+      destEnCtrl.text = r.destinationEn;
       wktGoCtrl.text = r.path.go;
       wktBackCtrl.text = r.path.back;
       goStations = List.from(r.stations.go);
@@ -242,9 +250,13 @@ class RouteEditorController extends ChangeNotifier {
     return BusRoute(
       id: idCtrl.text.trim(),
       name: nameCtrl.text.trim(),
+      nameEn: nameEnCtrl.text.trim(),
       description: descCtrl.text.trim(),
+      descriptionEn: descEnCtrl.text.trim(),
       departure: depCtrl.text.trim(),
+      departureEn: depEnCtrl.text.trim(),
       destination: destCtrl.text.trim(),
+      destinationEn: destEnCtrl.text.trim(),
       path: RoutePath(go: wktGoCtrl.text, back: wktBackCtrl.text),
       stations: RouteStations(go: goStations, back: backStations),
     );

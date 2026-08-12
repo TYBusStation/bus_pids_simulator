@@ -81,21 +81,17 @@ class RouteAnalysisProvider extends ChangeNotifier {
     double? heading,
   }) {
     if (accuracy > 50) return;
-
     final now = DateTime.now();
     final int nowMs = now.millisecondsSinceEpoch;
-
     if (location == _lastProcessedLocation &&
         status.dutyStatus == _lastDutyStatus &&
         status.direction == _lastDirection &&
         (nowMs - _lastUpdateTimestamp) < 800) {
       return;
     }
-
     _lastUpdateTimestamp = nowMs;
     _lastProcessedLocation = location;
     _lastDirection = status.direction;
-
     _speedHistory.add(MapEntry(now, speed));
     _speedHistory.removeWhere((e) => now.difference(e.key).inMinutes > 3);
 
@@ -110,7 +106,6 @@ class RouteAnalysisProvider extends ChangeNotifier {
         Static.audioManager.stop();
         notifyListeners();
       }
-
       if (_lastDutyStatus == DutyStatus.onDuty) resetAnalysis();
       _currentAnalysis = null;
       _lastDutyStatus = DutyStatus.offDuty;
@@ -127,7 +122,6 @@ class RouteAnalysisProvider extends ChangeNotifier {
     final stations = status.direction == Direction.go
         ? status.route.stations.go
         : status.route.stations.back;
-
     if (_lastDutyStatus != DutyStatus.onDuty) {
       _lastDutyStatus = DutyStatus.onDuty;
       _lastSpokenStationOrder = null;
@@ -151,13 +145,10 @@ class RouteAnalysisProvider extends ChangeNotifier {
         heading: heading,
       );
     }
-
     _handleLogic(_currentAnalysis, status, stations);
-
     if (_currentAnalysis != null) {
       _checkSpeeding(_currentAnalysis!, speed);
     }
-
     notifyListeners();
   }
 
@@ -167,20 +158,16 @@ class RouteAnalysisProvider extends ChangeNotifier {
     List<BusStation> stations,
   ) {
     if (_isOffDutyAlert || _lastDutyStatus != DutyStatus.onDuty) return;
-
     BusStation? next;
     bool isOffRoute = result?.isOffRoute ?? true;
-
     if (result == null || isOffRoute) {
       next = stations.isNotEmpty ? stations.first : BusStation(order: 0);
     } else {
       next = result.nextStation;
     }
-
     if (next == null) return;
 
     final int terminalOrder = stations.isNotEmpty ? stations.last.order : -1;
-
     bool shouldSpeakNext = false;
     if (_lastSpokenStationOrder == null) {
       shouldSpeakNext = true;
@@ -217,15 +204,18 @@ class RouteAnalysisProvider extends ChangeNotifier {
               (next.useGlobalArrival || next.arrivalTemplate == null)
               ? Static.settings.arrivalTemplate
               : next.arrivalTemplate!;
-          if (template.isNotEmpty)
+          if (template.isNotEmpty) {
+            final vars = getFormattedVariables(_currentLedEvent, status);
             _executeVoice(
               _buildSeq(
                 template,
-                next.name,
-                next.nameEn,
+                next,
                 next.order == terminalOrder,
+                status,
+                vars,
               ),
             );
+          }
         }
       }
     }
@@ -242,8 +232,17 @@ class RouteAnalysisProvider extends ChangeNotifier {
       List<double> filtered = speeds.skip(skip).take(take).toList();
       avgKmh = filtered.reduce((a, b) => a + b) / filtered.length;
     }
-    if (avgKmh < 5.0) return 20.0 / 3.6;
-    return avgKmh / 3.6;
+    return (avgKmh < 5.0) ? 20.0 / 3.6 : avgKmh / 3.6;
+  }
+
+  String _performReplacement(String template, Map<String, String> vars) {
+    String res = template;
+    final keys = vars.keys.toList()
+      ..sort((a, b) => b.length.compareTo(a.length));
+    for (var k in keys) {
+      res = res.replaceAll('{$k}', vars[k] ?? "");
+    }
+    return res;
   }
 
   Map<String, String> getFormattedVariables(LedEvent event, Status status) {
@@ -260,9 +259,8 @@ class RouteAnalysisProvider extends ChangeNotifier {
         : status.route.stations.back;
 
     BusStation? targetStation = _displayStation;
-    if (targetStation == null && stations.isNotEmpty) {
+    if (targetStation == null && stations.isNotEmpty)
       targetStation = stations.first;
-    }
 
     int idx = (targetStation != null)
         ? stations.indexWhere((s) => s.order == targetStation!.order)
@@ -287,28 +285,14 @@ class RouteAnalysisProvider extends ChangeNotifier {
       double distToNext = _currentAnalysis!.distToNextStation ?? 0;
       double secondsToNext = distToNext / avgSpeedMs;
       DateTime nextEst = now.add(Duration(seconds: secondsToNext.round()));
-
       map['currMin'] = (secondsToNext / 60).ceil().toString();
       map['currTimeHH'] = nextEst.hour.toString().padLeft(2, '0');
       map['currTimeMM'] = nextEst.minute.toString().padLeft(2, '0');
 
       double cumulativeSeconds = secondsToNext;
       for (int i = 1; i <= 15; i++) {
-        String pN = "",
-            pE = "",
-            nN = "",
-            nE = "",
-            nMin = "0",
-            nHH = "0",
-            nMM = "0";
-        if (idx - i >= 0) {
-          pN = stations[idx - i].name;
-          pE = stations[idx - i].nameEn;
-        }
         if (idx + i < stations.length) {
           final targetIdx = idx + i;
-          nN = stations[targetIdx].name;
-          nE = stations[targetIdx].nameEn;
           double posCurrent =
               _currentAnalysis!.stationPositions[stations[targetIdx - 1]
                   .order] ??
@@ -319,53 +303,24 @@ class RouteAnalysisProvider extends ChangeNotifier {
           double segmentDist = (posNext - posCurrent).abs() * 1000;
           cumulativeSeconds += (segmentDist / avgSpeedMs) + 50;
           DateTime est = now.add(Duration(seconds: cumulativeSeconds.round()));
-          nMin = (cumulativeSeconds / 60).ceil().toString();
-          nHH = est.hour.toString().padLeft(2, '0');
-          nMM = est.minute.toString().padLeft(2, '0');
+          map['NextName$i'] = stations[targetIdx].name;
+          map['NextMin$i'] = (cumulativeSeconds / 60).ceil().toString();
+          map['NextTimeHH$i'] = est.hour.toString().padLeft(2, '0');
+          map['NextTimeMM$i'] = est.minute.toString().padLeft(2, '0');
         }
-        map['PrevName$i'] = pN;
-        map['PrevNameEn$i'] = pE;
-        map['NextName$i'] = nN;
-        map['NextNameEn$i'] = nE;
-        map['NextMin$i'] = nMin;
-        map['NextTimeHH$i'] = nHH;
-        map['NextTimeMM$i'] = nMM;
-      }
-    } else {
-      map['currMin'] = "0";
-      map['currTimeHH'] = "0";
-      map['currTimeMM'] = "0";
-      for (int i = 1; i <= 15; i++) {
-        map['PrevName$i'] = "";
-        map['PrevNameEn$i'] = "";
-        map['NextName$i'] = "";
-        map['NextNameEn$i'] = "";
-        map['NextMin$i'] = "0";
-        map['NextTimeHH$i'] = "0";
-        map['NextTimeMM$i'] = "0";
       }
     }
 
-    final keys = map.keys.toList()
-      ..sort((a, b) => b.length.compareTo(a.length));
     Static.settings.customVariables.forEach((key, template) {
-      String processed = template;
-      for (var k in keys) {
-        processed = processed.replaceAll('{$k}', map[k] ?? "");
-      }
-      map[key] = processed;
+      map[key] = _performReplacement(template, map);
     });
     return map;
   }
 
   String formatTemplate(String template, LedEvent event, Status status) {
     Map<String, String> vars = getFormattedVariables(event, status);
-    String res = template;
-    final keys = vars.keys.toList()
-      ..sort((a, b) => b.length.compareTo(a.length));
-    for (var k in keys) {
-      res = res.replaceAll('{$k}', vars[k] ?? "");
-    }
+    String res = _performReplacement(template, vars);
+    res = res.replaceAll(RegExp(r'\{(A|B|AE|BE)\((.*?)\)\}'), "");
     return res;
   }
 
@@ -441,79 +396,107 @@ class RouteAnalysisProvider extends ChangeNotifier {
       nameEn: station.nameEn,
       isTerminal: isTerminal,
     );
+    final vars = getFormattedVariables(_currentLedEvent, status);
     notifyListeners();
     final template = (station.useGlobalNext || station.nextTemplate == null)
         ? Static.settings.nextStationTemplate
         : station.nextTemplate!;
     if (template.isNotEmpty)
-      _executeVoice(
-        _buildSeq(template, station.name, station.nameEn, isTerminal),
-      );
+      _executeVoice(_buildSeq(template, station, isTerminal, status, vars));
+  }
+
+  List<Map<String, dynamic>> _expandVoiceText(
+    String text,
+    Map<String, String> vars,
+    String locale,
+  ) {
+    String processed = _performReplacement(text, vars);
+
+    if (processed.trim().isEmpty) return [];
+
+    String audioKey = processed;
+
+    String ttsText = processed.replaceAll(RegExp(r'_(國|英|閩|客)$'), "");
+
+    return [
+      {'text': ttsText, 'audioKey': audioKey, 'locale': locale},
+    ];
   }
 
   List<Map<String, dynamic>> _buildSeq(
     List<String> template,
-    String name,
-    String nameEn,
+    BusStation station,
     bool isTerminal,
+    Status status,
+    Map<String, String> vars,
   ) {
-    bool hasFullAudio = Static.audioManager.hasAudio(name);
-    List<String> expanded = [];
+    String currentName = vars['name'] ?? station.name;
+    String currentNameEn = vars['nameEn'] ?? station.nameEn;
+
+    bool hasFullAudio = Static.audioManager.hasAudio(currentName);
+    List<String> baseExpanded = [];
     for (var item in template) {
       if (item == "{name}") {
         if (hasFullAudio)
-          expanded.add("{name_full}");
+          baseExpanded.add("{name_full}");
         else
-          expanded.addAll(Static.settings.stationVoiceSequence);
+          baseExpanded.addAll(Static.settings.stationVoiceSequence);
       } else
-        expanded.add(item);
+        baseExpanded.add(item);
     }
-    return expanded
-        .map<Map<String, dynamic>>((item) {
-          String ak = "", tx = "", lo = "zh-TW";
-          if (item == "{name_full}") {
-            ak = name;
-            tx = name;
-          } else if (item == "{name_zh}") {
-            ak = "${name}_國";
-            tx = name;
-          } else if (item == "{name_en}") {
-            if (Static.audioManager.hasAudio(nameEn)) {
-              ak = nameEn;
-            } else {
-              ak = "${name}_英";
-            }
-            tx = nameEn;
-            lo = "en-US";
-          } else if (item == "{name_ho}") {
-            ak = "${name}_閩";
-            tx = "";
-          } else if (item == "{name_hk}") {
-            ak = "${name}_客";
-            tx = "";
-          } else {
-            tx = item
-                .replaceAll('{terminal}', isTerminal ? "終點站" : "")
-                .replaceAll('{name_zh}', name)
-                .replaceAll('{name_ho}', "")
-                .replaceAll('{name_hk}', "")
-                .replaceAll('{name_en}', nameEn)
-                .replaceAll('{name}', name);
-            ak = tx;
-          }
-          return {
-            'text': tx,
-            'audioKey': ak,
-            'locale': lo,
-            'speed': (tx == "到了" || tx == "終點站") ? 0.9 : 1.0,
-          };
+    List<Map<String, dynamic>> finalSequence = [];
+    for (var item in baseExpanded) {
+      if (item == "{name_full}") {
+        finalSequence.add({
+          'text': currentName,
+          'audioKey': currentName,
+          'locale': 'zh-TW',
+        });
+      } else if (item == "{name_zh}") {
+        finalSequence.add({
+          'text': currentName,
+          'audioKey': "${currentName}_國",
+          'locale': 'zh-TW',
+        });
+      } else if (item == "{name_en}") {
+        String ak = Static.audioManager.hasAudio(currentNameEn)
+            ? currentNameEn
+            : "${currentName}_英";
+        finalSequence.add({
+          'text': currentNameEn,
+          'audioKey': ak,
+          'locale': 'en-US',
+        });
+      } else if (item == "{name_ho}") {
+        finalSequence.add({
+          'text': "",
+          'audioKey': "${currentName}_閩",
+          'locale': 'zh-TW',
+        });
+      } else if (item == "{name_hk}") {
+        finalSequence.add({
+          'text': "",
+          'audioKey': "${currentName}_客",
+          'locale': 'zh-TW',
+        });
+      } else {
+        String locale = item.contains(RegExp(r'[a-zA-Z]')) ? 'en-US' : 'zh-TW';
+
+        if (item.contains("_英")) locale = 'en-US';
+        if (item.contains("_國") || item.contains("_閩") || item.contains("_客"))
+          locale = 'zh-TW';
+
+        finalSequence.addAll(_expandVoiceText(item, vars, locale));
+      }
+    }
+    return finalSequence
+        .map((m) {
+          String tx = m['text'] as String;
+          return {...m, 'speed': (tx == "到了" || tx == "終點站") ? 0.9 : 1.0};
         })
         .where((m) {
           final String ak = m['audioKey'] as String;
-          if (ak.endsWith("_閩") || ak.endsWith("_客"))
-            return Static.audioManager.hasAudio(ak);
-          return ak.trim().isNotEmpty ||
-              (m['text'] as String).trim().isNotEmpty;
+          return ak.isNotEmpty || (m['text'] as String).trim().isNotEmpty;
         })
         .toList();
   }

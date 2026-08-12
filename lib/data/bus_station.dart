@@ -77,8 +77,8 @@ class BusStation {
       'lat': lat,
       'lon': lon,
     };
-    if (useGlobalNext == false) data['use_global_next'] = true;
-    if (useGlobalArrival == false) data['use_global_arrival'] = true;
+    if (useGlobalNext == false) data['use_global_next'] = false;
+    if (useGlobalArrival == false) data['use_global_arrival'] = false;
     if (nextTemplate != null && nextTemplate!.isNotEmpty) {
       data['next_template'] = nextTemplate;
     }

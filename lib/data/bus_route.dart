@@ -12,12 +12,20 @@ class BusRoute {
   final String id;
   @JsonKey(name: "name")
   final String name;
+  @JsonKey(name: "name_en")
+  final String nameEn;
   @JsonKey(name: "description")
   final String description;
+  @JsonKey(name: "description_en")
+  final String descriptionEn;
   @JsonKey(name: "departure")
   final String departure;
+  @JsonKey(name: "departure_en")
+  final String departureEn;
   @JsonKey(name: "destination")
   final String destination;
+  @JsonKey(name: "destination_en")
+  final String destinationEn;
   @JsonKey(name: "path")
   final RoutePath path;
   @JsonKey(name: "stations")
@@ -26,9 +34,13 @@ class BusRoute {
   BusRoute({
     required this.id,
     required this.name,
+    required this.nameEn,
     required this.description,
+    required this.descriptionEn,
     required this.departure,
+    required this.departureEn,
     required this.destination,
+    required this.destinationEn,
     required this.path,
     required this.stations,
   });
@@ -36,9 +48,13 @@ class BusRoute {
   factory BusRoute.unknownWithId(String id) => BusRoute(
     id: id,
     name: '未知',
+    nameEn: "Unknown",
     departure: "未知",
     destination: "未知",
     description: "未知",
+    descriptionEn: "Unknown",
+    departureEn: "Unknown",
+    destinationEn: "Unknown",
     path: RoutePath(go: "", back: ""),
     stations: RouteStations(go: [], back: []),
   );
