@@ -32,6 +32,9 @@ class RouteAnalysisProvider extends ChangeNotifier {
       _lastSpeedWarningStationOrder;
   DutyStatus? _lastDutyStatus;
   int _activeSequenceId = 0;
+  LatLng? _lastProcessedLocation;
+  int _lastUpdateTimestamp = 0;
+  Direction? _lastDirection;
   bool _isOffDutyAlert = false;
   LedEvent _currentLedEvent = LedEvent(
     type: LedBroadcastType.slogan,
@@ -78,11 +81,24 @@ class RouteAnalysisProvider extends ChangeNotifier {
     double? heading,
   }) {
     if (accuracy > 50) return;
+
     final now = DateTime.now();
+    final int nowMs = now.millisecondsSinceEpoch;
+
+    if (location == _lastProcessedLocation &&
+        status.dutyStatus == _lastDutyStatus &&
+        status.direction == _lastDirection &&
+        (nowMs - _lastUpdateTimestamp) < 800) {
+      return;
+    }
+
+    _lastUpdateTimestamp = nowMs;
+    _lastProcessedLocation = location;
+    _lastDirection = status.direction;
+
     _speedHistory.add(MapEntry(now, speed));
     _speedHistory.removeWhere((e) => now.difference(e.key).inMinutes > 3);
 
-    // 1. OffDuty 處理 (保持您的邏輯)
     if (status.dutyStatus == DutyStatus.offDuty) {
       if (speed >= 10 && !_isOffDutyAlert) {
         _isOffDutyAlert = true;
@@ -101,7 +117,13 @@ class RouteAnalysisProvider extends ChangeNotifier {
       return;
     }
 
-    // 2. OnDuty 初始化
+    if (status.dutyStatus == DutyStatus.onDuty) {
+      if (_isOffDutyAlert) {
+        _isOffDutyAlert = false;
+        Static.audioManager.stop();
+      }
+    }
+
     final stations = status.direction == Direction.go
         ? status.route.stations.go
         : status.route.stations.back;
@@ -137,6 +159,76 @@ class RouteAnalysisProvider extends ChangeNotifier {
     }
 
     notifyListeners();
+  }
+
+  void _handleLogic(
+    RouteAnalysisResult? result,
+    Status status,
+    List<BusStation> stations,
+  ) {
+    if (_isOffDutyAlert || _lastDutyStatus != DutyStatus.onDuty) return;
+
+    BusStation? next;
+    bool isOffRoute = result?.isOffRoute ?? true;
+
+    if (result == null || isOffRoute) {
+      next = stations.isNotEmpty ? stations.first : null;
+    } else {
+      next = result.nextStation;
+    }
+
+    if (next == null) return;
+
+    final int terminalOrder = stations.isNotEmpty ? stations.last.order : -1;
+
+    bool shouldSpeakNext = false;
+    if (_lastSpokenStationOrder == null) {
+      shouldSpeakNext = true;
+    } else if (result != null && !isOffRoute) {
+      final double distNext = result.distToNextStation ?? 1000000;
+      final double distPrev = result.distToPrevStation ?? 0;
+      if (distPrev > 5 &&
+          (distPrev > Static.settings.nextStationDepartureDistance ||
+              (Static.settings.nextStationDistance >= 0 &&
+                  distNext < Static.settings.nextStationDistance))) {
+        shouldSpeakNext = true;
+      }
+    }
+
+    if (shouldSpeakNext) {
+      _triggerNextStationBroadcast(next, terminalOrder, status);
+    }
+
+    if (result != null && !isOffRoute) {
+      final double distNext = result.distToNextStation ?? 1000000;
+      if (Static.settings.arrivalDistance >= 0 &&
+          distNext < Static.settings.arrivalDistance &&
+          _lastArrivedStationOrder != next.order) {
+        _lastArrivedStationOrder = next.order;
+        _displayStation = next;
+        _currentLedEvent = LedEvent(
+          type: LedBroadcastType.arrival,
+          name: next.name,
+          nameEn: next.nameEn,
+          isTerminal: next.order == terminalOrder,
+        );
+        if (Static.settings.enableArrivalBroadcast) {
+          final template =
+              (next.useGlobalArrival || next.arrivalTemplate == null)
+              ? Static.settings.arrivalTemplate
+              : next.arrivalTemplate!;
+          if (template.isNotEmpty)
+            _executeVoice(
+              _buildSeq(
+                template,
+                next.name,
+                next.nameEn,
+                next.order == terminalOrder,
+              ),
+            );
+        }
+      }
+    }
   }
 
   double getEffectiveSpeedMs() {
@@ -357,76 +449,6 @@ class RouteAnalysisProvider extends ChangeNotifier {
       _executeVoice(
         _buildSeq(template, station.name, station.nameEn, isTerminal),
       );
-  }
-
-  void _handleLogic(
-    RouteAnalysisResult? result,
-    Status status,
-    List<BusStation> stations,
-  ) {
-    if (_isOffDutyAlert || _lastDutyStatus != DutyStatus.onDuty) return;
-
-    BusStation? next;
-    bool isOffRoute = result?.isOffRoute ?? true;
-
-    if (result == null || isOffRoute) {
-      next = stations.isNotEmpty ? stations.first : BusStation(order: 0);
-    } else {
-      next = result.nextStation;
-    }
-
-    if (next == null) return;
-
-    final int terminalOrder = stations.isNotEmpty ? stations.last.order : -1;
-
-    bool shouldSpeakNext = false;
-    if (_lastSpokenStationOrder == null) {
-      shouldSpeakNext = true;
-    } else if (result != null && !isOffRoute) {
-      final double distNext = result.distToNextStation ?? 1000000;
-      final double distPrev = result.distToPrevStation ?? 0;
-      if (distPrev > 5 &&
-          (distPrev > Static.settings.nextStationDepartureDistance ||
-              (Static.settings.nextStationDistance >= 0 &&
-                  distNext < Static.settings.nextStationDistance))) {
-        shouldSpeakNext = true;
-      }
-    }
-
-    if (shouldSpeakNext) {
-      _triggerNextStationBroadcast(next, terminalOrder, status);
-    }
-
-    if (result != null && !isOffRoute) {
-      final double distNext = result.distToNextStation ?? 1000000;
-      if (Static.settings.arrivalDistance >= 0 &&
-          distNext < Static.settings.arrivalDistance &&
-          _lastArrivedStationOrder != next.order) {
-        _lastArrivedStationOrder = next.order;
-        _displayStation = next;
-        _currentLedEvent = LedEvent(
-          type: LedBroadcastType.arrival,
-          name: next.name,
-          nameEn: next.nameEn,
-          isTerminal: next.order == terminalOrder,
-        );
-        if (Static.settings.enableArrivalBroadcast) {
-          final template =
-              (next.useGlobalArrival || next.arrivalTemplate == null)
-              ? Static.settings.arrivalTemplate
-              : next.arrivalTemplate!;
-          if (template.isNotEmpty)
-            _executeVoice(
-              _buildSeq(
-                template,
-                next.name,
-                next.nameEn,
-                next.order == terminalOrder,
-              ),
-            );
-        }
-      }
-    }
   }
 
   List<Map<String, dynamic>> _buildSeq(

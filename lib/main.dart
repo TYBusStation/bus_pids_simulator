@@ -34,6 +34,7 @@ void main() async {
               loc.currentLocation,
               loc.currentSpeed,
               status.currentStatus,
+              heading: loc.currentHeading,
             );
           },
         ),
