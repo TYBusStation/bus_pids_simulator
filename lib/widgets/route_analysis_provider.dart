@@ -172,7 +172,7 @@ class RouteAnalysisProvider extends ChangeNotifier {
     bool isOffRoute = result?.isOffRoute ?? true;
 
     if (result == null || isOffRoute) {
-      next = stations.isNotEmpty ? stations.first : null;
+      next = stations.isNotEmpty ? stations.first : BusStation(order: 0);
     } else {
       next = result.nextStation;
     }
