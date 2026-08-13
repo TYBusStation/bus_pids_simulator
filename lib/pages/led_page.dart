@@ -24,6 +24,9 @@ class _LedPageState extends State<LedPage> {
   String _currentText = "";
   LedSequence? _currentConfig;
 
+  String _cachedSloganText = "";
+  String? _lastSloganCacheKey;
+
   @override
   void initState() {
     super.initState();
@@ -34,7 +37,9 @@ class _LedPageState extends State<LedPage> {
 
   @override
   void dispose() {
-    context.read<RouteAnalysisProvider>().removeListener(_onLedEventChanged);
+    try {
+      context.read<RouteAnalysisProvider>().removeListener(_onLedEventChanged);
+    } catch (_) {}
     Static.settings.removeListener(_onSettingsChanged);
     super.dispose();
   }
@@ -75,10 +80,8 @@ class _LedPageState extends State<LedPage> {
         _queueIndex++;
         _updateText(event);
       } else {
-        setState(() {
-          _isBlanking = true;
-        });
-        Future.delayed(const Duration(milliseconds: 100), () {
+        setState(() => _isBlanking = true);
+        Future.delayed(const Duration(milliseconds: 30), () {
           if (!mounted) return;
           setState(() {
             _currentText = res;
@@ -98,6 +101,8 @@ class _LedPageState extends State<LedPage> {
     final status = context.read<StatusChangeNotifier>().currentStatus;
     final provider = context.read<RouteAnalysisProvider>();
     final analysis = provider.currentAnalysis;
+    final now = DateTime.now();
+
     List<LedSequence> slogans = List.from(Static.settings.sloganList);
 
     if (Static.settings.showStationListSlogan &&
@@ -106,56 +111,58 @@ class _LedPageState extends State<LedPage> {
           ? status.route.stations.go
           : status.route.stations.back;
       if (analysis?.nextStation != null) {
-        int idx = stations.indexWhere(
-          (s) => s.order == analysis!.nextStation!.order,
-        );
-        if (idx != -1) {
-          final now = DateTime.now();
-          final double avgSpeedMs = provider.getEffectiveSpeedMs();
-          double cumulativeSeconds =
-              (analysis!.distToNextStation ?? 0) / avgSpeedMs;
-          List<String> subItems = [];
-
-          for (int i = 0; i < Static.settings.nextStationCount; i++) {
-            int targetIdx = idx + i;
-            if (targetIdx >= stations.length) break;
-
-            final s = stations[targetIdx];
-            if (i > 0) {
-              double posPrev =
-                  analysis.stationPositions[stations[targetIdx - 1].order] ?? 0;
-              double posCurr = analysis.stationPositions[s.order] ?? 0;
-              double segmentDist = (posCurr - posPrev).abs() * 1000;
-              cumulativeSeconds += (segmentDist / avgSpeedMs) + 50;
-            }
-
-            DateTime est = now.add(
-              Duration(seconds: cumulativeSeconds.round()),
-            );
-            String minStr = (cumulativeSeconds / 60).ceil().toString();
-            String hhStr = est.hour.toString().padLeft(2, '0');
-            String mmStr = est.minute.toString().padLeft(2, '0');
-
-            String sub = Static.settings.nextStationSubSequence
-                .join("")
-                .replaceAll('{name}', s.name)
-                .replaceAll('{nameEn}', s.nameEn)
-                .replaceAll('{min}', minStr)
-                .replaceAll('{TimeHH}', hhStr)
-                .replaceAll('{TimeMM}', mmStr);
-            subItems.add(sub);
-          }
-
-          slogans.add(
-            LedSequence(
-              template: Static.settings.nextStationListSequence
-                  .join("")
-                  .replaceAll(
-                    '{next_stations}',
-                    subItems.join(Static.settings.nextStationSeparator),
-                  ),
-            ),
+        String cacheKey =
+            "${now.minute}_${analysis!.nextStation!.order}_${status.route.name}";
+        if (_lastSloganCacheKey == cacheKey) {
+          slogans.add(LedSequence(template: _cachedSloganText));
+        } else {
+          int idx = stations.indexWhere(
+            (s) => s.order == analysis.nextStation!.order,
           );
+          if (idx != -1) {
+            final double avgSpeedMs = provider.getEffectiveSpeedMs();
+            double cumulativeSeconds =
+                (analysis.distToNextStation ?? 0) / avgSpeedMs;
+            List<String> subItems = [];
+            for (int i = 0; i < Static.settings.nextStationCount; i++) {
+              int targetIdx = idx + i;
+              if (targetIdx >= stations.length) break;
+              final s = stations[targetIdx];
+              if (i > 0) {
+                double posPrev =
+                    analysis.stationPositions[stations[targetIdx - 1].order] ??
+                    0;
+                double posCurr = analysis.stationPositions[s.order] ?? 0;
+                cumulativeSeconds +=
+                    ((posCurr - posPrev).abs() * 1000 / avgSpeedMs) + 50;
+              }
+              DateTime est = now.add(
+                Duration(seconds: cumulativeSeconds.round()),
+              );
+              String sub = Static.settings.nextStationSubSequence
+                  .join("")
+                  .replaceAll('{name}', s.name)
+                  .replaceAll('{nameEn}', s.nameEn)
+                  .replaceAll(
+                    '{min}',
+                    (cumulativeSeconds / 60).ceil().toString(),
+                  )
+                  .replaceAll('{TimeHH}', est.hour.toString().padLeft(2, '0'))
+                  .replaceAll(
+                    '{TimeMM}',
+                    est.minute.toString().padLeft(2, '0'),
+                  );
+              subItems.add(sub);
+            }
+            _cachedSloganText = Static.settings.nextStationListSequence
+                .join("")
+                .replaceAll(
+                  '{next_stations}',
+                  subItems.join(Static.settings.nextStationSeparator),
+                );
+            _lastSloganCacheKey = cacheKey;
+            slogans.add(LedSequence(template: _cachedSloganText));
+          }
         }
       }
     }
@@ -173,11 +180,7 @@ class _LedPageState extends State<LedPage> {
       _currentConfig = config;
       _sloganIndex++;
     }
-    if (mounted) {
-      setState(() {
-        _isBlanking = false;
-      });
-    }
+    if (mounted) setState(() => _isBlanking = false);
   }
 
   @override
@@ -194,25 +197,29 @@ class _LedPageState extends State<LedPage> {
             borderRadius: BorderRadius.circular(4),
           ),
           child: ClipRect(
-            child: (_isBlanking || _currentText.isEmpty)
-                ? const SizedBox.expand()
-                : LedContent(
-                    key: ValueKey(
-                      "LED_${_currentText}_${_isPriorityMode}_${_queueIndex}",
+            child: RepaintBoundary(
+              child: (_isBlanking || _currentText.isEmpty)
+                  ? const SizedBox.expand()
+                  : LedContent(
+                      key: ValueKey(
+                        "LED_${_currentText}_${_isPriorityMode}_$_queueIndex",
+                      ),
+                      text: _currentText,
+                      config: _currentConfig ?? LedSequence(template: ""),
+                      containerHeight: Static.settings.ledHeight,
+                      onComplete: () {
+                        if (_isPriorityMode) {
+                          _queueIndex++;
+                          _updateText(
+                            context
+                                .read<RouteAnalysisProvider>()
+                                .currentLedEvent,
+                          );
+                        } else
+                          _nextSlogan();
+                      },
                     ),
-                    text: _currentText,
-                    config: _currentConfig ?? LedSequence(template: ""),
-                    containerHeight: Static.settings.ledHeight,
-                    onComplete: () {
-                      if (_isPriorityMode) {
-                        _queueIndex++;
-                        _updateText(
-                          context.read<RouteAnalysisProvider>().currentLedEvent,
-                        );
-                      } else
-                        _nextSlogan();
-                    },
-                  ),
+            ),
           ),
         ),
       ),
@@ -253,7 +260,9 @@ class _LedContentState extends State<LedContent> with TickerProviderStateMixin {
     _scrollAnim = AnimationController(vsync: this);
     _entryAnim = AnimationController(
       vsync: this,
-      duration: Duration(milliseconds: widget.config.entrySpeed.toInt()),
+      duration: Duration(
+        milliseconds: widget.config.entrySpeed.toInt().clamp(10, 5000),
+      ),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) => _initLayout());
   }
@@ -262,62 +271,89 @@ class _LedContentState extends State<LedContent> with TickerProviderStateMixin {
     if (!mounted) return;
     final rb = _key.currentContext?.findRenderObject() as RenderBox?;
     if (rb == null) return;
-    double tw = rb.size.width, vw = MediaQuery.of(context).size.width * 0.98;
+
+    double tw = rb.size.width;
+    double vw = MediaQuery.of(context).size.width * 0.98;
+
     _isLong = tw > (vw - 80);
-    setState(() {
-      if (!_isLong) {
-        _align = (widget.config.entryShort.name.contains('Left'))
-            ? Alignment.centerLeft
-            : Alignment.center;
-        _entryOffset = (widget.config.entryShort.name.contains('top'))
-            ? const Offset(0, -1)
-            : (widget.config.entryShort.name.contains('bottom')
-                  ? const Offset(0, 1)
-                  : const Offset(1, 0));
-      } else {
-        _align = Alignment.centerLeft;
-        _entryOffset = (widget.config.entryLong == LedEntryLong.rightScrollIn)
-            ? Offset.zero
-            : (widget.config.entryLong == LedEntryLong.topLeftScroll
-                  ? const Offset(0, -1)
-                  : (widget.config.entryLong == LedEntryLong.bottomLeftScroll
-                        ? const Offset(0, 1)
-                        : const Offset(1, 0)));
-      }
-      _isReady = true;
-    });
-    if (widget.config.entryLong == LedEntryLong.rightScrollIn && _isLong)
+
+    bool effectiveIsLong =
+        _isLong || widget.config.entryShort == LedEntryShort.asLongSetting;
+
+    if (mounted) {
+      setState(() {
+        if (!effectiveIsLong) {
+          // --- 執行短文字邏輯 ---
+          _align = (widget.config.entryShort.name.contains('Left'))
+              ? Alignment.centerLeft
+              : Alignment.center;
+          _entryOffset = (widget.config.entryShort.name.contains('top'))
+              ? const Offset(0, -1)
+              : (widget.config.entryShort.name.contains('bottom')
+                    ? const Offset(0, 1)
+                    : const Offset(1, 0));
+        } else {
+          _align = Alignment.centerLeft;
+          _isLong = true;
+          _entryOffset = (widget.config.entryLong == LedEntryLong.rightScrollIn)
+              ? Offset.zero
+              : (widget.config.entryLong == LedEntryLong.topLeftScroll
+                    ? const Offset(0, -1)
+                    : (widget.config.entryLong == LedEntryLong.bottomLeftScroll
+                          ? const Offset(0, 1)
+                          : const Offset(1, 0)));
+        }
+        _isReady = true;
+      });
+    }
+
+    if (widget.config.entryLong == LedEntryLong.rightScrollIn &&
+        effectiveIsLong) {
       _startScroll(tw, vw);
-    else {
-      await _entryAnim.forward();
-      await Future.delayed(Duration(milliseconds: widget.config.stayMs));
-      if (_isLong)
-        _startScroll(tw, vw);
-      else {
-        await Future.delayed(const Duration(seconds: 2));
-        if (mounted) widget.onComplete();
-      }
+    } else {
+      try {
+        await _entryAnim.forward().orCancel;
+        await Future.delayed(Duration(milliseconds: widget.config.stayMs));
+        if (!mounted) return;
+
+        if (effectiveIsLong) {
+          _startScroll(tw, vw);
+        } else {
+          await Future.delayed(const Duration(seconds: 2));
+          if (mounted) widget.onComplete();
+        }
+      } catch (_) {}
     }
   }
 
   void _startScroll(double tw, double vw) {
+    if (!mounted) return;
     double dist = tw + vw,
         speed = widget.config.scrollSpeed > 0
             ? widget.config.scrollSpeed
             : Static.settings.ledScrollSpeed;
     _scrollAnim.duration = Duration(
-      milliseconds: (dist / speed * 1000).toInt(),
+      milliseconds: (dist / speed * 1000).toInt().clamp(100, 60000),
     );
+
     _scrollAnim.addListener(() {
-      if (_scroll.hasClients) _scroll.jumpTo(_scrollAnim.value * dist);
+      if (_scroll.hasClients) {
+        _scroll.jumpTo(_scrollAnim.value * dist);
+      }
     });
-    _scrollAnim.forward().then((_) {
-      if (mounted) widget.onComplete();
-    });
+
+    _scrollAnim
+        .forward()
+        .then((_) {
+          if (mounted) widget.onComplete();
+        })
+        .catchError((_) {});
   }
 
   @override
   void dispose() {
+    _scrollAnim.stop();
+    _entryAnim.stop();
     _scroll.dispose();
     _scrollAnim.dispose();
     _entryAnim.dispose();
@@ -326,7 +362,7 @@ class _LedContentState extends State<LedContent> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    double fontSize = (widget.containerHeight - 24).clamp(0.0, 2000.0) * 0.75;
+    double fontSize = (widget.containerHeight - 24).clamp(0.0, 500.0) * 0.75;
     return Opacity(
       opacity: _isReady ? 1.0 : 0.0,
       child: SlideTransition(
@@ -342,6 +378,7 @@ class _LedContentState extends State<LedContent> with TickerProviderStateMixin {
             scrollDirection: Axis.horizontal,
             physics: const NeverScrollableScrollPhysics(),
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 if (widget.config.entryLong == LedEntryLong.rightScrollIn &&
                     _isLong)

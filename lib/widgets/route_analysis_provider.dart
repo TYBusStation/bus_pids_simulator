@@ -83,17 +83,28 @@ class RouteAnalysisProvider extends ChangeNotifier {
     if (accuracy > 50) return;
     final now = DateTime.now();
     final int nowMs = now.millisecondsSinceEpoch;
-    if (location == _lastProcessedLocation &&
-        status.dutyStatus == _lastDutyStatus &&
-        status.direction == _lastDirection &&
-        (nowMs - _lastUpdateTimestamp) < 800) {
-      return;
+
+    if (location != null && _lastProcessedLocation != null) {
+      final double dist = const Distance().as(
+        LengthUnit.Meter,
+        _lastProcessedLocation!,
+        location,
+      );
+      if (dist < 1.0 &&
+          status.dutyStatus == _lastDutyStatus &&
+          status.direction == _lastDirection &&
+          (nowMs - _lastUpdateTimestamp) < 1000) {
+        return;
+      }
     }
+
     _lastUpdateTimestamp = nowMs;
     _lastProcessedLocation = location;
     _lastDirection = status.direction;
+
     _speedHistory.add(MapEntry(now, speed));
-    _speedHistory.removeWhere((e) => now.difference(e.key).inMinutes > 3);
+    if (_speedHistory.length > 60) _speedHistory.removeAt(0);
+    _speedHistory.removeWhere((e) => now.difference(e.key).inMinutes > 2);
 
     if (status.dutyStatus == DutyStatus.offDuty) {
       if (speed >= 10 && !_isOffDutyAlert) {
@@ -112,16 +123,15 @@ class RouteAnalysisProvider extends ChangeNotifier {
       return;
     }
 
-    if (status.dutyStatus == DutyStatus.onDuty) {
-      if (_isOffDutyAlert) {
-        _isOffDutyAlert = false;
-        Static.audioManager.stop();
-      }
+    if (status.dutyStatus == DutyStatus.onDuty && _isOffDutyAlert) {
+      _isOffDutyAlert = false;
+      Static.audioManager.stop();
     }
 
     final stations = status.direction == Direction.go
         ? status.route.stations.go
         : status.route.stations.back;
+
     if (_lastDutyStatus != DutyStatus.onDuty) {
       _lastDutyStatus = DutyStatus.onDuty;
       _lastSpokenStationOrder = null;
@@ -145,6 +155,7 @@ class RouteAnalysisProvider extends ChangeNotifier {
         heading: heading,
       );
     }
+
     _handleLogic(_currentAnalysis, status, stations);
     if (_currentAnalysis != null) {
       _checkSpeeding(_currentAnalysis!, speed);
@@ -223,15 +234,8 @@ class RouteAnalysisProvider extends ChangeNotifier {
 
   double getEffectiveSpeedMs() {
     if (_speedHistory.isEmpty) return 20.0 / 3.6;
-    List<double> speeds = _speedHistory.map((e) => e.value).toList()..sort();
-    int n = speeds.length, skip = (n * 0.125).floor(), take = n - (2 * skip);
-    double avgKmh;
-    if (take <= 0) {
-      avgKmh = speeds.reduce((a, b) => a + b) / n;
-    } else {
-      List<double> filtered = speeds.skip(skip).take(take).toList();
-      avgKmh = filtered.reduce((a, b) => a + b) / filtered.length;
-    }
+    final recent = _speedHistory.reversed.take(10).map((e) => e.value).toList();
+    double avgKmh = recent.reduce((a, b) => a + b) / recent.length;
     return (avgKmh < 5.0) ? 20.0 / 3.6 : avgKmh / 3.6;
   }
 
@@ -411,13 +415,9 @@ class RouteAnalysisProvider extends ChangeNotifier {
     String locale,
   ) {
     String processed = _performReplacement(text, vars);
-
     if (processed.trim().isEmpty) return [];
-
     String audioKey = processed;
-
     String ttsText = processed.replaceAll(RegExp(r'_(國|英|閩|客)$'), "");
-
     return [
       {'text': ttsText, 'audioKey': audioKey, 'locale': locale},
     ];
@@ -432,7 +432,6 @@ class RouteAnalysisProvider extends ChangeNotifier {
   ) {
     String currentName = vars['name'] ?? station.name;
     String currentNameEn = vars['nameEn'] ?? station.nameEn;
-
     bool hasFullAudio = Static.audioManager.hasAudio(currentName);
     List<String> baseExpanded = [];
     for (var item in template) {
@@ -481,11 +480,9 @@ class RouteAnalysisProvider extends ChangeNotifier {
         });
       } else {
         String locale = item.contains(RegExp(r'[a-zA-Z]')) ? 'en-US' : 'zh-TW';
-
         if (item.contains("_英")) locale = 'en-US';
         if (item.contains("_國") || item.contains("_閩") || item.contains("_客"))
           locale = 'zh-TW';
-
         finalSequence.addAll(_expandVoiceText(item, vars, locale));
       }
     }

@@ -7,17 +7,21 @@ part of 'bus_route.dart';
 // **************************************************************************
 
 BusRoute _$BusRouteFromJson(Map<String, dynamic> json) => BusRoute(
-  id: json['id'] as String,
-  name: json['name'] as String,
-  nameEn: json['name_en'] as String,
-  description: json['description'] as String,
-  descriptionEn: json['description_en'] as String,
-  departure: json['departure'] as String,
-  departureEn: json['departure_en'] as String,
-  destination: json['destination'] as String,
-  destinationEn: json['destination_en'] as String,
-  path: RoutePath.fromJson(json['path'] as Map<String, dynamic>),
-  stations: RouteStations.fromJson(json['stations'] as Map<String, dynamic>),
+  id: json['id'] as String? ?? '',
+  name: json['name'] as String? ?? '未知',
+  nameEn: json['name_en'] as String? ?? 'Unknown',
+  description: json['description'] as String? ?? '未知',
+  descriptionEn: json['description_en'] as String? ?? 'Unknown',
+  departure: json['departure'] as String? ?? '未知',
+  departureEn: json['departure_en'] as String? ?? 'Unknown',
+  destination: json['destination'] as String? ?? '未知',
+  destinationEn: json['destination_en'] as String? ?? 'Unknown',
+  path: json['path'] == null
+      ? null
+      : RoutePath.fromJson(json['path'] as Map<String, dynamic>),
+  stations: json['stations'] == null
+      ? null
+      : RouteStations.fromJson(json['stations'] as Map<String, dynamic>),
 );
 
 Map<String, dynamic> _$BusRouteToJson(BusRoute instance) => <String, dynamic>{

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -44,6 +45,7 @@ class AudioManager {
 
   final Map<String, Uint8List> _memoryCache = {};
   final Set<String> _currentRouteKeys = {};
+  static const int _maxCacheEntries = 100;
 
   Future<void> init() async {
     await Hive.initFlutter();
@@ -106,6 +108,17 @@ class AudioManager {
 
   Future<bool> _ensureInCache(String key) async {
     if (_memoryCache.containsKey(key)) return true;
+
+    if (_memoryCache.length > _maxCacheEntries) {
+      final keysToRemove = _memoryCache.keys
+          .where((k) => !_currentRouteKeys.contains(k))
+          .toList();
+      for (var k in keysToRemove) {
+        _memoryCache.remove(k);
+      }
+      if (_memoryCache.length > _maxCacheEntries) _memoryCache.clear();
+    }
+
     final bytes = await _findBytesInStorage(key);
     if (bytes != null) {
       _memoryCache[key] = bytes;
@@ -132,9 +145,8 @@ class AudioManager {
     if (raw == null) return null;
     if (raw is Map) return Map.from(raw);
     try {
-      if (raw is Uint8List ||
-          raw.runtimeType.toString().contains('Uint8List')) {
-        final decoded = jsonDecode(utf8.decode(raw as Uint8List));
+      if (raw is Uint8List) {
+        final decoded = jsonDecode(utf8.decode(raw));
         if (decoded is Map) return decoded;
       }
     } catch (_) {}
@@ -282,7 +294,7 @@ class AudioManager {
           audioBoxMatches[_random.nextInt(audioBoxMatches.length)];
       final b = await _audioBox.get(selectedKey);
       if (b != null) {
-        _memoryCache[selectedKey] = b;
+        await _ensureInCache(selectedKey);
         return b;
       }
     }
@@ -298,7 +310,7 @@ class AudioManager {
         final cacheKey = "${pack.name}:$selectedFileName";
         final b = await _packDataBox.get(cacheKey);
         if (b != null) {
-          _memoryCache[cacheKey] = b;
+          await _ensureInCache(cacheKey);
           return b;
         }
       }
@@ -350,7 +362,7 @@ class AudioManager {
     final bytes = await _getRandomBytes(name);
     if (bytes != null) {
       await _player.stop();
-      await Future.delayed(const Duration(milliseconds: 100));
+      await Future.delayed(const Duration(milliseconds: 50));
       await _player.setSource(BytesSource(bytes));
       await _applySettings(localSpeed);
       final completer = Completer<void>();

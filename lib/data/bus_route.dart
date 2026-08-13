@@ -6,58 +6,59 @@ part 'bus_route.g.dart';
 
 @JsonSerializable()
 class BusRoute {
-  static final unknown = BusRoute.unknownWithId("未知");
+  static final unknown = BusRoute(id: "未知");
 
-  @JsonKey(name: "id")
+  @JsonKey(name: "id", defaultValue: "")
   final String id;
-  @JsonKey(name: "name")
+
+  @JsonKey(name: "name", defaultValue: "未知")
   final String name;
-  @JsonKey(name: "name_en")
+
+  @JsonKey(name: "name_en", defaultValue: "Unknown")
   final String nameEn;
-  @JsonKey(name: "description")
+
+  @JsonKey(name: "description", defaultValue: "未知")
   final String description;
-  @JsonKey(name: "description_en")
+
+  @JsonKey(name: "description_en", defaultValue: "Unknown")
   final String descriptionEn;
-  @JsonKey(name: "departure")
+
+  @JsonKey(name: "departure", defaultValue: "未知")
   final String departure;
-  @JsonKey(name: "departure_en")
+
+  @JsonKey(name: "departure_en", defaultValue: "Unknown")
   final String departureEn;
-  @JsonKey(name: "destination")
+
+  @JsonKey(name: "destination", defaultValue: "未知")
   final String destination;
-  @JsonKey(name: "destination_en")
+
+  @JsonKey(name: "destination_en", defaultValue: "Unknown")
   final String destinationEn;
+
   @JsonKey(name: "path")
   final RoutePath path;
+
   @JsonKey(name: "stations")
   final RouteStations stations;
 
   BusRoute({
-    required this.id,
-    required this.name,
-    required this.nameEn,
-    required this.description,
-    required this.descriptionEn,
-    required this.departure,
-    required this.departureEn,
-    required this.destination,
-    required this.destinationEn,
-    required this.path,
-    required this.stations,
-  });
+    this.id = "",
+    this.name = "未知",
+    this.nameEn = "Unknown",
+    this.description = "未知",
+    this.descriptionEn = "Unknown",
+    this.departure = "未知",
+    this.departureEn = "Unknown",
+    this.destination = "未知",
+    this.destinationEn = "Unknown",
+    RoutePath? path,
+    RouteStations? stations,
+  })
+      :
+        this.path = path ?? RoutePath(go: "", back: ""),
+        this.stations = stations ?? RouteStations(go: [], back: []);
 
-  factory BusRoute.unknownWithId(String id) => BusRoute(
-    id: id,
-    name: '未知',
-    nameEn: "Unknown",
-    departure: "未知",
-    destination: "未知",
-    description: "未知",
-    descriptionEn: "Unknown",
-    departureEn: "Unknown",
-    destinationEn: "Unknown",
-    path: RoutePath(go: "", back: ""),
-    stations: RouteStations(go: [], back: []),
-  );
+  factory BusRoute.unknownWithId(String id) => BusRoute(id: id);
 
   factory BusRoute.fromJson(Map<String, dynamic> json) =>
       _$BusRouteFromJson(json);

@@ -270,17 +270,19 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
                           labelText: "短文字進入",
                           isDense: true,
                         ),
-                        items: LedEntryShort.values
-                            .map(
-                              (v) => DropdownMenuItem(
-                                value: v,
-                                child: Text(
-                                  v.name,
-                                  style: const TextStyle(fontSize: 13),
-                                ),
-                              ),
-                            )
-                            .toList(),
+                        items: LedEntryShort.values.map((v) {
+                          String label = v.name;
+                          if (v == LedEntryShort.asLongSetting)
+                            label = "跟隨長文字行為 (強制滾動)";
+
+                          return DropdownMenuItem(
+                            value: v,
+                            child: Text(
+                              label,
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          );
+                        }).toList(),
                         onChanged: (v) => shortE = v!,
                       ),
                     ),

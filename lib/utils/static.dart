@@ -36,7 +36,6 @@ abstract class Static {
       await audioManager.init();
       await TTS.init();
       await _loadCustomRoutes();
-      await fetchAvailableCities();
       await requestLocationPermission();
     } catch (e, stack) {
       debugPrint("Init Error: $e");
@@ -119,7 +118,6 @@ abstract class Static {
       'timestamp': DateTime.now().millisecondsSinceEpoch,
       'data': jsonRaw,
     });
-    await fetchAvailableCities();
   }
 
   static Map<String, dynamic>? getCityCache(String city) {
@@ -150,11 +148,6 @@ abstract class Static {
 
   static bool isCityLoaded(String key) =>
       (key == 'Custom') ? true : Hive.box("city_data_box").containsKey(key);
-
-  static Future<void> refreshRoutes() async {
-    await fetchAvailableCities();
-    await _loadCustomRoutes();
-  }
 
   static Future<void> saveSettings() => settings.save();
 

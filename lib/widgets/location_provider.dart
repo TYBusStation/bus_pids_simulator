@@ -16,6 +16,7 @@ class LocationChangeNotifier extends ChangeNotifier {
   bool _isDisposed = false;
   GpsMode _gpsMode = GpsMode.auto;
   int _lastNotifyTime = 0;
+  final Distance _distance = const Distance();
 
   LatLng? get currentLocation => _currentLocation;
 
@@ -79,10 +80,17 @@ class LocationChangeNotifier extends ChangeNotifier {
     bool force = false,
   }) {
     if (_gpsMode == GpsMode.auto || _isDisposed) return;
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (!force && _currentLocation != null) {
+      final double d = _distance.as(LengthUnit.Meter, _currentLocation!, loc);
+      if (d < 0.5 && (now - _lastNotifyTime) < 500) return;
+    }
+
     _currentLocation = loc;
     _currentSpeed = speed;
     _currentHeading = heading;
-    final now = DateTime.now().millisecondsSinceEpoch;
+
     if (force || (now - _lastNotifyTime) > 120) {
       _lastNotifyTime = now;
       notifyListeners();
@@ -95,8 +103,8 @@ class LocationChangeNotifier extends ChangeNotifier {
     if (defaultTargetPlatform == TargetPlatform.android) {
       locationSettings = AndroidSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 0,
-        intervalDuration: const Duration(milliseconds: 500),
+        distanceFilter: 1,
+        intervalDuration: const Duration(milliseconds: 1000),
         foregroundNotificationConfig: const ForegroundNotificationConfig(
           notificationText: "正在背景運行定位服務",
           notificationTitle: "公車模擬器執行中",
@@ -106,14 +114,14 @@ class LocationChangeNotifier extends ChangeNotifier {
         defaultTargetPlatform == TargetPlatform.macOS) {
       locationSettings = AppleSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 0,
+        distanceFilter: 1,
         pauseLocationUpdatesAutomatically: false,
         showBackgroundLocationIndicator: true,
       );
     } else {
       locationSettings = const LocationSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 0,
+        distanceFilter: 1,
       );
     }
 
@@ -121,9 +129,22 @@ class LocationChangeNotifier extends ChangeNotifier {
         Geolocator.getPositionStream(locationSettings: locationSettings).listen(
           (Position position) {
             if (_isDisposed || _gpsMode != GpsMode.auto) return;
-            _currentLocation = LatLng(position.latitude, position.longitude);
+            final now = DateTime.now().millisecondsSinceEpoch;
+            final newLoc = LatLng(position.latitude, position.longitude);
+
+            if (_currentLocation != null) {
+              final double d = _distance.as(
+                LengthUnit.Meter,
+                _currentLocation!,
+                newLoc,
+              );
+              if (d < 1.0 && (now - _lastNotifyTime) < 1000) return;
+            }
+
+            _currentLocation = newLoc;
             _currentSpeed = position.speed > 0 ? position.speed * 3.6 : 0;
             _currentHeading = position.heading;
+            _lastNotifyTime = now;
             notifyListeners();
           },
           onError: (e) => debugPrint(e.toString()),

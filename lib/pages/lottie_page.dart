@@ -40,6 +40,8 @@ class _LottiePageState extends State<LottiePage> with TickerProviderStateMixin {
   final Map<String, TextStyle> _baseStyleCache = {};
   final Map<String, double> _calculatedSizes = {};
 
+  final TextPainter _measurer = TextPainter(textDirection: TextDirection.ltr);
+
   @override
   void initState() {
     super.initState();
@@ -98,7 +100,7 @@ class _LottiePageState extends State<LottiePage> with TickerProviderStateMixin {
     _isPreparing = true;
 
     final targetType = _isPriorityMode ? _activeType : LedBroadcastType.slogan;
-    Uint8List? targetData = targetType == LedBroadcastType.next
+    final targetData = targetType == LedBroadcastType.next
         ? Static.settings.lottieNext
         : (targetType == LedBroadcastType.arrival
               ? Static.settings.lottieArrival
@@ -107,6 +109,7 @@ class _LottiePageState extends State<LottiePage> with TickerProviderStateMixin {
     if (targetData == null ||
         (targetData == _displayData && !_isInitialLoading)) {
       _isPreparing = false;
+      if (mounted) setState(() {});
       return;
     }
 
@@ -134,22 +137,23 @@ class _LottiePageState extends State<LottiePage> with TickerProviderStateMixin {
     try {
       final json = jsonDecode(utf8.decode(data));
       if (json['fonts'] != null && json['fonts']['list'] != null) {
-        List<Future> prepTasks = [];
-        for (var f in (json['fonts']['list'] as List)) {
-          final String fn = (f['fName']?.toString() ?? "");
-          final String fam = (f['fFamily']?.toString() ?? "");
-          final String w = (f['fWeight']?.toString() ?? "");
-          final String s = (f['fStyle']?.toString() ?? "");
+        final List<Future> prepTasks = [];
+        for (final f in (json['fonts']['list'] as List)) {
+          final String fn = f['fName']?.toString() ?? "";
+          final String fam = f['fFamily']?.toString() ?? "";
+          final String w = f['fWeight']?.toString() ?? "";
+          final String s = f['fStyle']?.toString() ?? "";
           tempFontMetadata[fn] = {'family': fam, 'weight': w, 'style': s};
           prepTasks.add(_prewarmFont(fn, fam, s, w));
         }
         await Future.wait(prepTasks);
       }
 
-      for (var layer in (json['layers'] as List)) {
+      for (final layer in (json['layers'] as List)) {
         if (layer['t'] != null && layer['t']['d'] != null) {
-          var doc = layer['t']['d']['k'][0]['s'];
-          String nm = layer['nm'].toString();
+          final doc = layer['t']['d']['k'][0]['s'];
+          final String nm = layer['nm']?.toString() ?? "";
+          if (nm.isEmpty) continue;
           tempAllTextLayers.add(nm);
           tempFontFamily[nm] = doc['f']?.toString() ?? "";
           if (doc['sz'] != null &&
@@ -168,23 +172,30 @@ class _LottiePageState extends State<LottiePage> with TickerProviderStateMixin {
       _baseStyleCache.clear();
       _calculatedSizes.clear();
       _lastTextMapHash = null;
-
-      _fontMetadataMap.clear();
-      _fontMetadataMap.addAll(tempFontMetadata);
-      _boundingBoxes.clear();
-      _boundingBoxes.addAll(tempBoundingBoxes);
-      _originalFontSizes.clear();
-      _originalFontSizes.addAll(tempOriginalSizes);
-      _layerInitialText.clear();
-      _layerInitialText.addAll(tempInitialText);
-      _layerIsVertical.clear();
-      _layerIsVertical.addAll(tempIsVertical);
-      _layerFontFamily.clear();
-      _layerFontFamily.addAll(tempFontFamily);
-      _allTextLayers.clear();
-      _allTextLayers.addAll(tempAllTextLayers);
-      _paragraphLayers.clear();
-      _paragraphLayers.addAll(tempBoundingBoxes.keys);
+      _fontMetadataMap
+        ..clear()
+        ..addAll(tempFontMetadata);
+      _boundingBoxes
+        ..clear()
+        ..addAll(tempBoundingBoxes);
+      _originalFontSizes
+        ..clear()
+        ..addAll(tempOriginalSizes);
+      _layerInitialText
+        ..clear()
+        ..addAll(tempInitialText);
+      _layerIsVertical
+        ..clear()
+        ..addAll(tempIsVertical);
+      _layerFontFamily
+        ..clear()
+        ..addAll(tempFontFamily);
+      _allTextLayers
+        ..clear()
+        ..addAll(tempAllTextLayers);
+      _paragraphLayers
+        ..clear()
+        ..addAll(tempBoundingBoxes.keys);
     } catch (_) {}
   }
 
@@ -200,14 +211,10 @@ class _LottiePageState extends State<LottiePage> with TickerProviderStateMixin {
       return;
     try {
       final googleMap = GoogleFonts.asMap();
-      final normalized = target
-          .toLowerCase()
-          .replaceAll(' ', '')
-          .replaceAll('-', '');
+      final normalized = target.toLowerCase().replaceAll(RegExp(r'[\s-]'), '');
       String? mk;
-      for (var k in googleMap.keys) {
-        if (k.toLowerCase().replaceAll(' ', '').replaceAll('-', '') ==
-            normalized) {
+      for (final k in googleMap.keys) {
+        if (k.toLowerCase().replaceAll(RegExp(r'[\s-]'), '') == normalized) {
           mk = k;
           break;
         }
@@ -221,7 +228,7 @@ class _LottiePageState extends State<LottiePage> with TickerProviderStateMixin {
   }
 
   FontWeight _resolveFontWeight(String s, String w, String fn) {
-    final str = (s + w + fn).toLowerCase().trim();
+    final str = (s + w + fn).toLowerCase();
     if (str.contains('900') || str.contains('black')) return FontWeight.w900;
     if (str.contains('800') || (str.contains('extra') && str.contains('bold')))
       return FontWeight.w800;
@@ -250,17 +257,17 @@ class _LottiePageState extends State<LottiePage> with TickerProviderStateMixin {
         ? FontStyle.italic
         : FontStyle.normal;
 
-    TextStyle style;
-    final normalizedTarget = target
-        .toLowerCase()
-        .replaceAll(' ', '')
-        .replaceAll('-', '');
+    final normalizedTarget = target.toLowerCase().replaceAll(
+      RegExp(r'[\s-]'),
+      '',
+    );
     final customIdx = Static.settings.fontList.indexWhere(
       (f) =>
-          f.name.toLowerCase().replaceAll(' ', '').replaceAll('-', '') ==
+          f.name.toLowerCase().replaceAll(RegExp(r'[\s-]'), '') ==
           normalizedTarget,
     );
 
+    TextStyle style;
     if (customIdx != -1) {
       style = TextStyle(
         fontFamily: Static.settings.fontList[customIdx].name,
@@ -270,8 +277,8 @@ class _LottiePageState extends State<LottiePage> with TickerProviderStateMixin {
     } else {
       final googleMap = GoogleFonts.asMap();
       String? mk;
-      for (var k in googleMap.keys) {
-        if (k.toLowerCase().replaceAll(' ', '').replaceAll('-', '') ==
+      for (final k in googleMap.keys) {
+        if (k.toLowerCase().replaceAll(RegExp(r'[\s-]'), '') ==
             normalizedTarget) {
           mk = k;
           break;
@@ -286,14 +293,14 @@ class _LottiePageState extends State<LottiePage> with TickerProviderStateMixin {
             );
     }
     final finalStyle = style.copyWith(fontSize: fs);
-    _baseStyleCache[cacheKey] = finalStyle;
+    if (_baseStyleCache.length < 100) _baseStyleCache[cacheKey] = finalStyle;
     return finalStyle;
   }
 
   String _getProcessedText(String ini, Map<String, String> map, bool vert) {
     String res = ini.replaceAll('\r', '').replaceAll('\n', ' ');
     final sk = map.keys.toList()..sort((a, b) => b.length.compareTo(a.length));
-    for (var k in sk) {
+    for (final k in sk) {
       res = res.replaceAll('{$k}', map[k] ?? "");
     }
     return vert
@@ -302,28 +309,31 @@ class _LottiePageState extends State<LottiePage> with TickerProviderStateMixin {
   }
 
   void _precalculateSizes(Map<String, String> tm) {
-    String h = tm.values.join('|') + (_displayType?.toString() ?? "");
+    final String h = tm.values.join('|') + (_displayType?.toString() ?? "");
     if (_lastTextMapHash == h) return;
     _lastTextMapHash = h;
     _calculatedSizes.clear();
-    final tp = TextPainter(textDirection: TextDirection.ltr);
-    for (String ly in _paragraphLayers) {
+
+    for (final ly in _paragraphLayers) {
       if (!_boundingBoxes.containsKey(ly)) continue;
-      double maxFs = _originalFontSizes[ly] ?? 24.0;
-      Size b = _boundingBoxes[ly]!;
-      bool v = _layerIsVertical[ly] ?? false;
-      String p = _getProcessedText(_layerInitialText[ly] ?? "", tm, v);
+      final double maxFs = _originalFontSizes[ly] ?? 24.0;
+      final Size b = _boundingBoxes[ly]!;
+      final bool v = _layerIsVertical[ly] ?? false;
+      final String p = _getProcessedText(_layerInitialText[ly] ?? "", tm, v);
       final TextStyle bs = _getFinalTextStyle(_layerFontFamily[ly], 1.0);
+
       double lo = 8.0, hi = maxFs, best = lo;
       while (lo <= hi) {
-        double mi = (lo + hi) / 2;
-        tp.text = TextSpan(
+        final double mi = (lo + hi) / 2;
+        _measurer.text = TextSpan(
           text: p,
           style: bs.copyWith(fontSize: mi),
         );
-        tp.maxLines = v ? 100 : 1;
-        tp.layout();
-        if (v ? tp.height <= b.height * 0.95 : tp.width <= b.width * 0.90) {
+        _measurer.maxLines = v ? 100 : 1;
+        _measurer.layout();
+        if (v
+            ? _measurer.height <= b.height * 0.95
+            : _measurer.width <= b.width * 0.90) {
           best = mi;
           lo = mi + 0.5;
         } else {
@@ -345,7 +355,7 @@ class _LottiePageState extends State<LottiePage> with TickerProviderStateMixin {
 
     final status = context.watch<StatusChangeNotifier>().currentStatus;
     final analysis = context.watch<RouteAnalysisProvider>();
-    Map<String, String> tm = analysis.getFormattedVariables(
+    final Map<String, String> tm = analysis.getFormattedVariables(
       analysis.currentLedEvent,
       status,
     );
@@ -363,28 +373,23 @@ class _LottiePageState extends State<LottiePage> with TickerProviderStateMixin {
             _controller.forward(from: 0);
           },
           delegates: LottieDelegates(
-            textStyle: (lfs) {
-              final baseStyle = _getFinalTextStyle(lfs.fontFamily, 24.0);
-              return baseStyle.copyWith(
-                color: Colors.white,
-                height: 1.0,
-                leadingDistribution: TextLeadingDistribution.even,
-              );
-            },
+            textStyle: (lfs) =>
+                _getFinalTextStyle(lfs.fontFamily, 24.0).copyWith(
+                  color: Colors.white,
+                  height: 1.0,
+                  leadingDistribution: TextLeadingDistribution.even,
+                ),
             values: [
-              ..._allTextLayers.map((n) {
-                final initial = _layerInitialText[n];
-                if (initial == null)
-                  return ValueDelegate.text([n, '**'], value: "");
-                return ValueDelegate.text(
+              ..._allTextLayers.map(
+                (n) => ValueDelegate.text(
                   [n, '**'],
                   value: _getProcessedText(
-                    initial,
+                    _layerInitialText[n] ?? "",
                     tm,
                     _layerIsVertical[n] ?? false,
                   ),
-                );
-              }),
+                ),
+              ),
               ..._paragraphLayers.map(
                 (n) => ValueDelegate.textSize(
                   [n, '**'],

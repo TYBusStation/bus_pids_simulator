@@ -153,6 +153,7 @@ class GpsControlProvider extends ChangeNotifier {
 
   void _stopSim() {
     _simTimer?.cancel();
+    _simTimer = null;
     _isSimulating = false;
   }
 
@@ -161,7 +162,9 @@ class GpsControlProvider extends ChangeNotifier {
     _simTimer = Timer.periodic(Duration(milliseconds: _updateIntervalMs), (
       timer,
     ) {
-      if (locNotifier.gpsMode != GpsMode.manual || _simRoute == null) {
+      if (locNotifier.gpsMode != GpsMode.manual ||
+          _simRoute == null ||
+          !_isSimulating) {
         _stopSim();
         notifyListeners();
         return;
@@ -212,7 +215,7 @@ class GpsControlProvider extends ChangeNotifier {
 
   @override
   void dispose() {
-    _simTimer?.cancel();
+    _stopSim();
     super.dispose();
   }
 }
