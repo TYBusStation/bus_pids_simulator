@@ -141,9 +141,13 @@ class RouteAnalysisProvider extends ChangeNotifier {
       );
     }
 
-    final points = status.direction == Direction.go
+    List<LatLng> points = status.direction == Direction.go
         ? status.route.path.goPoints
         : status.route.path.backPoints;
+
+    if (points.isEmpty && stations.length >= 2) {
+      points = stations.map((s) => s.position).toList();
+    }
 
     if (location == null || stations.isEmpty || points.isEmpty) {
       _currentAnalysis = null;
@@ -436,12 +440,14 @@ class RouteAnalysisProvider extends ChangeNotifier {
     List<String> baseExpanded = [];
     for (var item in template) {
       if (item == "{name}") {
-        if (hasFullAudio)
+        if (hasFullAudio) {
           baseExpanded.add("{name_full}");
-        else
+        } else {
           baseExpanded.addAll(Static.settings.stationVoiceSequence);
-      } else
+        }
+      } else {
         baseExpanded.add(item);
+      }
     }
     List<Map<String, dynamic>> finalSequence = [];
     for (var item in baseExpanded) {
@@ -458,12 +464,21 @@ class RouteAnalysisProvider extends ChangeNotifier {
           'locale': 'zh-TW',
         });
       } else if (item == "{name_en}") {
-        String ak = Static.audioManager.hasAudio(currentNameEn)
-            ? currentNameEn
-            : "${currentName}_英";
+        String audioKey = "";
+        if (currentNameEn.isNotEmpty &&
+            Static.audioManager.hasLocalAudio(currentNameEn)) {
+          audioKey = currentNameEn;
+        } else if (Static.audioManager.hasLocalAudio("${currentName}_英")) {
+          audioKey = "${currentName}_英";
+        } else if (currentNameEn.isNotEmpty &&
+            Static.audioManager.hasAudio(currentNameEn)) {
+          audioKey = currentNameEn;
+        } else if (Static.audioManager.hasAudio("${currentName}_英")) {
+          audioKey = "${currentName}_英";
+        }
         finalSequence.add({
           'text': currentNameEn,
-          'audioKey': ak,
+          'audioKey': audioKey,
           'locale': 'en-US',
         });
       } else if (item == "{name_ho}") {
@@ -481,8 +496,9 @@ class RouteAnalysisProvider extends ChangeNotifier {
       } else {
         String locale = item.contains(RegExp(r'[a-zA-Z]')) ? 'en-US' : 'zh-TW';
         if (item.contains("_英")) locale = 'en-US';
-        if (item.contains("_國") || item.contains("_閩") || item.contains("_客"))
+        if (item.contains("_國") || item.contains("_閩") || item.contains("_客")) {
           locale = 'zh-TW';
+        }
         finalSequence.addAll(_expandVoiceText(item, vars, locale));
       }
     }
