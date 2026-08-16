@@ -81,12 +81,13 @@ class AudioManager {
     _currentRouteKeys.clear();
 
     for (var name in names) {
+      final cleanName = name.trim();
       final variants = [
-        name,
-        "${name}_國",
-        "${name}_英",
-        "${name}_閩",
-        "${name}_客",
+        cleanName,
+        "${cleanName}_國",
+        "${cleanName}_英",
+        "${cleanName}_閩",
+        "${cleanName}_客",
       ];
       for (var v in variants) {
         if (await _ensureInCache(v)) {
@@ -131,12 +132,31 @@ class AudioManager {
     if (_audioBox.containsKey(baseName)) {
       return await _audioBox.get(baseName);
     }
+    final audioBoxKeys = _audioBox.keys.cast<String>();
+    final audioBoxMatch = audioBoxKeys.firstWhere(
+      (k) => k.startsWith("${baseName}_["),
+      orElse: () => "",
+    );
+    if (audioBoxMatch.isNotEmpty) {
+      return await _audioBox.get(audioBoxMatch);
+    }
+
     for (var pack in voicePacks) {
       if (!pack.isEnabled) continue;
+
       if (pack.fileNames.contains(baseName)) {
         return await _packDataBox.get("${pack.name}:$baseName");
       }
+
+      final packMatch = pack.fileNames.firstWhere(
+        (fn) => fn.startsWith("${baseName}_["),
+        orElse: () => "",
+      );
+      if (packMatch.isNotEmpty) {
+        return await _packDataBox.get("${pack.name}:$packMatch");
+      }
     }
+
     return null;
   }
 

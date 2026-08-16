@@ -11,6 +11,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../widgets/map_bottom_panel.dart';
+import '../widgets/serial_provider.dart';
 import 'contact_page.dart';
 import 'info_page.dart';
 import 'led_page.dart';
@@ -208,6 +209,37 @@ class _MainPageState extends State<MainPage> {
                               fontSize: 13,
                               fontWeight: FontWeight.bold,
                             ),
+                          ),
+                          const Spacer(),
+                          Consumer<SerialProvider>(
+                            builder: (context, serial, child) {
+                              return InkWell(
+                                onTap: () => serial.connect(),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      serial.isConnected
+                                          ? Icons.usb
+                                          : Icons.usb_off,
+                                      color: serial.isConnected
+                                          ? Colors.green
+                                          : Colors.red,
+                                      size: 14,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      serial.status,
+                                      style: TextStyle(
+                                        color: serial.isConnected
+                                            ? Colors.green
+                                            : Colors.red,
+                                        fontSize: 10,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
                           ),
                           const Spacer(),
                           StreamBuilder(

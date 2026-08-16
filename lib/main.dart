@@ -6,6 +6,7 @@ import 'package:bus_pids_simulator/widgets/gps_control_provider.dart';
 import 'package:bus_pids_simulator/widgets/landscape_provider.dart';
 import 'package:bus_pids_simulator/widgets/location_provider.dart';
 import 'package:bus_pids_simulator/widgets/route_analysis_provider.dart';
+import 'package:bus_pids_simulator/widgets/serial_provider.dart';
 import 'package:bus_pids_simulator/widgets/status_provider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -17,6 +18,7 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => SerialProvider()),
         ChangeNotifierProvider(create: (_) => LandscapeChangeNotifier(false)),
         ChangeNotifierProvider(
           create: (_) => StatusChangeNotifier(Static.currentStatus),

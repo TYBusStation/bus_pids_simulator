@@ -98,12 +98,19 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
                 setState(() {});
               },
             ),
-            SequenceManagerWidget<String>(
-              title: "即將接近字幕序列",
-              subtitle: "站名串接列表：{next_stations}",
-              items: Static.settings.nextStationListSequence,
-              onAdd: () => "{next_stations}",
-              onEdit: (val) async => await _showTextDialog(val),
+            SequenceManagerWidget<LedSequence>(
+              title: "字幕輪播標語設定",
+              subtitle: "",
+              items: Static.settings.sloganList,
+              onAdd: () => LedSequence(template: "歡迎搭乘"),
+              onEdit: (val) async {
+                final result = await _showLedDialog(val, "編輯輪播標語");
+                if (result != null) {
+                  await Static.saveSettings();
+                  setState(() {});
+                }
+                return result;
+              },
             ),
             ExpansionTile(
               title: const Text(
@@ -272,8 +279,7 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
                         ),
                         items: LedEntryShort.values.map((v) {
                           String label = v.name;
-                          if (v == LedEntryShort.asLongSetting)
-                            label = "跟隨長文字行為 (強制滾動)";
+                          if (v == LedEntryShort.asLongSetting) label = "長文字行為";
 
                           return DropdownMenuItem(
                             value: v,
@@ -363,8 +369,10 @@ class _LedSettingsTabState extends State<LedSettingsTab> {
               item.entrySpeed = double.tryParse(eC.text) ?? 500;
               item.scrollSpeed = double.tryParse(sC.text) ?? 400;
               item.stayMs = int.tryParse(dC.text) ?? 800;
-              item.color = int.tryParse(cC.text) ?? 0xFFFF0000;
-              Static.saveSettings();
+              final parsedColor = int.tryParse(cC.text, radix: 16);
+              if (parsedColor != null) {
+                item.color = parsedColor;
+              }
               Navigator.pop(v, item);
             },
             child: const Text("確定"),

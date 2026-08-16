@@ -48,7 +48,7 @@ class LedSequence {
   };
 
   factory LedSequence.fromJson(Map<String, dynamic> json) => LedSequence(
-    template: json['template'],
+    template: json['template'] ?? "",
     entryShort: LedEntryShort.values.firstWhere(
       (e) => e.name == json['entryShort'],
       orElse: () => LedEntryShort.bottomLeft,
@@ -60,7 +60,7 @@ class LedSequence {
     scrollSpeed: (json['scrollSpeed'] as num).toDouble(),
     stayMs: json['stayMs'] as int,
     entrySpeed: (json['entrySpeed'] as num).toDouble(),
-    color: json['color'] ?? -1,
+    color: json['color'] is int ? json['color'] : -1,
     forceLongEntry: json['forceLongEntry'] ?? false,
   );
 }

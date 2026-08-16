@@ -5,8 +5,10 @@ import 'package:provider/provider.dart';
 
 import '../data/led_sequence.dart';
 import '../data/status.dart';
+import '../utils/led_command_helper.dart';
 import '../utils/static.dart';
 import '../widgets/route_analysis_provider.dart';
+import '../widgets/serial_provider.dart';
 import '../widgets/status_provider.dart';
 
 class LedPage extends StatefulWidget {
@@ -18,14 +20,20 @@ class LedPage extends StatefulWidget {
 
 class _LedPageState extends State<LedPage> {
   List<LedSequence> _activeQueue = [];
-  int _queueIndex = 0, _sloganIndex = 0;
+  int _queueIndex = 0;
+  int _sloganIndex = 0;
   DateTime? _lastEventTime;
-  bool _isPriorityMode = false, _isBlanking = false;
+  bool _isPriorityMode = false;
+  bool _isBlanking = false;
+
   String _currentText = "";
   LedSequence? _currentConfig;
 
   String _cachedSloganText = "";
   String? _lastSloganCacheKey;
+
+  StreamSubscription? _serialSubscription;
+  String _serialBuffer = "";
 
   @override
   void initState() {
@@ -33,19 +41,67 @@ class _LedPageState extends State<LedPage> {
     _nextSlogan();
     context.read<RouteAnalysisProvider>().addListener(_onLedEventChanged);
     Static.settings.addListener(_onSettingsChanged);
+
+    final serial = context.read<SerialProvider>();
+    _serialSubscription = serial.receiveStream.listen((data) {
+      _serialBuffer += data;
+      if (_serialBuffer.contains("FIN")) {
+        _serialBuffer = "";
+        _onSequenceComplete();
+      }
+      if (_serialBuffer.length > 300) _serialBuffer = "";
+    });
   }
 
   @override
   void dispose() {
+    _serialSubscription?.cancel();
+    Static.settings.removeListener(_onSettingsChanged);
     try {
       context.read<RouteAnalysisProvider>().removeListener(_onLedEventChanged);
     } catch (_) {}
-    Static.settings.removeListener(_onSettingsChanged);
     super.dispose();
   }
 
   void _onSettingsChanged() {
     if (mounted) setState(() {});
+  }
+
+  void _applyNewContent(String text, LedSequence config) async {
+    if (!mounted) return;
+
+    setState(() {
+      _isBlanking = true;
+      _currentText = text;
+      _currentConfig = config;
+    });
+
+    final serial = context.read<SerialProvider>();
+
+    if (serial.isConnected) {
+      try {
+        final result = await LedCommandHelper.generateCommand(
+          text: text,
+          config: config,
+        );
+        serial.sendLedImageRaw(result.command);
+      } catch (e) {
+        _onSequenceComplete();
+      }
+    }
+
+    if (mounted) setState(() => _isBlanking = false);
+  }
+
+  void _onSequenceComplete() {
+    if (!mounted) return;
+
+    if (_isPriorityMode) {
+      _queueIndex++;
+      _updateText(context.read<RouteAnalysisProvider>().currentLedEvent);
+    } else {
+      _nextSlogan();
+    }
   }
 
   void _onLedEventChanged() {
@@ -80,15 +136,7 @@ class _LedPageState extends State<LedPage> {
         _queueIndex++;
         _updateText(event);
       } else {
-        setState(() => _isBlanking = true);
-        Future.delayed(const Duration(milliseconds: 30), () {
-          if (!mounted) return;
-          setState(() {
-            _currentText = res;
-            _currentConfig = config;
-            _isBlanking = false;
-          });
-        });
+        _applyNewContent(res, config);
       }
     } else {
       _isPriorityMode = false;
@@ -167,60 +215,129 @@ class _LedPageState extends State<LedPage> {
       }
     }
 
-    if (slogans.isEmpty) {
-      _currentText = "";
-      _currentConfig = null;
-    } else {
+    if (slogans.isNotEmpty) {
       final config = slogans[_sloganIndex % slogans.length];
-      _currentText = provider.formatTemplate(
+      String res = provider.formatTemplate(
         config.template,
         LedEvent(type: LedBroadcastType.slogan, name: "", nameEn: ""),
         status,
       );
-      _currentConfig = config;
       _sloganIndex++;
+      _applyNewContent(res, config);
     }
-    if (mounted) setState(() => _isBlanking = false);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Center(
-        child: Container(
-          width: MediaQuery.of(context).size.width * 0.98,
-          height: Static.settings.ledHeight,
-          decoration: BoxDecoration(
-            color: const Color(0xFF101010),
-            border: Border.all(color: const Color(0xFF999999), width: 12),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: ClipRect(
-            child: RepaintBoundary(
-              child: (_isBlanking || _currentText.isEmpty)
-                  ? const SizedBox.expand()
-                  : LedContent(
-                      key: ValueKey(
-                        "LED_${_currentText}_${_isPriorityMode}_$_queueIndex",
-                      ),
-                      text: _currentText,
-                      config: _currentConfig ?? LedSequence(template: ""),
-                      containerHeight: Static.settings.ledHeight,
-                      onComplete: () {
-                        if (_isPriorityMode) {
-                          _queueIndex++;
-                          _updateText(
-                            context
-                                .read<RouteAnalysisProvider>()
-                                .currentLedEvent,
-                          );
-                        } else
-                          _nextSlogan();
-                      },
-                    ),
+      body: Stack(
+        children: [
+          Center(
+            child: Consumer<SerialProvider>(
+              builder: (context, serial, child) {
+                return serial.isConnected
+                    ? _buildConnectedStatus()
+                    : _buildVirtualLed();
+              },
             ),
           ),
+          Positioned(
+            left: 10,
+            bottom: 10,
+            child: Consumer<SerialProvider>(
+              builder: (context, serial, child) {
+                return InkWell(
+                  onTap: () => serial.connect(),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          serial.isConnected ? Icons.usb : Icons.usb_off,
+                          color: serial.isConnected ? Colors.green : Colors.red,
+                          size: 14,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          serial.status,
+                          style: TextStyle(
+                            color: serial.isConnected
+                                ? Colors.green
+                                : Colors.red,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConnectedStatus() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(Icons.usb, color: Colors.green, size: 64),
+        const SizedBox(height: 16),
+        const Text(
+          "實體 LED 控制器已連線",
+          style: TextStyle(
+            color: Colors.green,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          "正在播放：$_currentText",
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: Colors.white70, fontSize: 16),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildVirtualLed() {
+    return Container(
+      width: MediaQuery.of(context).size.width * 0.98,
+      height: Static.settings.ledHeight,
+      decoration: BoxDecoration(
+        color: const Color(0xFF101010),
+        border: Border.all(color: const Color(0xFF999999), width: 12),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: ClipRect(
+        child: RepaintBoundary(
+          child: (_isBlanking || _currentText.isEmpty)
+              ? const SizedBox.expand()
+              : LedContent(
+                  key: ValueKey(
+                    "LED_${_currentText}_${_isPriorityMode}_$_queueIndex",
+                  ),
+                  text: _currentText,
+                  config: _currentConfig ?? LedSequence(template: ""),
+                  containerHeight: Static.settings.ledHeight,
+                  onComplete: () {
+                    if (!context.read<SerialProvider>().isConnected) {
+                      _onSequenceComplete();
+                    }
+                  },
+                ),
         ),
       ),
     );
@@ -274,7 +391,6 @@ class _LedContentState extends State<LedContent> with TickerProviderStateMixin {
 
     double tw = rb.size.width;
     double vw = MediaQuery.of(context).size.width * 0.98;
-
     _isLong = tw > (vw - 80);
 
     bool effectiveIsLong =
@@ -283,7 +399,6 @@ class _LedContentState extends State<LedContent> with TickerProviderStateMixin {
     if (mounted) {
       setState(() {
         if (!effectiveIsLong) {
-          // --- 執行短文字邏輯 ---
           _align = (widget.config.entryShort.name.contains('Left'))
               ? Alignment.centerLeft
               : Alignment.center;
@@ -315,7 +430,6 @@ class _LedContentState extends State<LedContent> with TickerProviderStateMixin {
         await _entryAnim.forward().orCancel;
         await Future.delayed(Duration(milliseconds: widget.config.stayMs));
         if (!mounted) return;
-
         if (effectiveIsLong) {
           _startScroll(tw, vw);
         } else {
@@ -328,10 +442,11 @@ class _LedContentState extends State<LedContent> with TickerProviderStateMixin {
 
   void _startScroll(double tw, double vw) {
     if (!mounted) return;
-    double dist = tw + vw,
-        speed = widget.config.scrollSpeed > 0
-            ? widget.config.scrollSpeed
-            : Static.settings.ledScrollSpeed;
+    double dist = tw + vw;
+    double speed = widget.config.scrollSpeed > 0
+        ? widget.config.scrollSpeed
+        : Static.settings.ledScrollSpeed;
+
     _scrollAnim.duration = Duration(
       milliseconds: (dist / speed * 1000).toInt().clamp(100, 60000),
     );

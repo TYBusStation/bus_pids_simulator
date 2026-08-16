@@ -80,6 +80,13 @@ class RouteAnalysisProvider extends ChangeNotifier {
     double accuracy = 0,
     double? heading,
   }) {
+    if (status.dutyStatus == DutyStatus.onDuty) {
+      if (_isOffDutyAlert) {
+        _isOffDutyAlert = false;
+        Static.audioManager.stop();
+        notifyListeners();
+      }
+    }
     if (accuracy > 50) return;
     final now = DateTime.now();
     final int nowMs = now.millisecondsSinceEpoch;
