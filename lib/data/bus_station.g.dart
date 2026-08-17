@@ -20,6 +20,14 @@ BusStation _$BusStationFromJson(Map<String, dynamic> json) => BusStation(
   arrivalTemplate: (json['arrival_template'] as List<dynamic>?)
       ?.map((e) => e as String)
       .toList(),
+  useGlobalNextLed: json['use_global_next_led'] as bool? ?? true,
+  useGlobalArrivalLed: json['use_global_arrival_led'] as bool? ?? true,
+  nextLedTemplate: (json['next_led_template'] as List<dynamic>?)
+      ?.map((e) => LedSequence.fromJson(e as Map<String, dynamic>))
+      .toList(),
+  arrivalLedTemplate: (json['arrival_led_template'] as List<dynamic>?)
+      ?.map((e) => LedSequence.fromJson(e as Map<String, dynamic>))
+      .toList(),
 );
 
 Map<String, dynamic> _$BusStationToJson(BusStation instance) =>
@@ -33,4 +41,8 @@ Map<String, dynamic> _$BusStationToJson(BusStation instance) =>
       'use_global_arrival': instance.useGlobalArrival,
       'next_template': instance.nextTemplate,
       'arrival_template': instance.arrivalTemplate,
+      'use_global_next_led': instance.useGlobalNextLed,
+      'use_global_arrival_led': instance.useGlobalArrivalLed,
+      'next_led_template': instance.nextLedTemplate,
+      'arrival_led_template': instance.arrivalLedTemplate,
     };

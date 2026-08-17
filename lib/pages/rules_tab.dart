@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../utils/formatter_utils.dart';
 import '../utils/static.dart';
 
 class RulesTab extends StatefulWidget {
@@ -19,9 +20,7 @@ class _RulesTabState extends State<RulesTab> {
           title: const Text("啟用到站報站語音", style: TextStyle(fontSize: 14)),
           value: Static.settings.enableArrivalBroadcast,
           onChanged: (v) {
-            setState(() {
-              Static.settings.enableArrivalBroadcast = v;
-            });
+            setState(() => Static.settings.enableArrivalBroadcast = v);
             Static.saveSettings();
           },
         ),
@@ -36,23 +35,16 @@ class _RulesTabState extends State<RulesTab> {
           Static.settings.nextStationDistance,
           (v) => Static.settings.nextStationDistance = v,
         ),
-        _dTile(
-          "下站離開上站觸發距離 (公尺)",
-          Static.settings.nextStationDepartureDistance,
-          (v) => Static.settings.nextStationDepartureDistance = v,
-        ),
-        _dTile(
-          "語音片段間隔 (毫秒)",
-          Static.settings.voiceSegmentDelay,
-          (v) => Static.settings.voiceSegmentDelay = v,
-        ),
-        const Divider(height: 32),
+        const Divider(),
         SequenceManagerWidget<String>(
-          title: "{name}",
+          title: "站名語音序列元件",
           subtitle: "中文：{name_zh}，閩語：{name_ho}，客語：{name_hk}，英語：{name_en}",
           items: Static.settings.stationVoiceSequence,
           onAdd: () => "{name_zh}",
-          onEdit: (val) async => await _showTextDialog(val),
+          onEdit: (val) => FormatterUtils.showTextEditDialog(
+            context: context,
+            initialValue: val,
+          ),
         ),
         SequenceManagerWidget<String>(
           title: "下站報站語音序列",
@@ -60,7 +52,10 @@ class _RulesTabState extends State<RulesTab> {
               "{name}，中文：{name_zh}，閩語：{name_ho}，客語：{name_hk}，英語：{name_en}，終點站：{terminal}",
           items: Static.settings.nextStationTemplate,
           onAdd: () => "下一站",
-          onEdit: (val) async => await _showTextDialog(val),
+          onEdit: (val) => FormatterUtils.showTextEditDialog(
+            context: context,
+            initialValue: val,
+          ),
         ),
         SequenceManagerWidget<String>(
           title: "到站報站語音序列",
@@ -68,7 +63,10 @@ class _RulesTabState extends State<RulesTab> {
               "{name}，中文：{name_zh}，閩語：{name_ho}，客語：{name_hk}，英語：{name_en}，終點站：{terminal}",
           items: Static.settings.arrivalTemplate,
           onAdd: () => "到了",
-          onEdit: (val) async => await _showTextDialog(val),
+          onEdit: (val) => FormatterUtils.showTextEditDialog(
+            context: context,
+            initialValue: val,
+          ),
         ),
       ],
     );
@@ -84,9 +82,6 @@ class _RulesTabState extends State<RulesTab> {
           initialValue: v.toStringAsFixed(0),
           textAlign: TextAlign.end,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-          ),
           onChanged: (s) {
             final n = double.tryParse(s);
             if (n != null) {
@@ -95,31 +90,6 @@ class _RulesTabState extends State<RulesTab> {
             }
           },
         ),
-      ),
-    );
-  }
-
-  Future<String?> _showTextDialog(String initial) async {
-    final c = TextEditingController(text: initial);
-    return await showDialog<String>(
-      context: context,
-      builder: (v) => AlertDialog(
-        title: const Text("編輯片段"),
-        content: TextField(
-          controller: c,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: "內容"),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(v),
-            child: const Text("取消"),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(v, c.text),
-            child: const Text("確定"),
-          ),
-        ],
       ),
     );
   }
@@ -154,7 +124,9 @@ class _SequenceManagerWidgetState<T> extends State<SequenceManagerWidget<T>> {
         widget.title,
         style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
       ),
-      subtitle: Text(widget.subtitle, style: TextStyle(fontSize: 12)),
+      subtitle: widget.subtitle.isEmpty
+          ? null
+          : Text(widget.subtitle, style: const TextStyle(fontSize: 11)),
       children: [
         ...widget.items.asMap().entries.map(
           (e) => ListTile(
@@ -163,6 +135,7 @@ class _SequenceManagerWidgetState<T> extends State<SequenceManagerWidget<T>> {
               e.value is String
                   ? e.value as String
                   : (e.value as dynamic).template,
+              style: const TextStyle(fontSize: 13),
             ),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
@@ -171,12 +144,9 @@ class _SequenceManagerWidgetState<T> extends State<SequenceManagerWidget<T>> {
                   icon: const Icon(Icons.edit, size: 18),
                   onPressed: () async {
                     final result = await widget.onEdit(e.value);
-                    if (result != null) {
-                      setState(() {
-                        widget.items[e.key] = result;
-                      });
-                      Static.saveSettings();
-                    }
+                    if (result != null)
+                      setState(() => widget.items[e.key] = result);
+                    Static.saveSettings();
                   },
                 ),
                 IconButton(
@@ -201,8 +171,8 @@ class _SequenceManagerWidgetState<T> extends State<SequenceManagerWidget<T>> {
           ),
         ),
         ListTile(
-          leading: const Icon(Icons.add),
-          title: const Text("新增"),
+          leading: const Icon(Icons.add, size: 20),
+          title: const Text("新增", style: TextStyle(fontSize: 13)),
           onTap: () => setState(() {
             widget.items.add(widget.onAdd());
             Static.saveSettings();

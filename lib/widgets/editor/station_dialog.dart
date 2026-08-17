@@ -1,7 +1,9 @@
+import 'package:bus_pids_simulator/utils/formatter_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../data/bus_station.dart';
+import '../../data/led_sequence.dart';
 
 class SequenceManagerWidget<T> extends StatefulWidget {
   final String title;
@@ -63,6 +65,17 @@ class _SequenceManagerWidgetState<T> extends State<SequenceManagerWidget<T>> {
                   IconButton(
                     visualDensity: VisualDensity.compact,
                     padding: EdgeInsets.zero,
+                    icon: const Icon(Icons.arrow_upward, size: 14),
+                    onPressed: e.key == 0
+                        ? null
+                        : () => setState(() {
+                            final item = widget.items.removeAt(e.key);
+                            widget.items.insert(e.key - 1, item);
+                          }),
+                  ),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
                     icon: const Icon(Icons.delete, size: 14, color: Colors.red),
                     onPressed: () =>
                         setState(() => widget.items.removeAt(e.key)),
@@ -106,27 +119,36 @@ class StationDialog extends StatefulWidget {
 class _StationDialogState extends State<StationDialog> {
   late TextEditingController _nameCtrl, _nameEnCtrl, _orderCtrl;
   late List<String> _nextTpl, _arrTpl;
+  late List<LedSequence> _nextLedTpl, _arrLedTpl;
   bool _useGlobalNext = true, _useGlobalArrival = true;
+  bool _useGlobalNextLed = true, _useGlobalArrivalLed = true;
 
   @override
   void initState() {
     super.initState();
     _nameCtrl = TextEditingController(text: widget.existing?.name ?? "");
     _nameEnCtrl = TextEditingController(text: widget.existing?.nameEn ?? "");
-
     bool isExistInRoute =
         widget.existing != null && widget.currentList.contains(widget.existing);
-
     int initialOrder = isExistInRoute
         ? widget.existing!.order
         : (widget.currentList.length + 1);
-
     _orderCtrl = TextEditingController(text: initialOrder.toString());
 
     _nextTpl = List.from(widget.existing?.nextTemplate ?? ["下一站", "{name}"]);
     _arrTpl = List.from(widget.existing?.arrivalTemplate ?? ["{name}", "到了"]);
     _useGlobalNext = widget.existing?.useGlobalNext ?? true;
     _useGlobalArrival = widget.existing?.useGlobalArrival ?? true;
+
+    _useGlobalNextLed = widget.existing?.useGlobalNextLed ?? true;
+    _useGlobalArrivalLed = widget.existing?.useGlobalArrivalLed ?? true;
+    _nextLedTpl = List.from(
+      widget.existing?.nextLedTemplate ?? [LedSequence(template: "下一站 {name}")],
+    );
+    _arrLedTpl = List.from(
+      widget.existing?.arrivalLedTemplate ??
+          [LedSequence(template: "{name} 到了")],
+    );
   }
 
   @override
@@ -135,42 +157,6 @@ class _StationDialogState extends State<StationDialog> {
     _nameEnCtrl.dispose();
     _orderCtrl.dispose();
     super.dispose();
-  }
-
-  Future<String?> _showTextDialog(String initial) async {
-    final c = TextEditingController(text: initial);
-    final result = await showDialog<String>(
-      context: context,
-      builder: (v) => AlertDialog(
-        contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              "編輯片段",
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-            ),
-            TextField(
-              controller: c,
-              autofocus: true,
-              style: const TextStyle(fontSize: 13),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(v),
-            child: const Text("取消"),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(v, c.text),
-            child: const Text("確定"),
-          ),
-        ],
-      ),
-    );
-    c.dispose();
-    return result;
   }
 
   InputDecoration _compactInp(String label) => InputDecoration(
@@ -184,11 +170,10 @@ class _StationDialogState extends State<StationDialog> {
   Widget build(BuildContext context) {
     bool isExistInRoute =
         widget.existing != null && widget.currentList.contains(widget.existing);
-
     return AlertDialog(
       contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       content: SizedBox(
-        width: 550,
+        width: 600,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -198,15 +183,6 @@ class _StationDialogState extends State<StationDialog> {
                 "站點設定",
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
               ),
-              if (widget.routeNames.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text(
-                  "路線：${widget.routeNames.join(", ")}",
-                  style: const TextStyle(fontSize: 11, color: Colors.grey),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -214,7 +190,6 @@ class _StationDialogState extends State<StationDialog> {
                     flex: 1,
                     child: TextField(
                       controller: _orderCtrl,
-                      style: const TextStyle(fontSize: 12),
                       decoration: _compactInp("順序"),
                       keyboardType: TextInputType.number,
                     ),
@@ -224,7 +199,6 @@ class _StationDialogState extends State<StationDialog> {
                     flex: 3,
                     child: TextField(
                       controller: _nameCtrl,
-                      style: const TextStyle(fontSize: 12),
                       decoration: _compactInp("站名"),
                     ),
                   ),
@@ -233,12 +207,12 @@ class _StationDialogState extends State<StationDialog> {
                     flex: 4,
                     child: TextField(
                       controller: _nameEnCtrl,
-                      style: const TextStyle(fontSize: 12),
                       decoration: _compactInp("英文站名"),
                     ),
                   ),
                 ],
               ),
+              const Divider(),
               Row(
                 children: [
                   Expanded(
@@ -246,8 +220,8 @@ class _StationDialogState extends State<StationDialog> {
                       contentPadding: EdgeInsets.zero,
                       dense: true,
                       title: const Text(
-                        "下一站報站同步全域",
-                        style: TextStyle(fontSize: 11),
+                        "語音下站同步全域",
+                        style: TextStyle(fontSize: 10),
                       ),
                       value: _useGlobalNext,
                       onChanged: (v) => setState(() => _useGlobalNext = v),
@@ -258,8 +232,8 @@ class _StationDialogState extends State<StationDialog> {
                       contentPadding: EdgeInsets.zero,
                       dense: true,
                       title: const Text(
-                        "到站報站同步全域",
-                        style: TextStyle(fontSize: 11),
+                        "語音到站同步全域",
+                        style: TextStyle(fontSize: 10),
                       ),
                       value: _useGlobalArrival,
                       onChanged: (v) => setState(() => _useGlobalArrival = v),
@@ -274,10 +248,14 @@ class _StationDialogState extends State<StationDialog> {
                     Expanded(
                       child: !_useGlobalNext
                           ? SequenceManagerWidget<String>(
-                              title: "自訂下一站報站",
+                              title: "自訂下一站語音",
                               items: _nextTpl,
                               onAdd: () => "下一站",
-                              onEdit: (val) => _showTextDialog(val),
+                              onEdit: (val) =>
+                                  FormatterUtils.showTextEditDialog(
+                                    context: context,
+                                    initialValue: val,
+                                  ),
                             )
                           : const SizedBox(),
                     ),
@@ -285,10 +263,77 @@ class _StationDialogState extends State<StationDialog> {
                     Expanded(
                       child: !_useGlobalArrival
                           ? SequenceManagerWidget<String>(
-                              title: "自訂到站報站",
+                              title: "自訂到站語音",
                               items: _arrTpl,
                               onAdd: () => "到了",
-                              onEdit: (val) => _showTextDialog(val),
+                              onEdit: (val) =>
+                                  FormatterUtils.showTextEditDialog(
+                                    context: context,
+                                    initialValue: val,
+                                  ),
+                            )
+                          : const SizedBox(),
+                    ),
+                  ],
+                ),
+              const Divider(),
+              Row(
+                children: [
+                  Expanded(
+                    child: SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      title: const Text(
+                        "字幕下站同步全域",
+                        style: TextStyle(fontSize: 10),
+                      ),
+                      value: _useGlobalNextLed,
+                      onChanged: (v) => setState(() => _useGlobalNextLed = v),
+                    ),
+                  ),
+                  Expanded(
+                    child: SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      title: const Text(
+                        "字幕到站同步全域",
+                        style: TextStyle(fontSize: 10),
+                      ),
+                      value: _useGlobalArrivalLed,
+                      onChanged: (v) =>
+                          setState(() => _useGlobalArrivalLed = v),
+                    ),
+                  ),
+                ],
+              ),
+              if (!_useGlobalNextLed || !_useGlobalArrivalLed)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: !_useGlobalNextLed
+                          ? SequenceManagerWidget<LedSequence>(
+                              title: "自訂下一站字幕",
+                              items: _nextLedTpl,
+                              onAdd: () => LedSequence(template: "下一站"),
+                              onEdit: (val) => FormatterUtils.showLedEditDialog(
+                                context: context,
+                                item: val,
+                              ),
+                            )
+                          : const SizedBox(),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: !_useGlobalArrivalLed
+                          ? SequenceManagerWidget<LedSequence>(
+                              title: "自訂到站字幕",
+                              items: _arrLedTpl,
+                              onAdd: () => LedSequence(template: "到了"),
+                              onEdit: (val) => FormatterUtils.showLedEditDialog(
+                                context: context,
+                                item: val,
+                              ),
                             )
                           : const SizedBox(),
                     ),
@@ -298,7 +343,6 @@ class _StationDialogState extends State<StationDialog> {
           ),
         ),
       ),
-      actionsPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       actions: [
         if (isExistInRoute) ...[
           TextButton(
@@ -329,11 +373,15 @@ class _StationDialogState extends State<StationDialog> {
               useGlobalArrival: _useGlobalArrival,
               nextTemplate: _useGlobalNext ? null : _nextTpl,
               arrivalTemplate: _useGlobalArrival ? null : _arrTpl,
+              useGlobalNextLed: _useGlobalNextLed,
+              useGlobalArrivalLed: _useGlobalArrivalLed,
+              nextLedTemplate: _useGlobalNextLed ? null : _nextLedTpl,
+              arrivalLedTemplate: _useGlobalArrivalLed ? null : _arrLedTpl,
             );
             Navigator.pop(context, {
               'action': 'save',
               'station': s,
-              'order': int.tryParse(_orderCtrl.text) ?? 1,
+              'order': s.order,
             });
           },
           child: Text(

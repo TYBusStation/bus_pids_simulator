@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../data/bus_station.dart';
+import '../data/led_sequence.dart';
 import '../data/status.dart';
 import '../utils/route_engine.dart';
 import '../utils/static.dart';
@@ -15,12 +16,14 @@ class LedEvent {
   final String name, nameEn;
   final bool isTerminal;
   final DateTime timestamp;
+  final List<LedSequence>? customSequence;
 
   LedEvent({
     required this.type,
     required this.name,
     required this.nameEn,
     this.isTerminal = false,
+    this.customSequence,
   }) : timestamp = DateTime.now();
 }
 
@@ -53,6 +56,13 @@ class RouteAnalysisProvider extends ChangeNotifier {
   bool get isOffDutyAlert => _isOffDutyAlert;
 
   LedEvent get currentLedEvent => _currentLedEvent;
+
+  String _sanitize(String input) {
+    return input
+        .replaceAll(RegExp(r'[\\/*?:"<>|]'), '')
+        .replaceAll(RegExp(r'\.+$'), '')
+        .trim();
+  }
 
   void resetAnalysis() {
     _activeSequenceId++;
@@ -215,12 +225,23 @@ class RouteAnalysisProvider extends ChangeNotifier {
           _lastArrivedStationOrder != next.order) {
         _lastArrivedStationOrder = next.order;
         _displayStation = next;
+
+        final bool isTerminal = next.order == terminalOrder;
+        final customLedSeq =
+            (next.useGlobalArrivalLed || next.arrivalLedTemplate == null)
+            ? null
+            : next.arrivalLedTemplate;
+
         _currentLedEvent = LedEvent(
           type: LedBroadcastType.arrival,
           name: next.name,
           nameEn: next.nameEn,
-          isTerminal: next.order == terminalOrder,
+          isTerminal: isTerminal,
+          customSequence: customLedSeq,
         );
+
+        notifyListeners();
+
         if (Static.settings.enableArrivalBroadcast) {
           final template =
               (next.useGlobalArrival || next.arrivalTemplate == null)
@@ -228,19 +249,46 @@ class RouteAnalysisProvider extends ChangeNotifier {
               : next.arrivalTemplate!;
           if (template.isNotEmpty) {
             final vars = getFormattedVariables(_currentLedEvent, status);
-            _executeVoice(
-              _buildSeq(
-                template,
-                next,
-                next.order == terminalOrder,
-                status,
-                vars,
-              ),
-            );
+            _executeVoice(_buildSeq(template, next, isTerminal, status, vars));
           }
         }
       }
     }
+  }
+
+  void _triggerNextStationBroadcast(
+    BusStation station,
+    int terminalOrder,
+    Status status,
+  ) {
+    if (_lastDutyStatus != DutyStatus.onDuty ||
+        _lastSpokenStationOrder == station.order)
+      return;
+    final bool isTerminal = station.order == terminalOrder;
+    _lastSpokenStationOrder = station.order;
+    _displayStation = station;
+
+    final customLedSeq =
+        (station.useGlobalNextLed || station.nextLedTemplate == null)
+        ? null
+        : station.nextLedTemplate;
+
+    _currentLedEvent = LedEvent(
+      type: LedBroadcastType.next,
+      name: station.name,
+      nameEn: station.nameEn,
+      isTerminal: isTerminal,
+      customSequence: customLedSeq,
+    );
+
+    final vars = getFormattedVariables(_currentLedEvent, status);
+    notifyListeners();
+
+    final template = (station.useGlobalNext || station.nextTemplate == null)
+        ? Static.settings.nextStationTemplate
+        : station.nextTemplate!;
+    if (template.isNotEmpty)
+      _executeVoice(_buildSeq(template, station, isTerminal, status, vars));
   }
 
   double getEffectiveSpeedMs() {
@@ -373,7 +421,7 @@ class RouteAnalysisProvider extends ChangeNotifier {
           _isOffDutyAlert ||
           _lastDutyStatus != DutyStatus.onDuty)
         return;
-      String audioKey = (part['audioKey'] as String).replaceAll("/", ""),
+      String audioKey = part['audioKey'] as String,
           text = part['text'] as String;
       double speed = (part['speed'] as double) * Static.settings.globalSpeed;
       if (audioKey.isNotEmpty && Static.audioManager.hasAudio(audioKey))
@@ -394,32 +442,6 @@ class RouteAnalysisProvider extends ChangeNotifier {
     }
   }
 
-  void _triggerNextStationBroadcast(
-    BusStation station,
-    int terminalOrder,
-    Status status,
-  ) {
-    if (_lastDutyStatus != DutyStatus.onDuty ||
-        _lastSpokenStationOrder == station.order)
-      return;
-    final bool isTerminal = station.order == terminalOrder;
-    _lastSpokenStationOrder = station.order;
-    _displayStation = station;
-    _currentLedEvent = LedEvent(
-      type: LedBroadcastType.next,
-      name: station.name,
-      nameEn: station.nameEn,
-      isTerminal: isTerminal,
-    );
-    final vars = getFormattedVariables(_currentLedEvent, status);
-    notifyListeners();
-    final template = (station.useGlobalNext || station.nextTemplate == null)
-        ? Static.settings.nextStationTemplate
-        : station.nextTemplate!;
-    if (template.isNotEmpty)
-      _executeVoice(_buildSeq(template, station, isTerminal, status, vars));
-  }
-
   List<Map<String, dynamic>> _expandVoiceText(
     String text,
     Map<String, String> vars,
@@ -427,7 +449,7 @@ class RouteAnalysisProvider extends ChangeNotifier {
   ) {
     String processed = _performReplacement(text, vars);
     if (processed.trim().isEmpty) return [];
-    String audioKey = processed;
+    String audioKey = _sanitize(processed);
     String ttsText = processed.replaceAll(RegExp(r'_(國|英|閩|客)$'), "");
     return [
       {'text': ttsText, 'audioKey': audioKey, 'locale': locale},
@@ -441,8 +463,8 @@ class RouteAnalysisProvider extends ChangeNotifier {
     Status status,
     Map<String, String> vars,
   ) {
-    String currentName = vars['name'] ?? station.name;
-    String currentNameEn = vars['nameEn'] ?? station.nameEn;
+    String currentName = _sanitize(vars['name'] ?? station.name);
+    String currentNameEn = _sanitize(vars['nameEn'] ?? station.nameEn);
     bool hasFullAudio = Static.audioManager.hasAudio(currentName);
     List<String> baseExpanded = [];
     for (var item in template) {

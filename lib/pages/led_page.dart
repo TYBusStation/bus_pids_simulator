@@ -108,17 +108,27 @@ class _LedPageState extends State<LedPage> {
     final event = context.read<RouteAnalysisProvider>().currentLedEvent;
     if (event.timestamp != _lastEventTime &&
         event.type != LedBroadcastType.slogan) {
+      if (event.type == LedBroadcastType.arrival &&
+          !Static.settings.enableArrivalLedBroadcast) {
+        return;
+      }
+
       _lastEventTime = event.timestamp;
       _startPrioritySequence(event);
     }
   }
 
   void _startPrioritySequence(LedEvent event) {
-    _activeQueue = List.from(
-      event.type == LedBroadcastType.next
-          ? Static.settings.ledNextStationSeq
-          : Static.settings.ledArrivalSeq,
-    );
+    if (event.customSequence != null && event.customSequence!.isNotEmpty) {
+      _activeQueue = List.from(event.customSequence!);
+    } else {
+      _activeQueue = List.from(
+        event.type == LedBroadcastType.next
+            ? Static.settings.ledNextStationSeq
+            : Static.settings.ledArrivalSeq,
+      );
+    }
+
     _queueIndex = 0;
     _isPriorityMode = true;
     _updateText(event);

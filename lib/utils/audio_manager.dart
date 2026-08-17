@@ -56,6 +56,18 @@ class AudioManager {
     await preloadCommonAudios();
   }
 
+  String _sanitizeKey(String name) {
+    String cleaned = name;
+    final lastDot = cleaned.lastIndexOf('.');
+    if (lastDot != -1) {
+      cleaned = cleaned.substring(0, lastDot);
+    }
+    return cleaned
+        .replaceAll(RegExp(r'[\\/*?:"<>|]'), '')
+        .replaceAll(RegExp(r'\.+$'), '')
+        .trim();
+  }
+
   Future<void> preloadCommonAudios() async {
     final List<String> templates = [];
     templates.addAll(Static.settings.arrivalTemplate);
@@ -66,7 +78,7 @@ class AudioManager {
 
     for (var item in templates) {
       if (!item.contains("{") && !item.contains("}")) {
-        await _ensureInCache(item);
+        await _ensureInCache(_sanitizeKey(item));
       }
     }
   }
@@ -81,7 +93,7 @@ class AudioManager {
     _currentRouteKeys.clear();
 
     for (var name in names) {
-      final cleanName = name.trim();
+      final cleanName = _sanitizeKey(name);
       final variants = [
         cleanName,
         "${cleanName}_國",
@@ -99,8 +111,9 @@ class AudioManager {
     if (enNames != null) {
       for (var enName in enNames) {
         if (enName.isNotEmpty) {
-          if (await _ensureInCache(enName)) {
-            _currentRouteKeys.add(enName);
+          final cleanEn = _sanitizeKey(enName);
+          if (await _ensureInCache(cleanEn)) {
+            _currentRouteKeys.add(cleanEn);
           }
         }
       }
@@ -129,31 +142,40 @@ class AudioManager {
   }
 
   Future<Uint8List?> _findBytesInStorage(String baseName) async {
-    if (_audioBox.containsKey(baseName)) {
-      return await _audioBox.get(baseName);
-    }
-    final audioBoxKeys = _audioBox.keys.cast<String>();
-    final audioBoxMatch = audioBoxKeys.firstWhere(
-      (k) => k.startsWith("${baseName}_["),
-      orElse: () => "",
-    );
-    if (audioBoxMatch.isNotEmpty) {
-      return await _audioBox.get(audioBoxMatch);
-    }
+    // 定義要嘗試的鍵值順序：1.原始名稱, 2.全小寫名稱
+    final searchKeys = [baseName, baseName.toLowerCase()].toSet().toList();
 
-    for (var pack in voicePacks) {
-      if (!pack.isEnabled) continue;
-
-      if (pack.fileNames.contains(baseName)) {
-        return await _packDataBox.get("${pack.name}:$baseName");
+    for (var key in searchKeys) {
+      // 1. 直接匹配
+      if (_audioBox.containsKey(key)) {
+        return await _audioBox.get(key);
       }
 
-      final packMatch = pack.fileNames.firstWhere(
-        (fn) => fn.startsWith("${baseName}_["),
+      // 2. 匹配隨機變體 (例如: name_[1])
+      final audioBoxKeys = _audioBox.keys.cast<String>();
+      final audioBoxMatch = audioBoxKeys.firstWhere(
+        (k) => k.startsWith("${key}_["),
         orElse: () => "",
       );
-      if (packMatch.isNotEmpty) {
-        return await _packDataBox.get("${pack.name}:$packMatch");
+      if (audioBoxMatch.isNotEmpty) {
+        return await _audioBox.get(audioBoxMatch);
+      }
+
+      // 3. 從語音包 (Voice Packs) 搜尋
+      for (var pack in voicePacks) {
+        if (!pack.isEnabled) continue;
+
+        if (pack.fileNames.contains(key)) {
+          return await _packDataBox.get("${pack.name}:$key");
+        }
+
+        final packMatch = pack.fileNames.firstWhere(
+          (fn) => fn.startsWith("${key}_["),
+          orElse: () => "",
+        );
+        if (packMatch.isNotEmpty) {
+          return await _packDataBox.get("${pack.name}:$packMatch");
+        }
       }
     }
 
@@ -216,7 +238,7 @@ class AudioManager {
       List<String> fileNames = [];
       for (final file in archive) {
         if (file.isFile) {
-          final fileName = _stripExtension(file.name.split('/').last);
+          final fileName = _sanitizeKey(file.name.split('/').last);
           if (fileName.isEmpty || fileName.startsWith('.')) continue;
           final content = Uint8List.fromList(file.content as List<int>);
           await _packDataBox.put("$name:$fileName", content);
@@ -286,27 +308,38 @@ class AudioManager {
     }
   }
 
-  String _stripExtension(String name) {
-    final lastDot = name.lastIndexOf('.');
-    return (lastDot != -1) ? name.substring(0, lastDot) : name;
-  }
-
   Future<Uint8List?> getPackBytes(String packName, String fileName) async {
     return await _packDataBox.get("$packName:$fileName");
   }
 
   Future<Uint8List?> _getRandomBytes(String baseName) async {
+    final lowerBase = baseName.toLowerCase();
+
+    // --- 1. 從記憶體快取搜尋 ---
     List<String> cacheMatches = _memoryCache.keys
-        .where((key) => key == baseName || key.startsWith("${baseName}_["))
+        .where(
+          (key) =>
+              key == baseName ||
+              key == lowerBase ||
+              key.startsWith("${baseName}_[") ||
+              key.startsWith("${lowerBase}_["),
+        )
         .toList();
 
     if (cacheMatches.isNotEmpty) {
       return _memoryCache[cacheMatches[_random.nextInt(cacheMatches.length)]];
     }
 
+    // --- 2. 從本機資料庫 (_audioBox) 搜尋 ---
     List<String> audioBoxKeys = _audioBox.keys.cast<String>().toList();
     List<String> audioBoxMatches = audioBoxKeys
-        .where((key) => key == baseName || key.startsWith("${baseName}_["))
+        .where(
+          (key) =>
+              key == baseName ||
+              key == lowerBase ||
+              key.startsWith("${baseName}_[") ||
+              key.startsWith("${lowerBase}_["),
+        )
         .toList();
 
     if (audioBoxMatches.isNotEmpty) {
@@ -319,18 +352,27 @@ class AudioManager {
       }
     }
 
+    // --- 3. 從語音包 (Voice Packs) 搜尋 ---
     for (var pack in voicePacks) {
       if (!pack.isEnabled) continue;
       List<String> packMatches = pack.fileNames
-          .where((fn) => fn == baseName || fn.startsWith("${baseName}_["))
+          .where(
+            (fn) =>
+                fn == baseName ||
+                fn == lowerBase ||
+                fn.startsWith("${baseName}_[") ||
+                fn.startsWith("${lowerBase}_["),
+          )
           .toList();
+
       if (packMatches.isNotEmpty) {
         final selectedFileName =
             packMatches[_random.nextInt(packMatches.length)];
         final cacheKey = "${pack.name}:$selectedFileName";
         final b = await _packDataBox.get(cacheKey);
         if (b != null) {
-          await _ensureInCache(cacheKey);
+          // 存入快取時使用「封裝鍵值」
+          _memoryCache[cacheKey] = b;
           return b;
         }
       }
@@ -339,14 +381,36 @@ class AudioManager {
   }
 
   bool hasAudio(String name) {
-    if (_memoryCache.containsKey(name)) return true;
-    if (_memoryCache.keys.any((k) => k.startsWith("${name}_["))) return true;
-    if (_audioBox.containsKey(name)) return true;
-    if (_audioBox.keys.any((k) => k.toString().startsWith("${name}_[")))
+    final clean = _sanitizeKey(name);
+    final lower = clean.toLowerCase();
+
+    // 檢查快取
+    if (_memoryCache.containsKey(clean) || _memoryCache.containsKey(lower))
       return true;
+    if (_memoryCache.keys.any(
+      (k) => k.startsWith("${clean}_[") || k.startsWith("${lower}_["),
+    ))
+      return true;
+
+    // 檢查本機資料庫
+    if (_audioBox.containsKey(clean) || _audioBox.containsKey(lower))
+      return true;
+    if (_audioBox.keys.any(
+      (k) =>
+          k.toString().startsWith("${clean}_[") ||
+          k.toString().startsWith("${lower}_["),
+    ))
+      return true;
+
     for (var pack in voicePacks) {
       if (pack.isEnabled &&
-          pack.fileNames.any((k) => k == name || k.startsWith("${name}_["))) {
+          pack.fileNames.any(
+            (k) =>
+                k == clean ||
+                k == lower ||
+                k.startsWith("${clean}_[") ||
+                k.startsWith("${lower}_["),
+          )) {
         return true;
       }
     }
@@ -361,7 +425,7 @@ class AudioManager {
   }
 
   Future<void> playAudio(String name, {double localSpeed = 1.0}) async {
-    final bytes = await _getRandomBytes(name);
+    final bytes = await _getRandomBytes(_sanitizeKey(name));
     if (bytes != null) {
       await _player.stop();
       await _player.setSource(BytesSource(bytes));
@@ -379,7 +443,7 @@ class AudioManager {
   }
 
   Future<void> playAndWait(String name, {double localSpeed = 1.0}) async {
-    final bytes = await _getRandomBytes(name);
+    final bytes = await _getRandomBytes(_sanitizeKey(name));
     if (bytes != null) {
       await _player.stop();
       await Future.delayed(const Duration(milliseconds: 50));
@@ -424,20 +488,19 @@ class AudioManager {
 
   Future<bool> saveAudio(String n, Uint8List b) async {
     try {
-      final stripped = _stripExtension(n);
-      await _audioBox.put(stripped, b);
-      _memoryCache[stripped] = b;
+      final sanitized = _sanitizeKey(n);
+      await _audioBox.put(sanitized, b);
+      _memoryCache[sanitized] = b;
       return true;
     } catch (e) {
       return false;
     }
   }
 
-  bool hasLocalAudio(String name) =>
-      _audioBox.containsKey(_stripExtension(name));
+  bool hasLocalAudio(String name) => _audioBox.containsKey(_sanitizeKey(name));
 
   String generateUniqueName(String base) {
-    String name = _stripExtension(base);
+    String name = _sanitizeKey(base);
     if (_audioBox.containsKey(name)) {
       int i = 1;
       while (_audioBox.containsKey("${name}_[$i]")) i++;
@@ -447,23 +510,27 @@ class AudioManager {
   }
 
   Future<void> renameAudio(String o, String n) async {
-    final b = await _audioBox.get(o);
+    final oldSanitized = _sanitizeKey(o);
+    final newSanitized = _sanitizeKey(n);
+    final b = await _audioBox.get(oldSanitized);
     if (b != null) {
-      await _audioBox.put(n, b);
-      await _audioBox.delete(o);
-      _memoryCache.remove(o);
-      _memoryCache[n] = b;
+      await _audioBox.put(newSanitized, b);
+      await _audioBox.delete(oldSanitized);
+      _memoryCache.remove(oldSanitized);
+      _memoryCache[newSanitized] = b;
     }
   }
 
   Future<void> deleteAudio(String n) async {
-    await _audioBox.delete(n);
-    _memoryCache.remove(n);
+    final sanitized = _sanitizeKey(n);
+    await _audioBox.delete(sanitized);
+    _memoryCache.remove(sanitized);
   }
 
   Future<void> exportSingle(String n) async {
-    final b = await _audioBox.get(n);
-    if (b != null) downloadFile(b, "$n.mp3");
+    final sanitized = _sanitizeKey(n);
+    final b = await _audioBox.get(sanitized);
+    if (b != null) downloadFile(b, "$sanitized.mp3");
   }
 
   Future<void> exportAllZip() async {
@@ -505,7 +572,7 @@ class AudioManager {
     final archive = ZipDecoder().decodeBytes(result.files.first.bytes!);
     for (final file in archive) {
       if (file.isFile) {
-        final fileName = _stripExtension(file.name.split('/').last);
+        final fileName = _sanitizeKey(file.name.split('/').last);
         extracted[fileName] = Uint8List.fromList(file.content as List<int>);
       }
     }

@@ -30,7 +30,7 @@ class LedSequence {
     this.entryShort = LedEntryShort.bottomLeft,
     this.entryLong = LedEntryLong.rightScrollIn,
     this.scrollSpeed = -1,
-    this.stayMs = 800,
+    this.stayMs = 1500,
     this.entrySpeed = 500,
     this.color = -1,
     this.forceLongEntry = false,
@@ -63,4 +63,24 @@ class LedSequence {
     color: json['color'] is int ? json['color'] : -1,
     forceLongEntry: json['forceLongEntry'] ?? false,
   );
+
+  LedSequence copyWith({
+    String? template,
+    LedEntryShort? entryShort,
+    LedEntryLong? entryLong,
+    double? entrySpeed,
+    double? scrollSpeed,
+    int? stayMs,
+    int? color,
+  }) {
+    return LedSequence(
+      template: template ?? this.template,
+      entryShort: entryShort ?? this.entryShort,
+      entryLong: entryLong ?? this.entryLong,
+      entrySpeed: entrySpeed ?? this.entrySpeed,
+      scrollSpeed: scrollSpeed ?? this.scrollSpeed,
+      stayMs: stayMs ?? this.stayMs,
+      color: color ?? this.color,
+    );
+  }
 }

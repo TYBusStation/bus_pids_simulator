@@ -68,7 +68,13 @@ class LedCommandHelper {
         .toRadixString(16)
         .padLeft(8, '0')
         .toUpperCase();
-    int baseMode = (w <= 256 && !config.forceLongEntry) ? 1 : 0;
+
+    bool isLongMode =
+        (w > 256) ||
+        (config.forceLongEntry) ||
+        (config.entryShort == LedEntryShort.asLongSetting);
+
+    int baseMode = isLongMode ? 0 : 1;
 
     String cmd =
         "I:$hexColor|S:${proportionalSpeed.toStringAsFixed(2)}|W:$w|M:$baseMode|ES:${config.entryShort.index}|EL:${config.entryLong.index}|EP:${config.entrySpeed.toInt()}|T:${config.stayMs}|FL:${config.forceLongEntry ? 1 : 0}|D:${hex.encode(bytes)}\n";

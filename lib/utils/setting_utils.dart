@@ -44,7 +44,9 @@ class SettingsService extends ChangeNotifier {
       nextStationDistance = 250.0,
       nextStationDepartureDistance = 50.0,
       voiceSegmentDelay = 150.0;
-  bool enableArrivalBroadcast = true, showStationListSlogan = false;
+  bool enableArrivalBroadcast = true,
+      enableArrivalLedBroadcast = true,
+      showStationListSlogan = false;
   List<String> stationVoiceSequence = [
         "{name_zh}",
         "{name_ho}",
@@ -99,7 +101,6 @@ class SettingsService extends ChangeNotifier {
         final decoded = jsonDecode(utf8.decode(raw as Uint8List));
         return decoded;
       } catch (e) {
-        debugPrint("解析 Key: $key 失敗，回傳預設值。錯誤: $e");
         return defaultValue;
       }
     }
@@ -131,6 +132,8 @@ class SettingsService extends ChangeNotifier {
     voiceSegmentDelay = _box.get('voiceSegmentDelay') ?? voiceSegmentDelay;
     enableArrivalBroadcast =
         _box.get('enableArrivalBroadcast') ?? enableArrivalBroadcast;
+    enableArrivalLedBroadcast =
+        _box.get('enableArrivalLedBroadcast') ?? enableArrivalLedBroadcast;
     showStationListSlogan =
         _box.get('showStationListSlogan') ?? showStationListSlogan;
     ledScrollSpeed = _box.get('ledScrollSpeed') ?? ledScrollSpeed;
@@ -218,6 +221,7 @@ class SettingsService extends ChangeNotifier {
     );
     await _box.put('voiceSegmentDelay', voiceSegmentDelay);
     await _box.put('enableArrivalBroadcast', enableArrivalBroadcast);
+    await _box.put('enableArrivalLedBroadcast', enableArrivalLedBroadcast);
     await _box.put('stationVoiceSequence', stationVoiceSequence);
     await _box.put('arrivalTemplate', arrivalTemplate);
     await _box.put('nextStationTemplate', nextStationTemplate);

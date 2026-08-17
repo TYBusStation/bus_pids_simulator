@@ -1,6 +1,8 @@
 import 'package:json_annotation/json_annotation.dart';
 import 'package:latlong2/latlong.dart';
 
+import 'led_sequence.dart';
+
 part 'bus_station.g.dart';
 
 @JsonSerializable()
@@ -19,14 +21,30 @@ class BusStation {
 
   @JsonKey(name: "lon", defaultValue: 0.0)
   final double lon;
+
   @JsonKey(name: "use_global_next", defaultValue: true)
   final bool useGlobalNext;
+
   @JsonKey(name: "use_global_arrival", defaultValue: true)
   final bool useGlobalArrival;
+
   @JsonKey(name: "next_template")
   final List<String>? nextTemplate;
+
   @JsonKey(name: "arrival_template")
   final List<String>? arrivalTemplate;
+
+  @JsonKey(name: "use_global_next_led", defaultValue: true)
+  final bool useGlobalNextLed;
+
+  @JsonKey(name: "use_global_arrival_led", defaultValue: true)
+  final bool useGlobalArrivalLed;
+
+  @JsonKey(name: "next_led_template")
+  final List<LedSequence>? nextLedTemplate;
+
+  @JsonKey(name: "arrival_led_template")
+  final List<LedSequence>? arrivalLedTemplate;
 
   BusStation({
     required this.order,
@@ -38,6 +56,10 @@ class BusStation {
     this.useGlobalArrival = true,
     this.nextTemplate,
     this.arrivalTemplate,
+    this.useGlobalNextLed = true,
+    this.useGlobalArrivalLed = true,
+    this.nextLedTemplate,
+    this.arrivalLedTemplate,
   });
 
   BusStation copyWith({
@@ -50,6 +72,10 @@ class BusStation {
     bool? useGlobalArrival,
     List<String>? nextTemplate,
     List<String>? arrivalTemplate,
+    bool? useGlobalNextLed,
+    bool? useGlobalArrivalLed,
+    List<LedSequence>? nextLedTemplate,
+    List<LedSequence>? arrivalLedTemplate,
   }) {
     return BusStation(
       order: order ?? this.order,
@@ -61,6 +87,10 @@ class BusStation {
       useGlobalArrival: useGlobalArrival ?? this.useGlobalArrival,
       nextTemplate: nextTemplate ?? this.nextTemplate,
       arrivalTemplate: arrivalTemplate ?? this.arrivalTemplate,
+      useGlobalNextLed: useGlobalNextLed ?? this.useGlobalNextLed,
+      useGlobalArrivalLed: useGlobalArrivalLed ?? this.useGlobalArrivalLed,
+      nextLedTemplate: nextLedTemplate ?? this.nextLedTemplate,
+      arrivalLedTemplate: arrivalLedTemplate ?? this.arrivalLedTemplate,
     );
   }
 
@@ -84,6 +114,18 @@ class BusStation {
     }
     if (arrivalTemplate != null && arrivalTemplate!.isNotEmpty) {
       data['arrival_template'] = arrivalTemplate;
+    }
+    if (useGlobalNextLed == false) data['use_global_next_led'] = false;
+    if (useGlobalArrivalLed == false) data['use_global_arrival_led'] = false;
+    if (nextLedTemplate != null && nextLedTemplate!.isNotEmpty) {
+      data['next_led_template'] = nextLedTemplate!
+          .map((e) => e.toJson())
+          .toList();
+    }
+    if (arrivalLedTemplate != null && arrivalLedTemplate!.isNotEmpty) {
+      data['arrival_led_template'] = arrivalLedTemplate!
+          .map((e) => e.toJson())
+          .toList();
     }
     return data;
   }

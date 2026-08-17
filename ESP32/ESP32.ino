@@ -9,7 +9,7 @@
 
 MatrixPanel_I2S_DMA *dma_display = nullptr;
 
-uint8_t bitmapData[8192]; 
+uint8_t bitmapData[16384]; 
 int imgWidth = 0, displayMode = 0, bytesPerRow = 0;
 int shortMode = 0, longMode = 0;
 uint16_t imgColor = 0xFFFF;
@@ -31,14 +31,13 @@ uint8_t h2b(char c) {
 
 void parseImage(String cmd) {
     uint8_t brightness = strtoul(cmd.substring(2, 4).c_str(), NULL, 16);
-    if (dma_display) {
-        dma_display->setBrightness8(brightness); 
-    }
+    if (dma_display) dma_display->setBrightness8(brightness); 
 
     uint32_t r = strtoul(cmd.substring(4, 6).c_str(), NULL, 16);
     uint32_t g = strtoul(cmd.substring(6, 8).c_str(), NULL, 16);
     uint32_t b = strtoul(cmd.substring(8, 10).c_str(), NULL, 16);
-    imgColor = dma_display->color565(r, b, g);
+    
+    imgColor = dma_display->color565(r, g, b);
     
     int sIdx = cmd.indexOf("|S:");
     int wIdx = cmd.indexOf("|W:");
@@ -66,30 +65,62 @@ void parseImage(String cmd) {
         bitmapData[i] = (h2b(hexData[i*2]) << 4) | h2b(hexData[i*2+1]);
     }
 
-    targetX = 0; targetY = 0;
     float startX = 0, startY = 0;
+    targetX = 0; targetY = 0;
 
     if (displayMode == 1) {
-        targetX = (shortMode % 2 == 1) ? (LED_WIDTH - imgWidth) / 2 : 0;
+        if (shortMode == 1 || shortMode == 3 || shortMode == 5) {
+            targetX = (LED_WIDTH - imgWidth) / 2;
+        } else {
+            targetX = 0;
+        }
         targetY = 0;
-        if (shortMode <= 1) { startX = targetX; startY = LED_HEIGHT; }
-        else if (shortMode <= 3) { startX = targetX; startY = -LED_HEIGHT; }
-        else { startX = LED_WIDTH; startY = 0; }
+
+        switch (shortMode) {
+            case 0: case 1:
+                startX = targetX; startY = LED_HEIGHT;
+                break;
+            case 2: case 3:
+                startX = targetX; startY = -LED_HEIGHT;
+                break;
+            case 4: case 5:
+                startX = LED_WIDTH; startY = 0;
+                break;
+            default:
+                startX = targetX; startY = 0;
+                break;
+        }
         currentState = ENTERING;
     } else {
         targetX = 0; targetY = 0;
-        if (longMode == 0) { startX = 0; startY = LED_HEIGHT; }
-        else if (longMode == 1) { startX = 0; startY = -LED_HEIGHT; }
-        else if (longMode == 2) { startX = LED_WIDTH; startY = 0; }
-        else { startX = LED_WIDTH; startY = 0; currentState = SCROLLING; }
-        if (longMode != 3) currentState = ENTERING;
+        switch (longMode) {
+            case 0:
+                startX = 0; startY = LED_HEIGHT;
+                currentState = ENTERING;
+                break;
+            case 1:
+                startX = 0; startY = -LED_HEIGHT;
+                currentState = ENTERING;
+                break;
+            case 2:
+                startX = LED_WIDTH; startY = 0;
+                currentState = ENTERING;
+                break;
+            case 3:
+                startX = LED_WIDTH; startY = 0;
+                xPos = startX; yPos = 0;
+                currentState = SCROLLING;
+                break;
+        }
     }
 
-    xPos = startX; yPos = startY;
-    float frames = entryDur / 10.0;
-    if (frames < 1) frames = 1;
-    moveStepX = (targetX - startX) / frames;
-    moveStepY = (targetY - startY) / frames;
+    if (currentState == ENTERING || currentState == SCROLLING) {
+        xPos = startX; yPos = startY;
+        float frames = entryDur / 10.0;
+        if (frames < 1) frames = 1;
+        moveStepX = (targetX - startX) / frames;
+        moveStepY = (targetY - startY) / frames;
+    }
 }
 
 void updateDisplay() {
@@ -119,8 +150,13 @@ void setup() {
     HUB75_I2S_CFG mx(PANEL_RES_X, PANEL_RES_Y, PANEL_CHAIN);
     mx.double_buff = true;
     
-    mx.gpio.r1 = 25; mx.gpio.g1 = 26; mx.gpio.b1 = 27;
-    mx.gpio.r2 = 14; mx.gpio.g2 = 12; mx.gpio.b2 = 13;
+    mx.gpio.r1 = 25; 
+    mx.gpio.g1 = 27; 
+    mx.gpio.b1 = 26; 
+    mx.gpio.r2 = 14; 
+    mx.gpio.g2 = 13; 
+    mx.gpio.b2 = 12; 
+    
     mx.gpio.a = 23;  mx.gpio.b = 22;  mx.gpio.c = 5;  mx.gpio.d = 17;
     mx.gpio.lat = 4; mx.gpio.oe = 15; mx.gpio.clk = 16;
     
@@ -146,13 +182,13 @@ void loop() {
         } 
         else if (currentState == STAYING) {
             if (millis() - stateStartTime > stayMs) {
-                if (displayMode == 0) currentState = SCROLLING;
-                else { 
+                if (displayMode == 0) {
+                    currentState = SCROLLING;
+                } else { 
                     currentState = FINISHED; 
                     dma_display->fillScreen(0);
                     dma_display->flipDMABuffer();
                     Serial.println("FIN");
-                    Serial.flush();
                 }
             }
         } 
@@ -164,7 +200,6 @@ void loop() {
                 dma_display->fillScreen(0);
                 dma_display->flipDMABuffer();
                 Serial.println("FIN");
-                Serial.flush();
             }
         }
     }
