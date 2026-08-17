@@ -57,15 +57,129 @@ class AudioManager {
   }
 
   String _sanitizeKey(String name) {
-    String cleaned = name;
-    final lastDot = cleaned.lastIndexOf('.');
-    if (lastDot != -1) {
-      cleaned = cleaned.substring(0, lastDot);
-    }
-    return cleaned
+    return name
         .replaceAll(RegExp(r'[\\/*?:"<>|]'), '')
         .replaceAll(RegExp(r'\.+$'), '')
         .trim();
+  }
+
+  Future<Uint8List?> _searchInBox(LazyBox<Uint8List> box, String key) async {
+    if (box.containsKey(key)) {
+      return await box.get(key);
+    }
+    final keys = box.keys.cast<String>();
+    final matches = keys.where((k) => k.startsWith("${key}_[")).toList();
+    if (matches.isNotEmpty) {
+      return await box.get(matches[_random.nextInt(matches.length)]);
+    }
+    return null;
+  }
+
+  Future<Uint8List?> _searchInPacks(String key) async {
+    for (var pack in voicePacks) {
+      if (!pack.isEnabled) continue;
+
+      if (pack.fileNames.contains(key)) {
+        return await _packDataBox.get("${pack.name}:$key");
+      }
+      final matches = pack.fileNames
+          .where((fn) => fn.startsWith("${key}_["))
+          .toList();
+      if (matches.isNotEmpty) {
+        return await _packDataBox.get(
+          "${pack.name}:${matches[_random.nextInt(matches.length)]}",
+        );
+      }
+    }
+    return null;
+  }
+
+  Future<Uint8List?> _getFinalAudioBytes(
+    String name, {
+    String? zhFallbackForEn,
+  }) async {
+    final String original = _sanitizeKey(name);
+    final String lower = original.toLowerCase();
+
+    Uint8List? b = await _searchInBox(_audioBox, original);
+    if (b != null) return b;
+
+    if (original != lower) {
+      b = await _searchInBox(_audioBox, lower);
+      if (b != null) return b;
+    }
+
+    b = await _searchInPacks(original);
+    if (b != null) return b;
+
+    if (original != lower) {
+      b = await _searchInPacks(lower);
+      if (b != null) return b;
+    }
+
+    if (zhFallbackForEn != null) {
+      final String zhEnKey = "${_sanitizeKey(zhFallbackForEn)}_英";
+      b = await _searchInBox(_audioBox, zhEnKey);
+      if (b != null) return b;
+
+      b = await _searchInPacks(zhEnKey);
+      if (b != null) return b;
+    }
+
+    return null;
+  }
+
+  bool hasAudio(String name, {String? zhFallbackForEn}) {
+    final String original = _sanitizeKey(name);
+    final String lower = original.toLowerCase();
+
+    bool check(String key) {
+      if (_audioBox.containsKey(key)) return true;
+      if (_audioBox.keys.any((k) => k.toString().startsWith("${key}_[")))
+        return true;
+      for (var pack in voicePacks) {
+        if (pack.isEnabled &&
+            (pack.fileNames.contains(key) ||
+                pack.fileNames.any((fn) => fn.startsWith("${key}_["))))
+          return true;
+      }
+      return false;
+    }
+
+    if (check(original)) return true;
+    if (original != lower && check(lower)) return true;
+
+    if (zhFallbackForEn != null) {
+      if (check("${_sanitizeKey(zhFallbackForEn)}_英")) return true;
+    }
+
+    return false;
+  }
+
+  Future<void> playAndWait(
+    String name, {
+    double localSpeed = 1.0,
+    String? zhFallbackForEn,
+  }) async {
+    final bytes = await _getFinalAudioBytes(
+      name,
+      zhFallbackForEn: zhFallbackForEn,
+    );
+    if (bytes != null) {
+      await _player.stop();
+      await Future.delayed(const Duration(milliseconds: 50));
+      await _player.setSource(BytesSource(bytes));
+      await _applySettings(localSpeed);
+
+      final completer = Completer<void>();
+      StreamSubscription? sub;
+      sub = _player.onPlayerComplete.listen((_) {
+        if (!completer.isCompleted) completer.complete();
+        sub?.cancel();
+      });
+      await _player.resume();
+      await completer.future;
+    }
   }
 
   Future<void> preloadCommonAudios() async {
@@ -142,16 +256,13 @@ class AudioManager {
   }
 
   Future<Uint8List?> _findBytesInStorage(String baseName) async {
-    // 定義要嘗試的鍵值順序：1.原始名稱, 2.全小寫名稱
     final searchKeys = [baseName, baseName.toLowerCase()].toSet().toList();
 
     for (var key in searchKeys) {
-      // 1. 直接匹配
       if (_audioBox.containsKey(key)) {
         return await _audioBox.get(key);
       }
 
-      // 2. 匹配隨機變體 (例如: name_[1])
       final audioBoxKeys = _audioBox.keys.cast<String>();
       final audioBoxMatch = audioBoxKeys.firstWhere(
         (k) => k.startsWith("${key}_["),
@@ -161,7 +272,6 @@ class AudioManager {
         return await _audioBox.get(audioBoxMatch);
       }
 
-      // 3. 從語音包 (Voice Packs) 搜尋
       for (var pack in voicePacks) {
         if (!pack.isEnabled) continue;
 
@@ -380,43 +490,6 @@ class AudioManager {
     return null;
   }
 
-  bool hasAudio(String name) {
-    final clean = _sanitizeKey(name);
-    final lower = clean.toLowerCase();
-
-    // 檢查快取
-    if (_memoryCache.containsKey(clean) || _memoryCache.containsKey(lower))
-      return true;
-    if (_memoryCache.keys.any(
-      (k) => k.startsWith("${clean}_[") || k.startsWith("${lower}_["),
-    ))
-      return true;
-
-    // 檢查本機資料庫
-    if (_audioBox.containsKey(clean) || _audioBox.containsKey(lower))
-      return true;
-    if (_audioBox.keys.any(
-      (k) =>
-          k.toString().startsWith("${clean}_[") ||
-          k.toString().startsWith("${lower}_["),
-    ))
-      return true;
-
-    for (var pack in voicePacks) {
-      if (pack.isEnabled &&
-          pack.fileNames.any(
-            (k) =>
-                k == clean ||
-                k == lower ||
-                k.startsWith("${clean}_[") ||
-                k.startsWith("${lower}_["),
-          )) {
-        return true;
-      }
-    }
-    return false;
-  }
-
   Future<void> _applySettings(double localSpeed) async {
     await _player.setVolume(Static.settings.globalVolume.clamp(0.0, 1.0));
     await _player.setPlaybackRate(
@@ -440,24 +513,6 @@ class AudioManager {
     await _player.setVolume(Static.settings.globalVolume.clamp(0.0, 1.0));
     await _player.setPlaybackRate(Static.settings.globalSpeed.clamp(0.5, 2.0));
     await _player.resume();
-  }
-
-  Future<void> playAndWait(String name, {double localSpeed = 1.0}) async {
-    final bytes = await _getRandomBytes(_sanitizeKey(name));
-    if (bytes != null) {
-      await _player.stop();
-      await Future.delayed(const Duration(milliseconds: 50));
-      await _player.setSource(BytesSource(bytes));
-      await _applySettings(localSpeed);
-      final completer = Completer<void>();
-      StreamSubscription? sub;
-      sub = _player.onPlayerComplete.listen((_) {
-        if (!completer.isCompleted) completer.complete();
-        sub?.cancel();
-      });
-      await _player.resume();
-      await completer.future;
-    }
   }
 
   Completer<void>? _currentCompleter;

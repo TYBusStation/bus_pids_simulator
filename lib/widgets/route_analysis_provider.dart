@@ -416,44 +416,38 @@ class RouteAnalysisProvider extends ChangeNotifier {
     await Static.TTS.stop();
     await Static.audioManager.stop();
     await Future.delayed(const Duration(milliseconds: 50));
+
     for (var part in sequence) {
       if (thisId != _activeSequenceId ||
           _isOffDutyAlert ||
           _lastDutyStatus != DutyStatus.onDuty)
         return;
-      String audioKey = part['audioKey'] as String,
-          text = part['text'] as String;
+
+      String audioKey = part['audioKey'] as String;
+      String text = part['text'] as String;
+      String? zhFallback = part['zhFallback'] as String?; // 新增中文回退標記
       double speed = (part['speed'] as double) * Static.settings.globalSpeed;
-      if (audioKey.isNotEmpty && Static.audioManager.hasAudio(audioKey))
+
+      // 檢查是否有音檔 (使用新的優先級邏輯)
+      if (audioKey.isNotEmpty &&
+          Static.audioManager.hasAudio(audioKey, zhFallbackForEn: zhFallback)) {
         await Static.audioManager.playAndWait(
           audioKey,
           localSpeed: part['speed'] as double,
+          zhFallbackForEn: zhFallback,
         );
-      else if (text.isNotEmpty)
+      } else if (text.isNotEmpty) {
         await Static.TTS.speak(
           text,
           rate: speed.clamp(0.5, 2.0),
           volume: Static.settings.globalVolume,
           locale: part['locale'] as String,
         );
+      }
       await Future.delayed(
         Duration(milliseconds: Static.settings.voiceSegmentDelay.round()),
       );
     }
-  }
-
-  List<Map<String, dynamic>> _expandVoiceText(
-    String text,
-    Map<String, String> vars,
-    String locale,
-  ) {
-    String processed = _performReplacement(text, vars);
-    if (processed.trim().isEmpty) return [];
-    String audioKey = _sanitize(processed);
-    String ttsText = processed.replaceAll(RegExp(r'_(國|英|閩|客)$'), "");
-    return [
-      {'text': ttsText, 'audioKey': audioKey, 'locale': locale},
-    ];
   }
 
   List<Map<String, dynamic>> _buildSeq(
@@ -465,11 +459,11 @@ class RouteAnalysisProvider extends ChangeNotifier {
   ) {
     String currentName = _sanitize(vars['name'] ?? station.name);
     String currentNameEn = _sanitize(vars['nameEn'] ?? station.nameEn);
-    bool hasFullAudio = Static.audioManager.hasAudio(currentName);
+
     List<String> baseExpanded = [];
     for (var item in template) {
       if (item == "{name}") {
-        if (hasFullAudio) {
+        if (Static.audioManager.hasAudio(currentName)) {
           baseExpanded.add("{name_full}");
         } else {
           baseExpanded.addAll(Static.settings.stationVoiceSequence);
@@ -478,6 +472,7 @@ class RouteAnalysisProvider extends ChangeNotifier {
         baseExpanded.add(item);
       }
     }
+
     List<Map<String, dynamic>> finalSequence = [];
     for (var item in baseExpanded) {
       if (item == "{name_full}") {
@@ -493,21 +488,10 @@ class RouteAnalysisProvider extends ChangeNotifier {
           'locale': 'zh-TW',
         });
       } else if (item == "{name_en}") {
-        String audioKey = "";
-        if (currentNameEn.isNotEmpty &&
-            Static.audioManager.hasLocalAudio(currentNameEn)) {
-          audioKey = currentNameEn;
-        } else if (Static.audioManager.hasLocalAudio("${currentName}_英")) {
-          audioKey = "${currentName}_英";
-        } else if (currentNameEn.isNotEmpty &&
-            Static.audioManager.hasAudio(currentNameEn)) {
-          audioKey = currentNameEn;
-        } else if (Static.audioManager.hasAudio("${currentName}_英")) {
-          audioKey = "${currentName}_英";
-        }
         finalSequence.add({
           'text': currentNameEn,
-          'audioKey': audioKey,
+          'audioKey': currentNameEn, // 這裡傳英文站名
+          'zhFallback': currentName, // 這裡傳中文名供回退 "_英" 搜尋
           'locale': 'en-US',
         });
       } else if (item == "{name_ho}") {
@@ -523,24 +507,31 @@ class RouteAnalysisProvider extends ChangeNotifier {
           'locale': 'zh-TW',
         });
       } else {
+        // 其他模板內容 (如 "到了"、"終點站")
         String locale = item.contains(RegExp(r'[a-zA-Z]')) ? 'en-US' : 'zh-TW';
         if (item.contains("_英")) locale = 'en-US';
-        if (item.contains("_國") || item.contains("_閩") || item.contains("_客")) {
-          locale = 'zh-TW';
-        }
         finalSequence.addAll(_expandVoiceText(item, vars, locale));
       }
     }
-    return finalSequence
-        .map((m) {
-          String tx = m['text'] as String;
-          return {...m, 'speed': (tx == "到了" || tx == "終點站") ? 0.9 : 1.0};
-        })
-        .where((m) {
-          final String ak = m['audioKey'] as String;
-          return ak.isNotEmpty || (m['text'] as String).trim().isNotEmpty;
-        })
-        .toList();
+
+    return finalSequence.map((m) {
+      String tx = m['text'] as String;
+      return {...m, 'speed': (tx == "到了" || tx == "終點站") ? 0.9 : 1.0};
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> _expandVoiceText(
+    String text,
+    Map<String, String> vars,
+    String locale,
+  ) {
+    String processed = _performReplacement(text, vars);
+    if (processed.trim().isEmpty) return [];
+    String audioKey = _sanitize(processed);
+    String ttsText = processed.replaceAll(RegExp(r'_(國|英|閩|客)$'), "");
+    return [
+      {'text': ttsText, 'audioKey': audioKey, 'locale': locale},
+    ];
   }
 
   @override
