@@ -97,8 +97,19 @@ class _LedPageState extends State<LedPage> {
     if (!mounted) return;
 
     if (_isPriorityMode) {
+      final event = context.read<RouteAnalysisProvider>().currentLedEvent;
       _queueIndex++;
-      _updateText(context.read<RouteAnalysisProvider>().currentLedEvent);
+
+      if (_queueIndex >= _activeQueue.length) {
+        if (event.type == LedBroadcastType.arrival) {
+          _queueIndex = 0;
+        } else {
+          _isPriorityMode = false;
+          _nextSlogan();
+          return;
+        }
+      }
+      _updateText(event);
     } else {
       _nextSlogan();
     }

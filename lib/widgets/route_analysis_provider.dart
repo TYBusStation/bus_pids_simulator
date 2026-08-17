@@ -344,6 +344,16 @@ class RouteAnalysisProvider extends ChangeNotifier {
       'ss': now.second.toString().padLeft(2, '0'),
     };
 
+    for (int i = 1; i <= 15; i++) {
+      map['NextName$i'] = "";
+      map['NextMin$i'] = "";
+      map['NextTimeHH$i'] = "";
+      map['NextTimeMM$i'] = "";
+    }
+    map['currMin'] = "";
+    map['currTimeHH'] = "";
+    map['currTimeMM'] = "";
+
     if (idx != -1 && _currentAnalysis != null) {
       double distToNext = _currentAnalysis!.distToNextStation ?? 0;
       double secondsToNext = distToNext / avgSpeedMs;

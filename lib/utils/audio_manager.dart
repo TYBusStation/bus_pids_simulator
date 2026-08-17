@@ -57,10 +57,13 @@ class AudioManager {
   }
 
   String _sanitizeKey(String name) {
-    return name
-        .replaceAll(RegExp(r'[\\/*?:"<>|]'), '')
-        .replaceAll(RegExp(r'\.+$'), '')
-        .trim();
+    String base = name.split('/').last;
+    final extRegExp = RegExp(
+      r'\.(mp3|wav|ogg|m4a|aac|flac)$',
+      caseSensitive: false,
+    );
+    base = base.replaceFirst(extRegExp, '');
+    return base.replaceAll(RegExp(r'[\\/*?:"<>|]'), '').trim();
   }
 
   Future<Uint8List?> _searchInBox(LazyBox<Uint8List> box, String key) async {
@@ -326,30 +329,17 @@ class AudioManager {
     voicePacks.addAll(loaded);
   }
 
-  Future<void> reorderPack(int oldIndex, int newIndex) async {
-    if (oldIndex < newIndex) newIndex -= 1;
-    final item = voicePacks.removeAt(oldIndex);
-    voicePacks.insert(newIndex, item);
-
-    for (int i = 0; i < voicePacks.length; i++) {
-      voicePacks[i].priority = i;
-      final data = _getSafeMeta(voicePacks[i].name);
-      if (data != null) {
-        final Map<String, dynamic> updated = Map<String, dynamic>.from(data);
-        updated['priority'] = i;
-        await _packMetaBox.put(voicePacks[i].name, updated);
-      }
-    }
-  }
-
   Future<bool> importZipAsPack(String name, Uint8List zipBytes) async {
     try {
       final archive = ZipDecoder().decodeBytes(zipBytes);
       List<String> fileNames = [];
       for (final file in archive) {
         if (file.isFile) {
-          final fileName = _sanitizeKey(file.name.split('/').last);
-          if (fileName.isEmpty || fileName.startsWith('.')) continue;
+          if (file.name.split('/').last.startsWith('.')) continue;
+
+          final fileName = _sanitizeKey(file.name);
+          if (fileName.isEmpty) continue;
+
           final content = Uint8List.fromList(file.content as List<int>);
           await _packDataBox.put("$name:$fileName", content);
           fileNames.add(fileName);
@@ -369,6 +359,56 @@ class AudioManager {
       return true;
     } catch (e) {
       return false;
+    }
+  }
+
+  Future<Map<String, Uint8List>?> pickZipFiles() async {
+    FilePickerResult? result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['zip'],
+      withData: true,
+    );
+    if (result == null || result.files.first.bytes == null) return null;
+
+    final Map<String, Uint8List> extracted = {};
+    final archive = ZipDecoder().decodeBytes(result.files.first.bytes!);
+    for (final file in archive) {
+      if (file.isFile) {
+        if (file.name.split('/').last.startsWith('.')) continue;
+
+        final fileName = _sanitizeKey(file.name);
+        if (fileName.isEmpty) continue;
+
+        extracted[fileName] = Uint8List.fromList(file.content as List<int>);
+      }
+    }
+    return extracted;
+  }
+
+  Future<bool> saveAudio(String n, Uint8List b) async {
+    try {
+      final sanitized = _sanitizeKey(n);
+      await _audioBox.put(sanitized, b);
+      _memoryCache[sanitized] = b;
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<void> reorderPack(int oldIndex, int newIndex) async {
+    if (oldIndex < newIndex) newIndex -= 1;
+    final item = voicePacks.removeAt(oldIndex);
+    voicePacks.insert(newIndex, item);
+
+    for (int i = 0; i < voicePacks.length; i++) {
+      voicePacks[i].priority = i;
+      final data = _getSafeMeta(voicePacks[i].name);
+      if (data != null) {
+        final Map<String, dynamic> updated = Map<String, dynamic>.from(data);
+        updated['priority'] = i;
+        await _packMetaBox.put(voicePacks[i].name, updated);
+      }
     }
   }
 
@@ -422,10 +462,10 @@ class AudioManager {
     return await _packDataBox.get("$packName:$fileName");
   }
 
-  Future<Uint8List?> _getRandomBytes(String baseName) async {
-    final lowerBase = baseName.toLowerCase();
+  Future<Uint8List?> _getRandomBytes(String inputName) async {
+    final String baseName = _sanitizeKey(inputName);
+    final String lowerBase = baseName.toLowerCase();
 
-    // --- 1. 從記憶體快取搜尋 ---
     List<String> cacheMatches = _memoryCache.keys
         .where(
           (key) =>
@@ -440,7 +480,6 @@ class AudioManager {
       return _memoryCache[cacheMatches[_random.nextInt(cacheMatches.length)]];
     }
 
-    // --- 2. 從本機資料庫 (_audioBox) 搜尋 ---
     List<String> audioBoxKeys = _audioBox.keys.cast<String>().toList();
     List<String> audioBoxMatches = audioBoxKeys
         .where(
@@ -462,7 +501,6 @@ class AudioManager {
       }
     }
 
-    // --- 3. 從語音包 (Voice Packs) 搜尋 ---
     for (var pack in voicePacks) {
       if (!pack.isEnabled) continue;
       List<String> packMatches = pack.fileNames
@@ -478,11 +516,10 @@ class AudioManager {
       if (packMatches.isNotEmpty) {
         final selectedFileName =
             packMatches[_random.nextInt(packMatches.length)];
-        final cacheKey = "${pack.name}:$selectedFileName";
-        final b = await _packDataBox.get(cacheKey);
+        final dataKey = "${pack.name}:$selectedFileName";
+        final b = await _packDataBox.get(dataKey);
         if (b != null) {
-          // 存入快取時使用「封裝鍵值」
-          _memoryCache[cacheKey] = b;
+          _memoryCache[dataKey] = b;
           return b;
         }
       }
@@ -498,7 +535,7 @@ class AudioManager {
   }
 
   Future<void> playAudio(String name, {double localSpeed = 1.0}) async {
-    final bytes = await _getRandomBytes(_sanitizeKey(name));
+    final bytes = await _getRandomBytes(name);
     if (bytes != null) {
       await _player.stop();
       await _player.setSource(BytesSource(bytes));
@@ -540,17 +577,6 @@ class AudioManager {
   }
 
   List<String> get allAudioNames => _audioBox.keys.cast<String>().toList();
-
-  Future<bool> saveAudio(String n, Uint8List b) async {
-    try {
-      final sanitized = _sanitizeKey(n);
-      await _audioBox.put(sanitized, b);
-      _memoryCache[sanitized] = b;
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
 
   bool hasLocalAudio(String name) => _audioBox.containsKey(_sanitizeKey(name));
 
@@ -614,23 +640,5 @@ class AudioManager {
     );
     if (result != null) return result.files.first;
     return null;
-  }
-
-  Future<Map<String, Uint8List>?> pickZipFiles() async {
-    FilePickerResult? result = await FilePicker.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['zip'],
-      withData: true,
-    );
-    if (result == null || result.files.first.bytes == null) return null;
-    final Map<String, Uint8List> extracted = {};
-    final archive = ZipDecoder().decodeBytes(result.files.first.bytes!);
-    for (final file in archive) {
-      if (file.isFile) {
-        final fileName = _sanitizeKey(file.name.split('/').last);
-        extracted[fileName] = Uint8List.fromList(file.content as List<int>);
-      }
-    }
-    return extracted;
   }
 }

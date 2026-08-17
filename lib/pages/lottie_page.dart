@@ -29,6 +29,8 @@ class _LottiePageState extends State<LottiePage> with TickerProviderStateMixin {
   bool _isPreparing = false;
   String? _lastTextMapHash;
 
+  LottieDelegates? _cachedDelegates;
+
   final Map<String, Size> _boundingBoxes = {};
   final Map<String, double> _originalFontSizes = {};
   final Map<String, String> _layerInitialText = {};
@@ -45,10 +47,7 @@ class _LottiePageState extends State<LottiePage> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 1),
-    );
+    _controller = AnimationController(vsync: this);
     _controller.addStatusListener((s) {
       if (s == AnimationStatus.completed) _handleAnimationComplete();
     });
@@ -73,25 +72,39 @@ class _LottiePageState extends State<LottiePage> with TickerProviderStateMixin {
   void _onLedEventChanged() {
     if (!mounted) return;
     final event = context.read<RouteAnalysisProvider>().currentLedEvent;
-    if (event.timestamp != _lastEventTime) {
-      _lastEventTime = event.timestamp;
-      if (event.type != LedBroadcastType.slogan) {
-        _isPriorityMode = true;
-        _activeType = event.type;
-        _controller.stop();
+
+    if (event.type == LedBroadcastType.slogan) {
+      if (_isPriorityMode) {
+        setState(() {
+          _isPriorityMode = false;
+          _activeType = LedBroadcastType.slogan;
+        });
         _updateActiveLottie();
       }
+      return;
+    }
+
+    if (event.timestamp != _lastEventTime) {
+      _lastEventTime = event.timestamp;
+      _isPriorityMode = true;
+      _activeType = event.type;
+      _controller.stop();
+      _updateActiveLottie();
     }
   }
 
   void _handleAnimationComplete() {
     if (!mounted) return;
+
+    final currentEvent = context.read<RouteAnalysisProvider>().currentLedEvent;
+
     if (_isPriorityMode && _activeType == LedBroadcastType.next) {
       _isPriorityMode = false;
       _activeType = LedBroadcastType.slogan;
       _updateActiveLottie();
       return;
     }
+
     _controller.forward(from: 0);
   }
 
@@ -121,6 +134,8 @@ class _LottiePageState extends State<LottiePage> with TickerProviderStateMixin {
         _displayType = targetType;
         _isInitialLoading = false;
         _isPreparing = false;
+        _lastTextMapHash = null;
+        _cachedDelegates = null;
       });
     }
   }
@@ -171,7 +186,6 @@ class _LottiePageState extends State<LottiePage> with TickerProviderStateMixin {
 
       _baseStyleCache.clear();
       _calculatedSizes.clear();
-      _lastTextMapHash = null;
       _fontMetadataMap
         ..clear()
         ..addAll(tempFontMetadata);
@@ -308,9 +322,12 @@ class _LottiePageState extends State<LottiePage> with TickerProviderStateMixin {
         : res.trim();
   }
 
-  void _precalculateSizes(Map<String, String> tm) {
-    final String h = tm.values.join('|') + (_displayType?.toString() ?? "");
-    if (_lastTextMapHash == h) return;
+  void _syncDelegates(Map<String, String> tm) {
+    final String h =
+        tm.values.join('|') +
+        (_displayType?.toString() ?? "") +
+        _displayData.hashCode.toString();
+    if (_lastTextMapHash == h && _cachedDelegates != null) return;
     _lastTextMapHash = h;
     _calculatedSizes.clear();
 
@@ -342,6 +359,53 @@ class _LottiePageState extends State<LottiePage> with TickerProviderStateMixin {
       }
       _calculatedSizes[ly] = best;
     }
+
+    _cachedDelegates = LottieDelegates(
+      textStyle: (lfs) => _getFinalTextStyle(lfs.fontFamily, 24.0).copyWith(
+        color: Colors.white,
+        height: 1.0,
+        leadingDistribution: TextLeadingDistribution.even,
+      ),
+      values: [
+        ..._allTextLayers.map(
+          (n) => ValueDelegate.text(
+            [n, '**'],
+            value: _getProcessedText(
+              _layerInitialText[n] ?? "",
+              tm,
+              _layerIsVertical[n] ?? false,
+            ),
+          ),
+        ),
+        ..._paragraphLayers.map(
+          (n) => ValueDelegate.textSize(
+            [n, '**'],
+            value: (_calculatedSizes[n] ?? _originalFontSizes[n] ?? 24.0).clamp(
+              1.0,
+              500.0,
+            ),
+          ),
+        ),
+        ..._paragraphLayers.map(
+          (n) => ValueDelegate.transformPosition(
+            [n, '**'],
+            callback: (fi) {
+              final double bh = _boundingBoxes[n]?.height ?? 0;
+              final double cs =
+                  _calculatedSizes[n] ?? _originalFontSizes[n] ?? 24.0;
+              final Offset bp =
+                  Offset.lerp(
+                    fi.startValue ?? Offset.zero,
+                    fi.endValue ?? Offset.zero,
+                    fi.interpolatedKeyframeProgress,
+                  ) ??
+                  (fi.startValue ?? Offset.zero);
+              return bp + Offset(0, (cs - bh) * 0.5 - (cs * 0.08));
+            },
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -353,72 +417,35 @@ class _LottiePageState extends State<LottiePage> with TickerProviderStateMixin {
       );
     }
 
-    final status = context.watch<StatusChangeNotifier>().currentStatus;
-    final analysis = context.watch<RouteAnalysisProvider>();
-    final Map<String, String> tm = analysis.getFormattedVariables(
-      analysis.currentLedEvent,
-      status,
-    );
-    _precalculateSizes(tm);
-
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Center(
-        child: Lottie.memory(
-          _displayData!,
-          controller: _controller,
-          key: ValueKey("${_displayType}_${_displayData.hashCode}"),
-          onLoaded: (c) {
-            _controller.duration = c.duration;
-            _controller.forward(from: 0);
-          },
-          delegates: LottieDelegates(
-            textStyle: (lfs) =>
-                _getFinalTextStyle(lfs.fontFamily, 24.0).copyWith(
-                  color: Colors.white,
-                  height: 1.0,
-                  leadingDistribution: TextLeadingDistribution.even,
-                ),
-            values: [
-              ..._allTextLayers.map(
-                (n) => ValueDelegate.text(
-                  [n, '**'],
-                  value: _getProcessedText(
-                    _layerInitialText[n] ?? "",
-                    tm,
-                    _layerIsVertical[n] ?? false,
-                  ),
-                ),
+    return Selector2<
+      StatusChangeNotifier,
+      RouteAnalysisProvider,
+      Map<String, String>
+    >(
+      selector: (_, s, r) =>
+          r.getFormattedVariables(r.currentLedEvent, s.currentStatus),
+      builder: (context, tm, _) {
+        _syncDelegates(tm);
+        return Scaffold(
+          backgroundColor: Colors.black,
+          body: Center(
+            child: RepaintBoundary(
+              child: Lottie.memory(
+                _displayData!,
+                controller: _controller,
+                key: ValueKey("${_displayType}_${_displayData.hashCode}"),
+                onLoaded: (c) {
+                  _controller.duration = c.duration;
+                  if (!_controller.isAnimating) _controller.forward(from: 0);
+                },
+                delegates: _cachedDelegates,
+                frameRate: FrameRate.max,
+                filterQuality: FilterQuality.medium,
               ),
-              ..._paragraphLayers.map(
-                (n) => ValueDelegate.textSize(
-                  [n, '**'],
-                  value: (_calculatedSizes[n] ?? _originalFontSizes[n] ?? 24.0)
-                      .clamp(1.0, 500.0),
-                ),
-              ),
-              ..._paragraphLayers.map(
-                (n) => ValueDelegate.transformPosition(
-                  [n, '**'],
-                  callback: (fi) {
-                    final double bh = _boundingBoxes[n]?.height ?? 0;
-                    final double cs =
-                        _calculatedSizes[n] ?? _originalFontSizes[n] ?? 24.0;
-                    final Offset bp =
-                        Offset.lerp(
-                          fi.startValue ?? Offset.zero,
-                          fi.endValue ?? Offset.zero,
-                          fi.interpolatedKeyframeProgress,
-                        ) ??
-                        (fi.startValue ?? Offset.zero);
-                    return bp + Offset(0, (cs - bh) * 0.5 - (cs * 0.08));
-                  },
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
