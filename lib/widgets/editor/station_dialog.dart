@@ -7,6 +7,7 @@ import '../../data/led_sequence.dart';
 
 class SequenceManagerWidget<T> extends StatefulWidget {
   final String title;
+  final String? subtitle;
   final List<T> items;
   final T Function() onAdd;
   final Future<T?> Function(T) onEdit;
@@ -14,6 +15,7 @@ class SequenceManagerWidget<T> extends StatefulWidget {
   const SequenceManagerWidget({
     super.key,
     required this.title,
+    this.subtitle,
     required this.items,
     required this.onAdd,
     required this.onEdit,
@@ -37,52 +39,64 @@ class _SequenceManagerWidgetState<T> extends State<SequenceManagerWidget<T>> {
           widget.title,
           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
         ),
+        subtitle: widget.subtitle != null
+            ? Text(
+          widget.subtitle!,
+          style: const TextStyle(fontSize: 10, color: Colors.grey),
+        )
+            : null,
         children: [
-          ...widget.items.asMap().entries.map(
-            (e) => ListTile(
-              dense: true,
-              visualDensity: const VisualDensity(vertical: -4),
-              contentPadding: const EdgeInsets.only(left: 8, right: 0),
-              title: Text(
-                e.value is String
-                    ? e.value as String
-                    : (e.value as dynamic).template,
-                style: const TextStyle(fontSize: 11),
-              ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    icon: const Icon(Icons.edit, size: 14),
-                    onPressed: () async {
-                      final result = await widget.onEdit(e.value);
-                      if (result != null)
-                        setState(() => widget.items[e.key] = result);
-                    },
+          ...widget.items
+              .asMap()
+              .entries
+              .map(
+                (e) =>
+                ListTile(
+                  dense: true,
+                  visualDensity: const VisualDensity(vertical: -4),
+                  contentPadding: const EdgeInsets.only(left: 8, right: 0),
+                  title: Text(
+                    e.value is String
+                        ? e.value as String
+                        : (e.value as dynamic).template,
+                    style: const TextStyle(fontSize: 11),
                   ),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    icon: const Icon(Icons.arrow_upward, size: 14),
-                    onPressed: e.key == 0
-                        ? null
-                        : () => setState(() {
-                            final item = widget.items.removeAt(e.key);
-                            widget.items.insert(e.key - 1, item);
-                          }),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        icon: const Icon(Icons.edit, size: 14),
+                        onPressed: () async {
+                          final result = await widget.onEdit(e.value);
+                          if (result != null)
+                            setState(() => widget.items[e.key] = result);
+                        },
+                      ),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        icon: const Icon(Icons.arrow_upward, size: 14),
+                        onPressed: e.key == 0
+                            ? null
+                            : () =>
+                            setState(() {
+                              final item = widget.items.removeAt(e.key);
+                              widget.items.insert(e.key - 1, item);
+                            }),
+                      ),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        icon: const Icon(
+                            Icons.delete, size: 14, color: Colors.red),
+                        onPressed: () =>
+                            setState(() => widget.items.removeAt(e.key)),
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    icon: const Icon(Icons.delete, size: 14, color: Colors.red),
-                    onPressed: () =>
-                        setState(() => widget.items.removeAt(e.key)),
-                  ),
-                ],
-              ),
-            ),
+                ),
           ),
           ListTile(
             dense: true,
@@ -120,8 +134,10 @@ class _StationDialogState extends State<StationDialog> {
   late TextEditingController _nameCtrl, _nameEnCtrl, _orderCtrl;
   late List<String> _nextTpl, _arrTpl;
   late List<LedSequence> _nextLedTpl, _arrLedTpl;
-  bool _useGlobalNext = true, _useGlobalArrival = true;
-  bool _useGlobalNextLed = true, _useGlobalArrivalLed = true;
+  bool _useGlobalNext = true,
+      _useGlobalArrival = true;
+  bool _useGlobalNextLed = true,
+      _useGlobalArrivalLed = true;
 
   @override
   void initState() {
@@ -143,7 +159,8 @@ class _StationDialogState extends State<StationDialog> {
     _useGlobalNextLed = widget.existing?.useGlobalNextLed ?? true;
     _useGlobalArrivalLed = widget.existing?.useGlobalArrivalLed ?? true;
     _nextLedTpl = List.from(
-      widget.existing?.nextLedTemplate ?? [LedSequence(template: "下一站 {name}")],
+      widget.existing?.nextLedTemplate ??
+          [LedSequence(template: "下一站 {name}")],
     );
     _arrLedTpl = List.from(
       widget.existing?.arrivalLedTemplate ??
@@ -159,12 +176,13 @@ class _StationDialogState extends State<StationDialog> {
     super.dispose();
   }
 
-  InputDecoration _compactInp(String label) => InputDecoration(
-    labelText: label,
-    isDense: true,
-    contentPadding: const EdgeInsets.symmetric(vertical: 4),
-    labelStyle: const TextStyle(fontSize: 11),
-  );
+  InputDecoration _compactInp(String label) =>
+      InputDecoration(
+        labelText: label,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(vertical: 4),
+        labelStyle: const TextStyle(fontSize: 11),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -183,6 +201,15 @@ class _StationDialogState extends State<StationDialog> {
                 "站點設定",
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
               ),
+              if (widget.routeNames.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  "路線：${widget.routeNames.join(", ")}",
+                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -248,30 +275,30 @@ class _StationDialogState extends State<StationDialog> {
                     Expanded(
                       child: !_useGlobalNext
                           ? SequenceManagerWidget<String>(
-                              title: "自訂下一站語音",
-                              items: _nextTpl,
-                              onAdd: () => "下一站",
-                              onEdit: (val) =>
-                                  FormatterUtils.showTextEditDialog(
-                                    context: context,
-                                    initialValue: val,
-                                  ),
-                            )
+                        title: "自訂下一站語音",
+                        items: _nextTpl,
+                        onAdd: () => "下一站",
+                        onEdit: (val) =>
+                            FormatterUtils.showTextEditDialog(
+                              context: context,
+                              initialValue: val,
+                            ),
+                      )
                           : const SizedBox(),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: !_useGlobalArrival
                           ? SequenceManagerWidget<String>(
-                              title: "自訂到站語音",
-                              items: _arrTpl,
-                              onAdd: () => "到了",
-                              onEdit: (val) =>
-                                  FormatterUtils.showTextEditDialog(
-                                    context: context,
-                                    initialValue: val,
-                                  ),
-                            )
+                        title: "自訂到站語音",
+                        items: _arrTpl,
+                        onAdd: () => "到了",
+                        onEdit: (val) =>
+                            FormatterUtils.showTextEditDialog(
+                              context: context,
+                              initialValue: val,
+                            ),
+                      )
                           : const SizedBox(),
                     ),
                   ],
@@ -313,28 +340,30 @@ class _StationDialogState extends State<StationDialog> {
                     Expanded(
                       child: !_useGlobalNextLed
                           ? SequenceManagerWidget<LedSequence>(
-                              title: "自訂下一站字幕",
-                              items: _nextLedTpl,
-                              onAdd: () => LedSequence(template: "下一站"),
-                              onEdit: (val) => FormatterUtils.showLedEditDialog(
-                                context: context,
-                                item: val,
-                              ),
-                            )
+                        title: "自訂下一站字幕",
+                        items: _nextLedTpl,
+                        onAdd: () => LedSequence(template: "下一站"),
+                        onEdit: (val) =>
+                            FormatterUtils.showLedEditDialog(
+                              context: context,
+                              item: val,
+                            ),
+                      )
                           : const SizedBox(),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: !_useGlobalArrivalLed
                           ? SequenceManagerWidget<LedSequence>(
-                              title: "自訂到站字幕",
-                              items: _arrLedTpl,
-                              onAdd: () => LedSequence(template: "到了"),
-                              onEdit: (val) => FormatterUtils.showLedEditDialog(
-                                context: context,
-                                item: val,
-                              ),
-                            )
+                        title: "自訂到站字幕",
+                        items: _arrLedTpl,
+                        onAdd: () => LedSequence(template: "到了"),
+                        onEdit: (val) =>
+                            FormatterUtils.showLedEditDialog(
+                              context: context,
+                              item: val,
+                            ),
+                      )
                           : const SizedBox(),
                     ),
                   ],
