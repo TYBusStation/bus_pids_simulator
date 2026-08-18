@@ -1,5 +1,7 @@
+import 'package:bus_pids_simulator/widgets/route_analysis_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:marquee/marquee.dart';
+import 'package:provider/provider.dart';
 
 import '../data/status.dart';
 import '../pages/route_selection_page.dart';
@@ -290,15 +292,21 @@ class StatusPanel extends StatelessWidget {
                           "切${currentStatus.direction == Direction.go ? '返程' : '去程'}",
                       content:
                           "是否確定切換${currentStatus.direction == Direction.go ? '返程' : '去程'}？",
-                      onConfirm: () => statusNotifier.setStatus(
-                        Status(
-                          route: currentStatus.route,
-                          direction: currentStatus.direction == Direction.go
-                              ? Direction.back
-                              : Direction.go,
-                          dutyStatus: DutyStatus.offDuty,
-                        ),
-                      ),
+                      onConfirm: () {
+                        if (!isOnDuty) {
+                          Static.audioManager.stop();
+                          context.read<RouteAnalysisProvider>().resetAnalysis();
+                        }
+                        statusNotifier.setStatus(
+                          Status(
+                            route: currentStatus.route,
+                            direction: currentStatus.direction == Direction.go
+                                ? Direction.back
+                                : Direction.go,
+                            dutyStatus: DutyStatus.offDuty,
+                          ),
+                        );
+                      },
                     );
                   },
                   child: _buildDashboardBox(
@@ -334,6 +342,10 @@ class StatusPanel extends StatelessWidget {
                 title: isOnDuty ? '結束營運' : '開始營運',
                 content: "是否確定${isOnDuty ? '結束營運' : '開始營運'}？",
                 onConfirm: () {
+                  if (!isOnDuty) {
+                    Static.audioManager.stop();
+                    context.read<RouteAnalysisProvider>().resetAnalysis();
+                  }
                   statusNotifier.setStatus(
                     Status(
                       route: currentStatus.route,

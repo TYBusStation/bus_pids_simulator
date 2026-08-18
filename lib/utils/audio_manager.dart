@@ -104,27 +104,34 @@ class AudioManager {
     final String original = _sanitizeKey(name);
     final String lower = original.toLowerCase();
 
+    // --- 第一階段：在自定義 (Box) 中尋找 ---
+    // 找英文
     Uint8List? b = await _searchInBox(_audioBox, original);
     if (b != null) return b;
-
     if (original != lower) {
       b = await _searchInBox(_audioBox, lower);
       if (b != null) return b;
     }
 
+    // 找 中文_英
+    if (zhFallbackForEn != null) {
+      final String zhEnKey = "${_sanitizeKey(zhFallbackForEn)}_英";
+      b = await _searchInBox(_audioBox, zhEnKey);
+      if (b != null) return b;
+    }
+
+    // --- 第二階段：在語音包 (Packs) 中尋找 ---
+    // 找英文
     b = await _searchInPacks(original);
     if (b != null) return b;
-
     if (original != lower) {
       b = await _searchInPacks(lower);
       if (b != null) return b;
     }
 
+    // 找 中文_英
     if (zhFallbackForEn != null) {
       final String zhEnKey = "${_sanitizeKey(zhFallbackForEn)}_英";
-      b = await _searchInBox(_audioBox, zhEnKey);
-      if (b != null) return b;
-
       b = await _searchInPacks(zhEnKey);
       if (b != null) return b;
     }
@@ -136,24 +143,36 @@ class AudioManager {
     final String original = _sanitizeKey(name);
     final String lower = original.toLowerCase();
 
-    bool check(String key) {
+    bool checkInBox(String key) {
       if (_audioBox.containsKey(key)) return true;
       if (_audioBox.keys.any((k) => k.toString().startsWith("${key}_[")))
         return true;
+      return false;
+    }
+
+    bool checkInPacks(String key) {
       for (var pack in voicePacks) {
         if (pack.isEnabled &&
             (pack.fileNames.contains(key) ||
-                pack.fileNames.any((fn) => fn.startsWith("${key}_["))))
+                pack.fileNames.any((fn) => fn.startsWith("${key}_[")))) {
           return true;
+        }
       }
       return false;
     }
 
-    if (check(original)) return true;
-    if (original != lower && check(lower)) return true;
+    if (checkInBox(original)) return true;
+    if (original != lower && checkInBox(lower)) return true;
 
     if (zhFallbackForEn != null) {
-      if (check("${_sanitizeKey(zhFallbackForEn)}_英")) return true;
+      if (checkInBox("${_sanitizeKey(zhFallbackForEn)}_英")) return true;
+    }
+
+    if (checkInPacks(original)) return true;
+    if (original != lower && checkInPacks(lower)) return true;
+
+    if (zhFallbackForEn != null) {
+      if (checkInPacks("${_sanitizeKey(zhFallbackForEn)}_英")) return true;
     }
 
     return false;
