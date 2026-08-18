@@ -35,6 +35,16 @@ class _RulesTabState extends State<RulesTab> {
           Static.settings.nextStationDistance,
           (v) => Static.settings.nextStationDistance = v,
         ),
+        _dTile(
+          "下站離開上站觸發距離 (公尺)",
+          Static.settings.nextStationDepartureDistance,
+          (v) => Static.settings.nextStationDepartureDistance = v,
+        ),
+        _dTile(
+          "語音片段間隔 (毫秒)",
+          Static.settings.voiceSegmentDelay,
+          (v) => Static.settings.voiceSegmentDelay = v,
+        ),
         const Divider(),
         SequenceManagerWidget<String>(
           title: "站名語音序列元件",
