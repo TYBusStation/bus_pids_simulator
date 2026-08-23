@@ -125,7 +125,7 @@ class _InfoPageState extends State<InfoPage>
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildLeftStatusPanel(locNotifier, theme),
+              _buildLeftStatusPanel(locNotifier, theme, analysisProvider),
               const SizedBox(width: 10),
               Expanded(
                 child: StatusPanel(
@@ -147,7 +147,11 @@ class _InfoPageState extends State<InfoPage>
     );
   }
 
-  Widget _buildLeftStatusPanel(LocationChangeNotifier loc, ThemeData theme) {
+  Widget _buildLeftStatusPanel(
+    LocationChangeNotifier loc,
+    ThemeData theme,
+    RouteAnalysisProvider analysisProvider,
+  ) {
     bool hasLocation = loc.currentLocation != null;
     return Container(
       width: 200,
@@ -279,6 +283,27 @@ class _InfoPageState extends State<InfoPage>
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  "非營運警告音",
+                  style: TextStyle(fontSize: 10, color: Colors.white),
+                ),
+                SizedBox(
+                  height: 30,
+                  child: Switch(
+                    value: analysisProvider.isOffDutyAlertEnabled,
+                    onChanged: (val) =>
+                        analysisProvider.toggleOffDutyAlertEnabled(val),
+                  ),
+                ),
+              ],
+            ),
           ),
           const Spacer(),
           _buildControlRow(

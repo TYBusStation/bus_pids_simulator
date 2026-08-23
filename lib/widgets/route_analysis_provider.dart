@@ -28,6 +28,7 @@ class LedEvent {
 }
 
 class RouteAnalysisProvider extends ChangeNotifier {
+  bool _isOffDutyAlertEnabled = false;
   RouteAnalysisResult? _currentAnalysis;
   BusStation? _displayStation;
   int? _lastSpokenStationOrder,
@@ -56,6 +57,20 @@ class RouteAnalysisProvider extends ChangeNotifier {
   bool get isOffDutyAlert => _isOffDutyAlert;
 
   LedEvent get currentLedEvent => _currentLedEvent;
+
+  bool get isOffDutyAlertEnabled => _isOffDutyAlertEnabled;
+
+  void toggleOffDutyAlertEnabled(bool value) {
+    _isOffDutyAlertEnabled = value;
+    if (_isOffDutyAlert) {
+      if (_isOffDutyAlertEnabled) {
+        _startOffDutyLoop();
+      } else {
+        Static.audioManager.stop();
+      }
+    }
+    notifyListeners();
+  }
 
   String _sanitize(String input) {
     return input
@@ -126,7 +141,6 @@ class RouteAnalysisProvider extends ChangeNotifier {
     if (status.dutyStatus == DutyStatus.offDuty) {
       if (speed >= 10 && !_isOffDutyAlert) {
         _isOffDutyAlert = true;
-        Static.TTS.speak(" ");
         _startOffDutyLoop();
         notifyListeners();
       } else if (speed < 10 && _isOffDutyAlert) {
@@ -411,7 +425,9 @@ class RouteAnalysisProvider extends ChangeNotifier {
 
   Future<void> _startOffDutyLoop() async {
     final int thisId = _activeSequenceId;
-    while (_isOffDutyAlert && thisId == _activeSequenceId) {
+    while (_isOffDutyAlert &&
+        thisId == _activeSequenceId &&
+        _isOffDutyAlertEnabled) {
       try {
         await Static.audioManager.playAssetAndWait("notice.mp3");
       } catch (_) {}
