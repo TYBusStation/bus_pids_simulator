@@ -112,6 +112,7 @@ class RouteAnalysisProvider extends ChangeNotifier {
         notifyListeners();
       }
     }
+
     if (accuracy > 50) return;
     final now = DateTime.now();
     final int nowMs = now.millisecondsSinceEpoch;
@@ -159,9 +160,12 @@ class RouteAnalysisProvider extends ChangeNotifier {
       Static.audioManager.stop();
     }
 
-    final stations = status.direction == Direction.go
+    final List<BusStation> rawStations = status.direction == Direction.go
         ? status.route.stations.go
         : status.route.stations.back;
+
+    final List<BusStation> stations = List.from(rawStations)
+      ..sort((a, b) => a.order.compareTo(b.order));
 
     if (_lastDutyStatus != DutyStatus.onDuty) {
       _lastDutyStatus = DutyStatus.onDuty;
@@ -173,8 +177,8 @@ class RouteAnalysisProvider extends ChangeNotifier {
     }
 
     List<LatLng> points = status.direction == Direction.go
-        ? status.route.path.goPoints
-        : status.route.path.backPoints;
+        ? List.from(status.route.path.goPoints)
+        : List.from(status.route.path.backPoints);
 
     if (points.isEmpty && stations.length >= 2) {
       points = stations.map((s) => s.position).toList();

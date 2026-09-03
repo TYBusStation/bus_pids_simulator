@@ -169,18 +169,51 @@ class GpsControlPage extends StatelessWidget {
     return ListView.builder(
       itemCount: stations.length,
       padding: EdgeInsets.zero,
-      itemBuilder: (context, i) => ListTile(
-        dense: true,
-        visualDensity: VisualDensity.compact,
-        leading: Text("${i + 1}", style: const TextStyle(fontSize: 12)),
-        title: Text(stations[i].name, style: const TextStyle(fontSize: 12)),
-        trailing: IconButton(
+      itemBuilder: (context, i) {
+        final locNotifier = context.read<LocationChangeNotifier>();
+        return ListTile(
+          dense: true,
           visualDensity: VisualDensity.compact,
-          icon: const Icon(Icons.gps_fixed, size: 14),
-          onPressed: () =>
-              sim.jumpToStation(i, context.read<LocationChangeNotifier>()),
-        ),
-      ),
+          leading: Text("${i + 1}", style: const TextStyle(fontSize: 12)),
+          title: Text(
+            stations[i].name,
+            style: const TextStyle(fontSize: 12),
+            overflow: TextOverflow.ellipsis,
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.blue.shade600,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: const Size(0, 28),
+                  visualDensity: VisualDensity.compact,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                onPressed: () => sim.jumpToNextStationTrigger(i, locNotifier),
+                child: const Text("下一站", style: TextStyle(fontSize: 10)),
+              ),
+              const SizedBox(width: 4),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.orange.shade700,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: const Size(0, 28),
+                  visualDensity: VisualDensity.compact,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                onPressed: () => sim.jumpToArrivalTrigger(i, locNotifier),
+                child: const Text("到站", style: TextStyle(fontSize: 10)),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
